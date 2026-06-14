@@ -166,7 +166,7 @@ const RulesScreen = ({ session, onBack, onOpenProfile }: Props) => {
   );
 
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.container}>
+    <ScrollView style={styles.scroll} contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
       <View style={styles.header}>
         <Pressable
           style={({ pressed }) => [styles.iconButton, pressed && { opacity: 0.7 }]}

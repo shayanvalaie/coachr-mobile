@@ -885,7 +885,7 @@ const CalendarScreen = ({
 
   return (
     <View style={styles.root}>
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.container}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
           <Pressable
             style={({ pressed }) => [styles.iconButton, pressed && { opacity: 0.7 }]}
@@ -1402,7 +1402,7 @@ const CalendarScreen = ({
 
             <Text style={styles.modalSubtext}>Date: {dayKeyToReadable(selectedDateKey)}</Text>
 
-            <ScrollView style={styles.modalFormScroll} contentContainerStyle={styles.modalFormContent}>
+            <ScrollView style={styles.modalFormScroll} contentContainerStyle={styles.modalFormContent} keyboardShouldPersistTaps="handled">
               <View style={styles.row}>
                 <View style={styles.field}>
                   <Text style={styles.label}>Title</Text>

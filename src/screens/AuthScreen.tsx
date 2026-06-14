@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { Keyboard, StyleSheet, TouchableWithoutFeedback, View } from "react-native";
 import AuthForm from "../components/auth/AuthForm";
 import AuthHeader from "../components/auth/AuthHeader";
 import { palette } from "../theme/colors";
@@ -171,7 +171,8 @@ const AuthScreen = () => {
   };
 
   return (
-    <View style={styles.container}>
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+      <View style={styles.container}>
       <View style={styles.card}>
         <AuthHeader mode={mode} />
         <AuthForm
@@ -195,6 +196,7 @@ const AuthScreen = () => {
         />
       </View>
     </View>
+    </TouchableWithoutFeedback>
   );
 };
 
