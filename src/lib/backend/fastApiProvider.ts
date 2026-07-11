@@ -574,6 +574,13 @@ export const fastApiBackendClient: BackendClient = {
 
     return { id: payload.id };
   },
+  deleteTeamPlayer: async (teamId: string, playerId: string) => {
+    await authedRequest(
+      `/teams/${teamId}/players/${playerId}`,
+      { method: "DELETE" },
+      "Unable to delete player",
+    );
+  },
   getTeamGames: async (teamId: string) => {
     const payload = (await authedRequest(
       `/teams/${teamId}/games`,
@@ -648,6 +655,13 @@ export const fastApiBackendClient: BackendClient = {
     )) as any;
 
     return mapLineupVersionDetail(payload);
+  },
+  deleteLineupVersion: async (teamId: string, lineupId: string) => {
+    await authedRequest(
+      `/teams/${teamId}/lineups/${lineupId}`,
+      { method: "DELETE" },
+      "Unable to delete lineup",
+    );
   },
   exportLineupVersion: async (
     teamId: string,

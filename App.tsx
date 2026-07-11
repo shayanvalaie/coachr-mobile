@@ -202,6 +202,7 @@ function AppContent() {
                 session={session}
                 onBack={() => switchScreen("home")}
                 onOpenProfile={() => switchScreen("profile")}
+                onOpenRoster={() => switchScreen("roster")}
                 launchRequest={lineupLaunchRequest}
                 hasProSubscription={isPro}
                 onRequirePro={openProGate}

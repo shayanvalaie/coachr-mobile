@@ -30,7 +30,11 @@ type Props = {
   onGenerate: () => void;
   onSaveLineup: () => void;
   onToggleInning: (inning: number) => void;
-  onSetLineupCell: (inning: number, playerName: string, targetPosition: string) => void;
+  onSetLineupCell: (
+    inning: number,
+    playerName: string,
+    targetPosition: string,
+  ) => void;
   playerGenderByName?: Record<string, Player["gender"]>;
   onLineupDragStateChange?: (isDragging: boolean) => void;
 };
@@ -106,7 +110,7 @@ const GameSetup = ({
   <View style={styles.card}>
     <View style={styles.cardHeader}>
       <View style={styles.headerInfo}>
-        <Text style={styles.eyebrow}>Game Room</Text>
+        <Text style={styles.eyebrow}>Generate</Text>
         <Text style={styles.cardTitle}>Lineup Engine</Text>
         <Text style={styles.caption}>{activePlayersCount} active players</Text>
       </View>
@@ -115,7 +119,10 @@ const GameSetup = ({
           <Text style={styles.badgeText}>{lineup?.length ?? 0}/7</Text>
         </View>
         <Pressable
-          style={({ pressed }) => [styles.iconButton, pressed && { opacity: 0.7 }]}
+          style={({ pressed }) => [
+            styles.iconButton,
+            pressed && { opacity: 0.7 },
+          ]}
           onPress={onToggleCollapse}
         >
           <Entypo
@@ -195,12 +202,14 @@ const GameSetup = ({
         ) : null}
 
         {isGenerating ? <GeneratingState /> : null}
-        {!isGenerating && status ? <Text style={styles.status}>{status}</Text> : null}
+        {!isGenerating && status ? (
+          <Text style={styles.status}>{status}</Text>
+        ) : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
         <Text style={styles.hint}>
-          Engine honors locked/fixed players, minimum women requirements, catcher rules,
-          and fair bench rotation.
+          Engine honors locked/fixed players, minimum women requirements,
+          catcher rules, and fair bench rotation.
         </Text>
 
         <LineUp

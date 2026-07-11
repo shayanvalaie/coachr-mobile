@@ -140,19 +140,36 @@ const RosterScreen = ({
     );
   }, []);
 
-  const removePlayer = useCallback((id: string) => {
-    setRoster((prev) => prev.filter((p) => p.id !== id));
-    setActiveIds((prev) => {
-      const next = new Set(prev);
-      next.delete(id);
-      return next;
-    });
-    setExpandedPlayers((prev) => {
-      const next = new Set(prev);
-      next.delete(id);
-      return next;
-    });
-  }, []);
+  const removePlayer = useCallback(
+    async (id: string) => {
+      // Optimistically remove from local state for a responsive UI.
+      setRoster((prev) => prev.filter((p) => p.id !== id));
+      setActiveIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      setExpandedPlayers((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+
+      // Persist the deletion so it survives a reload.
+      try {
+        const team = await ensureTeam();
+        if (!team) return;
+        await backendClient.deleteTeamPlayer(team, id);
+      } catch (_err) {
+        setError("Failed to remove player.");
+        // Re-sync from the server so local state matches persisted state.
+        loadRoster().catch(() => {
+          setError("Unable to load roster from server.");
+        });
+      }
+    },
+    [ensureTeam, loadRoster],
+  );
 
   const togglePlayer = useCallback((id: string) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -186,21 +203,28 @@ const RosterScreen = ({
       }
 
       const { id: idToUse } = await backendClient.saveTeamPlayer(team, player);
-      if (idToUse === player.id) return;
 
-      setRoster((prev) =>
-        prev.map((p) => (p.id === player.id ? { ...player, id: idToUse } : p)),
-      );
-      setActiveIds((prev) => {
-        const next = new Set(prev);
-        next.delete(player.id);
-        next.add(idToUse);
-        return next;
-      });
+      if (idToUse !== player.id) {
+        setRoster((prev) =>
+          prev.map((p) =>
+            p.id === player.id ? { ...player, id: idToUse } : p,
+          ),
+        );
+        setActiveIds((prev) => {
+          const next = new Set(prev);
+          next.delete(player.id);
+          next.add(idToUse);
+          return next;
+        });
+      }
+
+      // Collapse the card once the player is saved.
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       setExpandedPlayers((prev) => {
+        if (!prev.has(player.id) && !prev.has(idToUse)) return prev;
         const next = new Set(prev);
         next.delete(player.id);
-        next.add(idToUse);
+        next.delete(idToUse);
         return next;
       });
     },
@@ -243,6 +267,50 @@ const RosterScreen = ({
       setIsSaving(false);
     }
   }, [roster, savePlayer]);
+
+  const handleRemoveAll = useCallback(() => {
+    if (roster.length === 0) return;
+
+    Alert.alert(
+      "Delete all players?",
+      "This removes every player from your roster. This cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete all",
+          style: "destructive",
+          onPress: async () => {
+            const idsToDelete = roster.map((p) => p.id);
+
+            // Optimistically clear local state for a responsive UI.
+            setRoster([]);
+            setActiveIds(new Set());
+            setExpandedPlayers(new Set());
+            setStatus("");
+            setError(null);
+
+            // Persist the deletions so they survive a reload.
+            try {
+              const team = await ensureTeam();
+              if (!team) return;
+              await Promise.all(
+                idsToDelete.map((id) =>
+                  backendClient.deleteTeamPlayer(team, id),
+                ),
+              );
+              setStatus("All players removed.");
+            } catch (_err) {
+              setError("Failed to remove all players.");
+              // Re-sync from the server so local state matches persisted state.
+              loadRoster().catch(() => {
+                setError("Unable to load roster from server.");
+              });
+            }
+          },
+        },
+      ],
+    );
+  }, [roster, ensureTeam, loadRoster]);
 
   const handleImportRoster = useCallback(async () => {
     setStatus("Importing roster...");
@@ -496,6 +564,19 @@ const RosterScreen = ({
         </Pressable>
         <Pressable
           style={({ pressed }) => [
+            styles.secondaryButton,
+            styles.dangerButton,
+            styles.actionButton,
+            pressed && { opacity: 0.85 },
+            roster.length === 0 && { opacity: 0.5 },
+          ]}
+          onPress={handleRemoveAll}
+          disabled={roster.length === 0}
+        >
+          <Text style={styles.dangerText}>Delete all</Text>
+        </Pressable>
+        <Pressable
+          style={({ pressed }) => [
             styles.primaryButton,
             styles.actionButton,
             pressed && { opacity: 0.85 },
@@ -640,6 +721,15 @@ const styles = StyleSheet.create({
   },
   secondaryText: {
     color: palette.text,
+    fontFamily: typeface.heading,
+    fontSize: 13,
+    textAlign: "center",
+  },
+  dangerButton: {
+    borderColor: "rgba(239,107,91,0.5)",
+  },
+  dangerText: {
+    color: palette.danger,
     fontFamily: typeface.heading,
     fontSize: 13,
     textAlign: "center",

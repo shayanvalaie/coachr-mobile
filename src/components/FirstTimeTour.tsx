@@ -1,5 +1,12 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
 import {
   Animated,
   Dimensions,
@@ -77,7 +84,13 @@ type Props = {
   onDone: () => void;
 };
 
-const FirstTimeTour = ({ steps, onDone }: Props) => {
+export type FirstTimeTourHandle = {
+  /** Replay the tour from the first step, regardless of whether it ran before. */
+  start: () => void;
+};
+
+const FirstTimeTour = forwardRef<FirstTimeTourHandle, Props>(
+  ({ steps, onDone }, ref) => {
   const [visible, setVisible] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
   const [rects, setRects] = useState<Rect[]>([]);
@@ -88,6 +101,19 @@ const FirstTimeTour = ({ steps, onDone }: Props) => {
       if (!val) setVisible(true);
     });
   }, []);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      start: () => {
+        fadeAnim.setValue(0);
+        setStepIndex(0);
+        setRects([]);
+        setVisible(true);
+      },
+    }),
+    [fadeAnim],
+  );
 
   const measureAll = useCallback(() => {
     const measured: (Rect | null)[] = new Array(steps.length).fill(null);
@@ -237,7 +263,10 @@ const FirstTimeTour = ({ steps, onDone }: Props) => {
       </Animated.View>
     </Modal>
   );
-};
+  },
+);
+
+FirstTimeTour.displayName = "FirstTimeTour";
 
 export default FirstTimeTour;
 

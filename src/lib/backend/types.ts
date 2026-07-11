@@ -164,6 +164,7 @@ export type BackendClient = {
   upsertTeamRules: (teamId: string, ruleText: string) => Promise<void>;
   getTeamRoster: (teamId: string) => Promise<Player[]>;
   saveTeamPlayer: (teamId: string, player: Player) => Promise<{ id: string }>;
+  deleteTeamPlayer: (teamId: string, playerId: string) => Promise<void>;
   getTeamGames: (teamId: string) => Promise<BackendGame[]>;
   saveTeamGame: (teamId: string, game: BackendGame) => Promise<{ id: string }>;
   deleteTeamGame: (teamId: string, gameId: string) => Promise<void>;
@@ -171,6 +172,7 @@ export type BackendClient = {
   saveLineupVersion: (payload: BackendSaveLineupRequest) => Promise<BackendLineupVersionSummary>;
   getLineupVersions: (teamId: string, gameId?: string | null) => Promise<BackendLineupVersionSummary[]>;
   getLineupVersion: (teamId: string, lineupId: string) => Promise<BackendLineupVersionDetail>;
+  deleteLineupVersion: (teamId: string, lineupId: string) => Promise<void>;
   exportLineupVersion: (
     teamId: string,
     lineupId: string,

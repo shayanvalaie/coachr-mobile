@@ -17,6 +17,7 @@ type Props = {
   player: Player;
   isExpanded: boolean;
   isActive: boolean;
+  isDragging?: boolean;
   isSaving: boolean;
   lineupSlots: string[];
   onDragLongPress?: () => void;
@@ -31,6 +32,7 @@ const PlayerCard = ({
   player,
   isExpanded,
   isActive,
+  isDragging,
   isSaving,
   lineupSlots,
   onDragLongPress,
@@ -90,13 +92,13 @@ const PlayerCard = ({
 
   return (
     <Pressable
-      style={({ pressed }) => [
+      style={[
         styles.playerRow,
         !isActive && styles.playerInactive,
-        pressed && onDragLongPress ? styles.playerPressed : null,
+        isDragging && styles.playerDragging,
       ]}
       onLongPress={onDragLongPress}
-      delayLongPress={120}
+      delayLongPress={500}
     >
       <View style={styles.rowHeader}>
         <View style={styles.identityWrap}>
@@ -259,8 +261,14 @@ const styles = StyleSheet.create({
   playerInactive: {
     opacity: 0.72,
   },
-  playerPressed: {
-    opacity: 0.96,
+  playerDragging: {
+    // Thicker accent border + brighter surface so the picked-up card
+    // clearly reads as raised. Padding drops by 1 to offset the extra
+    // border width and keep the content from shifting.
+    borderWidth: 2,
+    borderColor: "rgba(242,166,59,0.65)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    padding: 11,
   },
   rowHeader: {
     flexDirection: "row",

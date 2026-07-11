@@ -1,13 +1,13 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
-  LayoutAnimation,
   PanResponder,
   Platform,
   StyleSheet,
   UIManager,
   View,
 } from "react-native";
+import * as Haptics from "expo-haptics";
 import { Player } from "../types/lineup";
 import PlayerCard from "./Player";
 
@@ -27,6 +27,8 @@ type Props = {
 };
 
 const DEFAULT_ROW_HEIGHT = 108;
+// Must match styles.listWrap gap so swap distances line up with layout.
+const ROW_GAP = 10;
 
 const DraggablePlayerList = ({
   players,
@@ -43,8 +45,14 @@ const DraggablePlayerList = ({
   onSavePlayer,
 }: Props) => {
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  // Visual "lifted" styling (border, shadow). Cleared immediately on release,
+  // while draggingId stays set until the snap-back animation finishes.
+  const [liftedId, setLiftedId] = useState<string | null>(null);
   const draggingTranslateY = useRef(new Animated.Value(0)).current;
+  const draggingScale = useRef(new Animated.Value(1)).current;
+  const rowShiftsRef = useRef(new Map<string, Animated.Value>());
   const rowHeightsRef = useRef(new Map<string, number>());
+  const rowYsRef = useRef(new Map<string, number>());
   const playersRef = useRef(players);
   const draggingIdRef = useRef<string | null>(null);
   const activeIndexRef = useRef<number>(-1);
@@ -61,6 +69,15 @@ const DraggablePlayerList = ({
     if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
       UIManager.setLayoutAnimationEnabledExperimental(true);
     }
+  }, []);
+
+  const getRowShift = useCallback((id: string) => {
+    let value = rowShiftsRef.current.get(id);
+    if (!value) {
+      value = new Animated.Value(0);
+      rowShiftsRef.current.set(id, value);
+    }
+    return value;
   }, []);
 
   const movePlayer = useCallback(
@@ -81,26 +98,44 @@ const DraggablePlayerList = ({
       nextPlayers.splice(toIndex, 0, moved);
 
       playersRef.current = nextPlayers;
-      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+
+      // Displaced neighbors animate into place from onLayout (FLIP), which
+      // fires with their actual new position — guessing the offset here and
+      // setting it before React commits the reorder causes a one-frame jump.
       onReorderPlayers(nextPlayers);
     },
     [onReorderPlayers],
   );
 
   const stopDrag = useCallback(() => {
-    Animated.spring(draggingTranslateY, {
-      toValue: 0,
-      useNativeDriver: true,
-      damping: 16,
-      stiffness: 220,
-    }).start(() => {
+    // Drop the lifted styling right away; only the position snap-back
+    // keeps running until it settles.
+    setLiftedId(null);
+    Animated.parallel([
+      Animated.spring(draggingTranslateY, {
+        toValue: 0,
+        useNativeDriver: true,
+        damping: 22,
+        stiffness: 320,
+        restDisplacementThreshold: 0.5,
+        restSpeedThreshold: 5,
+      }),
+      Animated.spring(draggingScale, {
+        toValue: 1,
+        useNativeDriver: true,
+        damping: 22,
+        stiffness: 320,
+        restDisplacementThreshold: 0.005,
+        restSpeedThreshold: 0.05,
+      }),
+    ]).start(() => {
       setDraggingId(null);
       draggingIdRef.current = null;
       activeIndexRef.current = -1;
       consumedDyRef.current = 0;
       onDragStateChange?.(false);
     });
-  }, [draggingTranslateY, onDragStateChange]);
+  }, [draggingTranslateY, draggingScale, onDragStateChange]);
 
   const maybeSwapRows = useCallback(
     (gestureDy: number) => {
@@ -116,7 +151,9 @@ const DraggablePlayerList = ({
 
       while (localOffset > 0 && currentIndex < currentPlayers.length - 1) {
         const nextPlayer = currentPlayers[currentIndex + 1];
-        const nextHeight = rowHeightsRef.current.get(nextPlayer.id) ?? DEFAULT_ROW_HEIGHT;
+        const nextHeight =
+          (rowHeightsRef.current.get(nextPlayer.id) ?? DEFAULT_ROW_HEIGHT) +
+          ROW_GAP;
         if (localOffset < nextHeight * 0.5) break;
 
         movePlayer(currentIndex, currentIndex + 1);
@@ -128,7 +165,9 @@ const DraggablePlayerList = ({
 
       while (localOffset < 0 && currentIndex > 0) {
         const prevPlayer = currentPlayers[currentIndex - 1];
-        const prevHeight = rowHeightsRef.current.get(prevPlayer.id) ?? DEFAULT_ROW_HEIGHT;
+        const prevHeight =
+          (rowHeightsRef.current.get(prevPlayer.id) ?? DEFAULT_ROW_HEIGHT) +
+          ROW_GAP;
         if (Math.abs(localOffset) < prevHeight * 0.5) break;
 
         movePlayer(currentIndex, currentIndex - 1);
@@ -169,31 +208,75 @@ const DraggablePlayerList = ({
       activeIndexRef.current = index;
       consumedDyRef.current = 0;
       draggingTranslateY.setValue(0);
+      getRowShift(playerId).setValue(0);
       setDraggingId(playerId);
+      setLiftedId(playerId);
       onDragStateChange?.(true);
+
+      // Signal "drag mode": a haptic buzz and a slight lift of the card.
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+      Animated.spring(draggingScale, {
+        toValue: 1.03,
+        useNativeDriver: true,
+        damping: 14,
+        stiffness: 260,
+      }).start();
     },
-    [draggingTranslateY, isSaving, onDragStateChange],
+    [draggingTranslateY, draggingScale, getRowShift, isSaving, onDragStateChange],
   );
 
   return (
     <View style={styles.listWrap}>
       {players.map((player) => {
         const isDragging = draggingId === player.id;
+        const isLifted = liftedId === player.id;
 
         return (
           <Animated.View
             key={player.id}
             style={[
               styles.rowWrap,
-              isDragging && styles.draggingRow,
+              isDragging && styles.draggingRowLayer,
+              isLifted && styles.liftedRow,
               isDragging
                 ? {
-                    transform: [{ translateY: draggingTranslateY }],
+                    transform: [
+                      { translateY: draggingTranslateY },
+                      { scale: draggingScale },
+                    ],
                   }
-                : null,
+                : {
+                    transform: [{ translateY: getRowShift(player.id) }],
+                  },
             ]}
             onLayout={(event) => {
-              rowHeightsRef.current.set(player.id, event.nativeEvent.layout.height);
+              const { height, y } = event.nativeEvent.layout;
+              rowHeightsRef.current.set(player.id, height);
+
+              const prevY = rowYsRef.current.get(player.id);
+              rowYsRef.current.set(player.id, y);
+
+              // FLIP: when a drag reorders the list, a displaced row reports
+              // its new position here. Start it at its old spot and spring it
+              // into place — using the real measured offset avoids the
+              // one-frame jump that guessing the distance caused.
+              if (
+                draggingIdRef.current &&
+                player.id !== draggingIdRef.current &&
+                prevY !== undefined &&
+                prevY !== y
+              ) {
+                const shift = getRowShift(player.id);
+                shift.setValue(prevY - y);
+                Animated.spring(shift, {
+                  toValue: 0,
+                  useNativeDriver: true,
+                  damping: 20,
+                  stiffness: 300,
+                  restDisplacementThreshold: 0.5,
+                  restSpeedThreshold: 5,
+                }).start();
+              }
             }}
             {...(isDragging ? panResponder.panHandlers : {})}
           >
@@ -201,6 +284,7 @@ const DraggablePlayerList = ({
               player={player}
               isExpanded={expandedPlayers.has(player.id)}
               isActive={activeIds.has(player.id)}
+              isDragging={isLifted}
               lineupSlots={lineupSlots}
               onDragLongPress={() => beginDrag(player.id)}
               onToggleExpand={() => onToggleExpand(player.id)}
@@ -224,8 +308,13 @@ const styles = StyleSheet.create({
   rowWrap: {
     zIndex: 1,
   },
-  draggingRow: {
+  // Stacking only — kept until the snap-back finishes so the card
+  // travels above its neighbors.
+  draggingRowLayer: {
     zIndex: 50,
+  },
+  // Raised look — dropped immediately on release.
+  liftedRow: {
     shadowColor: "#000",
     shadowOpacity: 0.2,
     shadowRadius: 10,

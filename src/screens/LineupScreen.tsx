@@ -38,6 +38,7 @@ type Props = {
   session: BackendSession;
   onBack: () => void;
   onOpenProfile: () => void;
+  onOpenRoster: () => void;
   hasProSubscription: boolean;
   onRequirePro: (featureLabel: string) => void;
   launchRequest?: LineupLaunchRequest | null;
@@ -361,6 +362,7 @@ const LineupScreen = ({
   session,
   onBack,
   onOpenProfile,
+  onOpenRoster,
   hasProSubscription,
   onRequirePro,
   launchRequest = null,
@@ -400,6 +402,14 @@ const LineupScreen = ({
   const [compareBase, setCompareBase] =
     useState<BackendLineupVersionDetail | null>(null);
   const [activeHistoryId, setActiveHistoryId] = useState<string | null>(null);
+  const [pendingDeleteLineup, setPendingDeleteLineup] =
+    useState<BackendLineupVersionSummary | null>(null);
+  const [isDeletingLineup, setIsDeletingLineup] = useState(false);
+  const [rosterRequirement, setRosterRequirement] = useState<{
+    required: number;
+    have: number;
+    detail: string;
+  } | null>(null);
   const [gameSetupCollapsed, setGameSetupCollapsed] = useState(false);
   const [isDraggingLineupRow, setIsDraggingLineupRow] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -701,6 +711,26 @@ const LineupScreen = ({
     [ensureTeam, lockOrientation, onEditModeChange],
   );
 
+  const confirmDeleteLineup = useCallback(async () => {
+    if (!pendingDeleteLineup || isDeletingLineup) return;
+    const lineupId = pendingDeleteLineup.id;
+    setIsDeletingLineup(true);
+    try {
+      const team = await ensureTeam();
+      if (!team) return;
+      await backendClient.deleteLineupVersion(team, lineupId);
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      setLineupHistory((prev) => prev.filter((v) => v.id !== lineupId));
+      setStatus("Lineup deleted.");
+      setError(null);
+      setPendingDeleteLineup(null);
+    } catch (_err) {
+      setError("Unable to delete lineup.");
+    } finally {
+      setIsDeletingLineup(false);
+    }
+  }, [ensureTeam, pendingDeleteLineup, isDeletingLineup]);
+
   const restoreLineupVersion = useCallback(
     async (lineupId: string) => {
       try {
@@ -955,17 +985,21 @@ const LineupScreen = ({
         }
 
         if (activePlayers.length < rulesConfig.minimumPlayers) {
-          setError(
-            `Need at least ${rulesConfig.minimumPlayers} active players. You currently have ${activePlayers.length}.`,
-          );
+          setRosterRequirement({
+            required: rulesConfig.minimumPlayers,
+            have: activePlayers.length,
+            detail: `Your rules require at least ${rulesConfig.minimumPlayers} active players to generate a lineup.`,
+          });
           setStatus("");
           return;
         }
 
         if (activePlayers.length < rulesConfig.playersOnField) {
-          setError(
-            `Need at least ${rulesConfig.playersOnField} active players on field each ${rulesConfig.segmentLabel}.`,
-          );
+          setRosterRequirement({
+            required: rulesConfig.playersOnField,
+            have: activePlayers.length,
+            detail: `You need at least ${rulesConfig.playersOnField} active players so every ${rulesConfig.segmentLabel} can be filled on the field.`,
+          });
           setStatus("");
           return;
         }
@@ -1247,7 +1281,6 @@ const LineupScreen = ({
   const editModalExpandedInnings = showingHistoryDetail
     ? new Set<number>()
     : expandedInnings;
-  const showTabBar = activeTab === "build";
   const selectedGame = useMemo(
     () => games.find((game) => game.id === selectedGameId) ?? null,
     [games, selectedGameId],
@@ -1272,11 +1305,9 @@ const LineupScreen = ({
           </Pressable>
           <View style={styles.headerTextWrap}>
             <Text style={styles.headerEyebrow}>
-              {activeTab === "build" ? "Lineup Workspace" : "Lineup History"}
+              {activeTab === "build" ? "Generate Lineup" : "Lineup History"}
             </Text>
-            <Text style={styles.headerTitle}>
-              {activeTab === "build" ? "Build Lineup" : "History"}
-            </Text>
+            <Text style={styles.headerTitle}>Line Ups</Text>
           </View>
           <Pressable
             style={({ pressed }) => [
@@ -1289,42 +1320,44 @@ const LineupScreen = ({
           </Pressable>
         </View>
 
-        {showTabBar ? (
-          <View style={styles.tabRow}>
-            <Pressable
-              style={[styles.tabButton, styles.tabButtonActive]}
-              onPress={() => setActiveTab("build")}
-            >
-              <Text style={[styles.tabButtonText, styles.tabButtonTextActive]}>
-                Build
-              </Text>
-            </Pressable>
-            <Pressable
-              style={styles.tabButton}
-              onPress={() => setActiveTab("history")}
-            >
-              <Text style={styles.tabButtonText}>History</Text>
-            </Pressable>
-          </View>
-        ) : (
-          <View style={styles.historyToolbar}>
-            <Pressable
-              style={({ pressed }) => [
-                styles.secondaryButton,
-                styles.historyBackButton,
-                pressed && { opacity: 0.85 },
+        <View style={styles.tabRow}>
+          <Pressable
+            style={[
+              styles.tabButton,
+              activeTab === "build" && styles.tabButtonActive,
+            ]}
+            onPress={() => setActiveTab("build")}
+          >
+            <Text
+              style={[
+                styles.tabButtonText,
+                activeTab === "build" && styles.tabButtonTextActive,
               ]}
-              onPress={() => setActiveTab("build")}
             >
-              <Text style={styles.secondaryText}>Back to Build</Text>
-            </Pressable>
-          </View>
-        )}
+              Generate
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[
+              styles.tabButton,
+              activeTab === "history" && styles.tabButtonActive,
+            ]}
+            onPress={() => setActiveTab("history")}
+          >
+            <Text
+              style={[
+                styles.tabButtonText,
+                activeTab === "history" && styles.tabButtonTextActive,
+              ]}
+            >
+              Line Ups
+            </Text>
+          </Pressable>
+        </View>
 
         {activeTab === "build" ? (
           <>
             <View style={styles.heroCard}>
-              <Text style={styles.heroTitle}>Generate lineup</Text>
               <Text style={styles.heroSubtext}>
                 Active {activeCount} / {roster.length} players
               </Text>
@@ -1519,6 +1552,9 @@ const LineupScreen = ({
                 </Text>
               ) : (
                 <View style={styles.historyList}>
+                  <Text style={styles.historyHint}>
+                    Tap to open • Long-press to delete
+                  </Text>
                   {lineupHistory.map((version) => (
                     <Pressable
                       key={version.id}
@@ -1528,6 +1564,8 @@ const LineupScreen = ({
                         activeHistoryId === version.id && { opacity: 0.65 },
                       ]}
                       onPress={() => openLineupHistoryDetail(version.id)}
+                      onLongPress={() => setPendingDeleteLineup(version)}
+                      delayLongPress={350}
                       disabled={activeHistoryId === version.id}
                     >
                       <View style={styles.historyRowContent}>
@@ -1855,6 +1893,102 @@ const LineupScreen = ({
           </View>
         </View>
       </Modal>
+
+      <Modal
+        animationType="fade"
+        transparent
+        visible={pendingDeleteLineup !== null}
+        onRequestClose={() =>
+          isDeletingLineup ? undefined : setPendingDeleteLineup(null)
+        }
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Delete lineup?</Text>
+            <Text style={styles.modalSubtext}>
+              {pendingDeleteLineup
+                ? `“${
+                    pendingDeleteLineup.lineupName ||
+                    `Lineup v${pendingDeleteLineup.versionNumber}`
+                  }” will be permanently removed. This can’t be undone.`
+                : ""}
+            </Text>
+            <View style={styles.modalActions}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.secondaryButton,
+                  pressed && { opacity: 0.85 },
+                ]}
+                onPress={() => setPendingDeleteLineup(null)}
+                disabled={isDeletingLineup}
+              >
+                <Text style={styles.secondaryText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.dangerButton,
+                  pressed && { opacity: 0.9 },
+                  isDeletingLineup && { opacity: 0.7 },
+                ]}
+                onPress={confirmDeleteLineup}
+                disabled={isDeletingLineup}
+              >
+                {isDeletingLineup ? (
+                  <ActivityIndicator color={palette.accentText} size="small" />
+                ) : (
+                  <Text style={styles.dangerButtonText}>Delete</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        animationType="fade"
+        transparent
+        visible={rosterRequirement !== null}
+        onRequestClose={() => setRosterRequirement(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.rosterModalIcon}>
+              <Feather name="users" size={22} color={palette.accent} />
+            </View>
+            <Text style={styles.modalTitle}>Add players to your roster</Text>
+            <Text style={styles.modalSubtext}>
+              {rosterRequirement?.detail} You currently have{" "}
+              {rosterRequirement?.have}{" "}
+              {rosterRequirement?.have === 1 ? "active player" : "active players"}
+              . Add or activate more players in your roster to generate a lineup.
+            </Text>
+            <View style={styles.modalActions}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.secondaryButton,
+                  pressed && { opacity: 0.85 },
+                ]}
+                onPress={() => setRosterRequirement(null)}
+              >
+                <Text style={styles.secondaryText}>Not now</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.primaryButton,
+                  styles.rosterModalPrimary,
+                  pressed && { opacity: 0.9 },
+                ]}
+                onPress={() => {
+                  setRosterRequirement(null);
+                  onOpenRoster();
+                }}
+              >
+                <Text style={styles.primaryButtonText}>Go to Roster</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -1947,11 +2081,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: palette.border,
   },
-  heroTitle: {
-    color: palette.text,
-    fontFamily: typeface.display,
-    fontSize: 22,
-  },
+
   heroSubtext: {
     color: palette.subtext,
     fontFamily: typeface.body,
@@ -2092,6 +2222,12 @@ const styles = StyleSheet.create({
   },
   historyList: {
     gap: 8,
+  },
+  historyHint: {
+    color: palette.subtext,
+    fontFamily: typeface.body,
+    fontSize: 11,
+    marginBottom: 2,
   },
   historyRow: {
     borderWidth: 1,
@@ -2289,6 +2425,38 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "flex-end",
     gap: 8,
+    marginTop: 4,
+  },
+  dangerButton: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: palette.danger,
+    backgroundColor: palette.danger,
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 88,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  rosterModalIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(242,166,59,0.14)",
+    borderWidth: 1,
+    borderColor: "rgba(242,166,59,0.35)",
+  },
+  rosterModalPrimary: {
+    alignSelf: "auto",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  dangerButtonText: {
+    color: palette.accentText,
+    fontFamily: typeface.heading,
+    fontSize: 12,
   },
 });
 

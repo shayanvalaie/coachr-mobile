@@ -7,10 +7,11 @@ import { typeface } from "../theme/typography";
 type Props = {
   onUserPress?: () => void;
   onMenuPress?: () => void;
+  onInfoPress?: () => void;
   showMenu?: boolean;
 };
 
-const Header = ({ onUserPress, onMenuPress, showMenu = true }: Props) => (
+const Header = ({ onUserPress, onMenuPress, onInfoPress, showMenu = true }: Props) => (
   <View style={styles.container}>
     {showMenu ? (
       <Pressable
@@ -30,14 +31,27 @@ const Header = ({ onUserPress, onMenuPress, showMenu = true }: Props) => (
       <Text style={styles.title}>COACHR</Text>
     </View>
 
-    <Pressable
-      style={({ pressed }) => [styles.iconButton, pressed && { opacity: 0.7 }]}
-      onPress={onUserPress}
-      accessibilityLabel="User menu"
-      hitSlop={8}
-    >
-      <Feather name="user" size={20} color={palette.text} />
-    </Pressable>
+    <View style={styles.rightGroup}>
+      {onInfoPress ? (
+        <Pressable
+          style={({ pressed }) => [styles.iconButton, pressed && { opacity: 0.7 }]}
+          onPress={onInfoPress}
+          accessibilityLabel="Replay app tour"
+          hitSlop={8}
+        >
+          <Feather name="info" size={20} color={palette.text} />
+        </Pressable>
+      ) : null}
+
+      <Pressable
+        style={({ pressed }) => [styles.iconButton, pressed && { opacity: 0.7 }]}
+        onPress={onUserPress}
+        accessibilityLabel="User menu"
+        hitSlop={8}
+      >
+        <Feather name="user" size={20} color={palette.text} />
+      </Pressable>
+    </View>
   </View>
 );
 
@@ -58,6 +72,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 1,
     flex: 1,
+  },
+  rightGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
   eyebrow: {
     color: palette.subtext,

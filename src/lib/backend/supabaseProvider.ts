@@ -343,6 +343,39 @@ export const supabaseBackendClient: BackendClient = {
 
     return { id };
   },
+  deleteTeamPlayer: async (teamId: string, playerId: string) => {
+    const { error: joinError } = await supabase
+      .from("team_players")
+      .delete()
+      .eq("team_id", teamId)
+      .eq("player_id", playerId);
+
+    if (joinError) {
+      throw toError(joinError);
+    }
+
+    // Remove the underlying player only if no other team still references it.
+    const { data: remainingLinks, error: remainingError } = await supabase
+      .from("team_players")
+      .select("team_id")
+      .eq("player_id", playerId)
+      .limit(1);
+
+    if (remainingError) {
+      throw toError(remainingError);
+    }
+
+    if (!remainingLinks || remainingLinks.length === 0) {
+      const { error: playerError } = await supabase
+        .from("players")
+        .delete()
+        .eq("id", playerId);
+
+      if (playerError) {
+        throw toError(playerError);
+      }
+    }
+  },
   getTeamGames: async (teamId: string) => {
     const { data, error } = await supabase
       .from("team_games")
@@ -423,6 +456,9 @@ export const supabaseBackendClient: BackendClient = {
     throw new Error("Lineup history is currently available only with the FastAPI backend.");
   },
   getLineupVersion: async (_teamId: string, _lineupId: string) => {
+    throw new Error("Lineup history is currently available only with the FastAPI backend.");
+  },
+  deleteLineupVersion: async (_teamId: string, _lineupId: string) => {
     throw new Error("Lineup history is currently available only with the FastAPI backend.");
   },
   exportLineupVersion: async (

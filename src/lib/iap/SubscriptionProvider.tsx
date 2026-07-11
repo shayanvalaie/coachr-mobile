@@ -10,6 +10,7 @@ import React, {
 import { Alert, AppState, Platform, type AppStateStatus } from "react-native";
 import type { Purchase, PurchaseError } from "react-native-iap";
 import { backendClient } from "../backend/client";
+import { ADMIN_EMAILS } from "../proAccess";
 import {
   readPersistedSubscription,
   persistSubscription,
@@ -71,6 +72,7 @@ export const SubscriptionProvider = ({
   children: React.ReactNode;
 }) => {
   const proUnlockedInDev = __DEV__;
+  const [adminOverride, setAdminOverride] = useState(false);
   const [isPro, setIsPro] = useState(false);
   const [activeSku, setActiveSku] = useState<IapSku | null>(null);
   const [products, setProducts] = useState<SubscriptionProduct[]>([]);
@@ -84,9 +86,28 @@ export const SubscriptionProvider = ({
     };
   }, []);
 
+  useEffect(() => {
+    const isAdminEmail = (email: string | null | undefined) =>
+      !!email && ADMIN_EMAILS.has(email.toLowerCase());
+
+    backendClient.auth.getSession().then(({ data }) => {
+      if (mountedRef.current) {
+        setAdminOverride(isAdminEmail(data.session?.user.email));
+      }
+    });
+
+    const { data } = backendClient.auth.onAuthStateChange((_event, session) => {
+      if (mountedRef.current) {
+        setAdminOverride(isAdminEmail(session?.user.email));
+      }
+    });
+
+    return () => data.subscription.unsubscribe();
+  }, []);
+
   const normalizeSubState = useCallback(
     (pro: boolean, sku: IapSku | null) => {
-      if (proUnlockedInDev) {
+      if (proUnlockedInDev || adminOverride) {
         return { isPro: true, activeSku: sku };
       }
       if (!pro) {
@@ -94,7 +115,7 @@ export const SubscriptionProvider = ({
       }
       return { isPro: true, activeSku: sku };
     },
-    [proUnlockedInDev],
+    [proUnlockedInDev, adminOverride],
   );
 
   const applySubState = useCallback(

@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
-import FirstTimeTour, { TourStep } from "../components/FirstTimeTour";
+import FirstTimeTour, {
+  FirstTimeTourHandle,
+  TourStep,
+} from "../components/FirstTimeTour";
 import Header from "../components/Header";
 import { backendClient } from "../lib/backend/client";
 import { BackendGame, BackendSession } from "../lib/backend/types";
@@ -25,6 +28,7 @@ type Props = {
 type DashboardSummary = {
   rosterCount: number;
   gamesCount: number;
+  lineupsCount: number;
   nextGameLabel: string;
   rules: TeamRulesConfig;
 };
@@ -65,6 +69,7 @@ const HomeScreen = ({
   const rulesBtnRef = useRef<View>(null);
   const generateBtnRef = useRef<View>(null);
   const lineupsBtnRef = useRef<View>(null);
+  const tourRef = useRef<FirstTimeTourHandle>(null);
 
   const tourSteps = useMemo<TourStep[]>(
     () => [
@@ -100,6 +105,7 @@ const HomeScreen = ({
   const [summary, setSummary] = useState<DashboardSummary>({
     rosterCount: 0,
     gamesCount: 0,
+    lineupsCount: 0,
     nextGameLabel: "No upcoming game",
     rules: defaultTeamRulesConfig,
   });
@@ -125,16 +131,18 @@ const HomeScreen = ({
         return;
       }
 
-      const [roster, rawRules, games] = await Promise.all([
+      const [roster, rawRules, games, lineups] = await Promise.all([
         backendClient.getTeamRoster(team),
         backendClient.getTeamRules(team),
         backendClient.getTeamGames(team),
+        backendClient.getLineupVersions(team).catch(() => []),
       ]);
 
       const rules = parseTeamRulesConfig(rawRules);
       setSummary({
         rosterCount: roster.length,
         gamesCount: games.length,
+        lineupsCount: lineups.length,
         nextGameLabel: formatNextGameLabel(games),
         rules,
       });
@@ -168,7 +176,11 @@ const HomeScreen = ({
       </View>
 
       <View style={styles.screen}>
-        <Header onUserPress={onOpenProfile} showMenu={false} />
+        <Header
+          onUserPress={onOpenProfile}
+          onInfoPress={() => tourRef.current?.start()}
+          showMenu={false}
+        />
 
         <View style={styles.content}>
           <View style={styles.heroCard}>
@@ -183,6 +195,27 @@ const HomeScreen = ({
               <Text style={styles.heroPrimaryText}>Generate now</Text>
             </Pressable>
           </View>
+
+          {!loading && !error && summary.lineupsCount === 0 ? (
+            <View style={styles.emptyLineupCard}>
+              <Text style={styles.emptyLineupTitle}>No lineups yet</Text>
+              <Text style={styles.emptyLineupSubtitle}>
+                You haven&apos;t created a lineup yet. Generate your first one to
+                get ready for game day.
+              </Text>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.emptyLineupButton,
+                  pressed && { opacity: 0.9 },
+                ]}
+                onPress={onOpenLineupPage}
+              >
+                <Text style={styles.emptyLineupButtonText}>
+                  Create your first lineup
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
 
           <View style={styles.metricsGrid}>
             <View style={styles.metricCard}>
@@ -260,7 +293,7 @@ const HomeScreen = ({
           )}
         </View>
       </View>
-      <FirstTimeTour steps={tourSteps} onDone={() => {}} />
+      <FirstTimeTour ref={tourRef} steps={tourSteps} onDone={() => {}} />
     </>
   );
 };
@@ -336,6 +369,40 @@ const styles = StyleSheet.create({
   heroPrimaryText: {
     color: palette.accentText,
     fontSize: 14,
+    fontFamily: typeface.heading,
+  },
+  emptyLineupCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(242,166,59,0.35)",
+    backgroundColor: palette.cardAlt,
+    padding: 14,
+    gap: 8,
+  },
+  emptyLineupTitle: {
+    color: palette.text,
+    fontSize: 16,
+    fontFamily: typeface.heading,
+  },
+  emptyLineupSubtitle: {
+    color: palette.subtext,
+    fontSize: 13,
+    lineHeight: 19,
+    fontFamily: typeface.body,
+  },
+  emptyLineupButton: {
+    alignSelf: "flex-start",
+    backgroundColor: palette.accent,
+    borderRadius: 10,
+    paddingVertical: 9,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: "rgba(242,166,59,0.8)",
+    marginTop: 4,
+  },
+  emptyLineupButtonText: {
+    color: palette.accentText,
+    fontSize: 13,
     fontFamily: typeface.heading,
   },
   metricsGrid: {
