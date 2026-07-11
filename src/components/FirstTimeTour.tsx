@@ -7,17 +7,10 @@ import React, {
   useRef,
   useState,
 } from "react";
-import {
-  Animated,
-  Dimensions,
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
-import { palette } from "../theme/colors";
-import { typeface } from "../theme/typography";
+import { Animated, Dimensions, Modal, StyleSheet, View } from "react-native";
+import { theme } from "../theme/colors";
+import { radius, shadow, space } from "../theme/tokens";
+import { AppText, Button } from "./ui";
 
 const TOUR_KEY = "coachr_onboarding_tour_v1";
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get("window");
@@ -55,26 +48,31 @@ const TourCard = ({
   <View style={styles.card}>
     <View style={styles.cardHeader}>
       <View style={styles.stepPill}>
-        <Text style={styles.stepPillText}>
+        <AppText variant="caption" family="heading" color="accent">
           {stepIndex + 1} / {total}
-        </Text>
+        </AppText>
       </View>
     </View>
-    <Text style={styles.cardTitle}>{title}</Text>
-    <Text style={styles.cardDesc}>{description}</Text>
+    <AppText variant="title" family="display">
+      {title}
+    </AppText>
+    <AppText variant="body" color="secondary">
+      {description}
+    </AppText>
     <View style={styles.cardActions}>
-      <Pressable
-        style={({ pressed }) => [styles.skipBtn, pressed && { opacity: 0.7 }]}
+      <Button
+        label="Skip tour"
         onPress={onSkip}
-      >
-        <Text style={styles.skipText}>Skip tour</Text>
-      </Pressable>
-      <Pressable
-        style={({ pressed }) => [styles.nextBtn, pressed && { opacity: 0.9 }]}
+        variant="ghost"
+        size="sm"
+        accessibilityLabel="Skip tour"
+      />
+      <Button
+        label={isLast ? "Done" : "Next →"}
         onPress={onNext}
-      >
-        <Text style={styles.nextText}>{isLast ? "Done" : "Next →"}</Text>
-      </Pressable>
+        size="sm"
+        accessibilityLabel={isLast ? "Finish tour" : "Next tour step"}
+      />
     </View>
   </View>
 );
@@ -270,7 +268,7 @@ FirstTimeTour.displayName = "FirstTimeTour";
 
 export default FirstTimeTour;
 
-const CARD_BG = "#1c2820";
+const CARD_BG = theme.bg.elevated;
 
 const styles = StyleSheet.create({
   root: {
@@ -278,15 +276,15 @@ const styles = StyleSheet.create({
   },
   strip: {
     position: "absolute",
-    backgroundColor: "rgba(0,0,0,0.72)",
+    backgroundColor: theme.bg.overlay,
   },
   highlight: {
     position: "absolute",
-    borderRadius: 14,
+    borderRadius: radius.md,
     borderWidth: 2,
-    borderColor: palette.accent,
+    borderColor: theme.accent.base,
     // subtle glow
-    shadowColor: palette.accent,
+    shadowColor: theme.accent.base,
     shadowOpacity: 0.55,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 0 },
@@ -315,77 +313,35 @@ const styles = StyleSheet.create({
   },
   cardWrap: {
     position: "absolute",
-    left: 16,
-    right: 16,
+    left: space.md,
+    right: space.md,
   },
   card: {
     backgroundColor: CARD_BG,
-    borderRadius: 16,
-    padding: 16,
-    gap: 8,
+    borderRadius: radius.lg,
+    padding: space.md,
+    gap: space.xs,
     borderWidth: 1,
-    borderColor: "rgba(242,166,59,0.3)",
-    shadowColor: "#000",
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 12,
+    borderColor: theme.accent.subtleBorder,
+    ...shadow.float,
   },
   cardHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: space.xs,
   },
   stepPill: {
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    backgroundColor: "rgba(242,166,59,0.15)",
+    borderRadius: radius.pill,
+    paddingHorizontal: space.xs,
+    paddingVertical: space.xxs,
+    backgroundColor: theme.accent.subtle,
     borderWidth: 1,
-    borderColor: "rgba(242,166,59,0.4)",
-  },
-  stepPillText: {
-    color: palette.accent,
-    fontFamily: typeface.heading,
-    fontSize: 11,
-  },
-  cardTitle: {
-    color: palette.text,
-    fontFamily: typeface.display,
-    fontSize: 18,
-  },
-  cardDesc: {
-    color: palette.subtext,
-    fontFamily: typeface.body,
-    fontSize: 13,
-    lineHeight: 19,
+    borderColor: theme.accent.subtleBorder,
   },
   cardActions: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginTop: 4,
-  },
-  skipBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-  },
-  skipText: {
-    color: palette.subtext,
-    fontFamily: typeface.body,
-    fontSize: 13,
-  },
-  nextBtn: {
-    backgroundColor: palette.accent,
-    borderRadius: 10,
-    paddingVertical: 9,
-    paddingHorizontal: 18,
-    borderWidth: 1,
-    borderColor: "rgba(242,166,59,0.7)",
-  },
-  nextText: {
-    color: palette.accentText,
-    fontFamily: typeface.heading,
-    fontSize: 13,
+    marginTop: space.xxs,
   },
 });

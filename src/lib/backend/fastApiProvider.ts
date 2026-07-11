@@ -1,4 +1,4 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { secureStorage } from "../secureStorage";
 import Constants from "expo-constants";
 import { NativeModules } from "react-native";
 import { Player } from "../../types/lineup";
@@ -117,7 +117,7 @@ const buildFastApiBaseUrlCandidates = (): string[] => {
     });
 
     const candidates = [...new Set([...rewritten, raw])];
-    console.log(`[backend] FASTAPI URL candidates: ${candidates.join(" | ")}`);
+    if (__DEV__) console.log(`[backend] FASTAPI URL candidates: ${candidates.join(" | ")}`);
     return candidates;
   } catch (_err) {
     return [raw];
@@ -142,7 +142,7 @@ const ensureLoaded = async () => {
 
   loaded = true;
   try {
-    const raw = await AsyncStorage.getItem(SESSION_STORAGE_KEY);
+    const raw = await secureStorage.getItem(SESSION_STORAGE_KEY);
     cachedSession = raw ? (JSON.parse(raw) as BackendSession) : null;
   } catch (_err) {
     cachedSession = null;
@@ -166,9 +166,9 @@ const persistSession = async (
   cachedSession = session;
 
   if (session) {
-    await AsyncStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+    await secureStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
   } else {
-    await AsyncStorage.removeItem(SESSION_STORAGE_KEY);
+    await secureStorage.removeItem(SESSION_STORAGE_KEY);
   }
 
   emit(event, session);

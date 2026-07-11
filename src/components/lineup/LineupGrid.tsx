@@ -18,10 +18,12 @@ import {
   UIManager,
   View,
 } from "react-native";
-import { palette } from "../theme/colors";
-import { typeface } from "../theme/typography";
-import { InningAssignment } from "../types/lineup";
-import { normalizePlayerName } from "../utils/playerNames";
+import { theme, withAlpha } from "../../theme/colors";
+import { radius } from "../../theme/tokens";
+import { typeface } from "../../theme/typography";
+import { InningAssignment } from "../../types/lineup";
+import { normalizePlayerName } from "../../utils/playerNames";
+import { AppText } from "../ui";
 
 type Props = {
   lineup: InningAssignment[] | null;
@@ -42,7 +44,12 @@ const BENCH_MARKER = "X";
 const EMPTY_MARKER = "-";
 const DEFAULT_ROW_HEIGHT = 44;
 
-const LineUp = ({
+// Off-palette rose used to tint grid rows for female players. Kept as a local
+// hex constant (not a semantic token): the tint is unique to the lineup grid
+// and must stay visually distinct from both accent (amber) and danger (red).
+const FEMALE_ROW_TINT = "#c96f95";
+
+const LineupGrid = ({
   lineup,
   editable = false,
   presentation = "inline",
@@ -247,7 +254,11 @@ const LineUp = ({
   );
 
   if (!lineup) {
-    return <Text style={styles.empty}>Generate a lineup to see inning assignments.</Text>;
+    return (
+      <AppText variant="body" color="secondary">
+        Generate a lineup to see inning assignments.
+      </AppText>
+    );
   }
 
   const players = playerOrder.length > 0 ? playerOrder : discoveredPlayers;
@@ -270,7 +281,11 @@ const LineUp = ({
       style={[styles.lineupContainer, isEditModal && styles.lineupContainerModal]}
       onLayout={isEditModal ? (e) => setContainerWidth(e.nativeEvent.layout.width) : undefined}
     >
-      {!isEditModal ? <Text style={styles.title}>Active players ({players.length})</Text> : null}
+      {!isEditModal ? (
+        <AppText variant="title" family="heading" style={styles.title}>
+          Active players ({players.length})
+        </AppText>
+      ) : null}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -339,6 +354,8 @@ const LineUp = ({
                   ]}
                   onLongPress={() => beginDrag(playerName)}
                   delayLongPress={120}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${playerName}, batting position ${playerNumber}. Long press to reorder.`}
                 >
                   <View
                     style={[
@@ -392,6 +409,9 @@ const LineUp = ({
                                 : { playerName, inningNumber },
                             );
                           }}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Inning ${inningNumber}, ${playerName}, ${value === EMPTY_MARKER ? "unassigned" : value === BENCH_MARKER ? "bench" : value}`}
+                          accessibilityState={{ expanded: isOpen }}
                         >
                           <Text
                             style={[
@@ -427,6 +447,9 @@ const LineUp = ({
                                       onSetPlayerPosition?.(inningNumber, playerName, option);
                                       setOpenCell(null);
                                     }}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={option === BENCH_MARKER ? "Bench" : option}
+                                    accessibilityState={{ selected: active }}
                                   >
                                     <Text
                                       style={[
@@ -468,21 +491,25 @@ const LineUp = ({
           })}
         </View>
       </ScrollView>
-      {!isEditModal ? <Text style={styles.legend}>X = benched during that inning.</Text> : null}
+      {!isEditModal ? (
+        <AppText variant="body" color="secondary">
+          X = benched during that inning.
+        </AppText>
+      ) : null}
     </View>
   );
 };
 
-export default memo(LineUp);
+export default memo(LineupGrid);
 
 const styles = StyleSheet.create({
   lineupContainer: {
     borderWidth: 1,
-    borderColor: palette.border,
+    borderColor: theme.border.base,
     borderRadius: 14,
     padding: 8,
     gap: 8,
-    backgroundColor: palette.cardAlt,
+    backgroundColor: theme.bg.elevated,
   },
   lineupContainerModal: {
     borderWidth: 0,
@@ -491,22 +518,19 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent",
   },
   title: {
-    color: palette.text,
-    fontFamily: typeface.heading,
-    fontSize: 18,
     marginBottom: 2,
   },
   row: {
     flexDirection: "row",
     alignItems: "center",
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.08)",
+    borderBottomColor: theme.border.subtle,
     minHeight: 44,
     zIndex: 1,
     overflow: "visible",
   },
   femaleRow: {
-    backgroundColor: "#c96f95",
+    backgroundColor: FEMALE_ROW_TINT,
   },
   draggingRow: {
     zIndex: 50,
@@ -515,13 +539,13 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 6 },
     elevation: 10,
-    backgroundColor: palette.cardAlt,
+    backgroundColor: theme.bg.elevated,
   },
   headerRow: {
-    backgroundColor: "rgba(255,255,255,0.04)",
+    backgroundColor: withAlpha(theme.text.primary, 0.04),
   },
   headerCell: {
-    color: palette.subtext,
+    color: theme.text.secondary,
     fontFamily: typeface.heading,
     fontSize: 14,
   },
@@ -536,40 +560,40 @@ const styles = StyleSheet.create({
   playerNumberBadge: {
     minWidth: 22,
     height: 22,
-    borderRadius: 999,
+    borderRadius: radius.pill,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.16)",
+    backgroundColor: withAlpha(theme.text.primary, 0.16),
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
+    borderColor: withAlpha(theme.text.primary, 0.12),
   },
   playerNumberBadgeModal: {
     minWidth: 24,
     height: 24,
   },
   playerNumberText: {
-    color: palette.text,
+    color: theme.text.primary,
     fontFamily: typeface.heading,
     fontSize: 11,
   },
   playerNameText: {
     flex: 1,
-    color: palette.text,
+    color: theme.text.primary,
     fontFamily: typeface.heading,
     fontSize: 16,
   },
   inningCell: {
-    color: palette.text,
+    color: theme.text.primary,
     fontFamily: typeface.heading,
     fontSize: 14,
     textAlign: "center",
     paddingHorizontal: 0,
   },
   editableCell: {
-    borderRadius: 8,
+    borderRadius: radius.sm,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(255,255,255,0.03)",
+    borderColor: withAlpha(theme.text.primary, 0.12),
+    backgroundColor: withAlpha(theme.text.primary, 0.03),
     alignItems: "center",
     justifyContent: "center",
   },
@@ -581,11 +605,11 @@ const styles = StyleSheet.create({
     zIndex: 60,
   },
   editableCellOpen: {
-    borderColor: "rgba(126,207,157,0.58)",
-    backgroundColor: "rgba(126,207,157,0.14)",
+    borderColor: withAlpha(theme.success.base, 0.58),
+    backgroundColor: theme.success.subtle,
   },
   editableBenchCell: {
-    borderColor: "rgba(242,115,87,0.45)",
+    borderColor: withAlpha(theme.danger.base, 0.45),
   },
   editableCellText: {
     fontFamily: typeface.heading,
@@ -599,8 +623,8 @@ const styles = StyleSheet.create({
     minWidth: 74,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: palette.background,
+    borderColor: theme.border.base,
+    backgroundColor: theme.bg.base,
     paddingVertical: 4,
     shadowColor: "#000",
     shadowOpacity: 0.3,
@@ -620,35 +644,25 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
   },
   cellDropdownOptionActive: {
-    backgroundColor: "rgba(126,207,157,0.14)",
+    backgroundColor: theme.success.subtle,
   },
   cellDropdownOptionText: {
-    color: palette.subtext,
+    color: theme.text.secondary,
     fontFamily: typeface.heading,
     fontSize: 11,
     textAlign: "left",
   },
   cellDropdownOptionTextActive: {
-    color: palette.success,
+    color: theme.success.base,
   },
   positionCellText: {
-    color: palette.text,
+    color: theme.text.primary,
   },
   emptyCellText: {
-    color: "rgba(201,192,171,0.8)",
+    color: withAlpha(theme.text.secondary, 0.8),
   },
   benchCellText: {
-    color: palette.danger,
+    color: theme.danger.base,
     fontFamily: typeface.heading,
-  },
-  legend: {
-    color: palette.subtext,
-    fontFamily: typeface.body,
-    fontSize: 14,
-  },
-  empty: {
-    color: palette.subtext,
-    fontFamily: typeface.body,
-    fontSize: 13,
   },
 });

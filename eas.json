@@ -6,13 +6,34 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://mibrqnqsavwxhtwndiud.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1pYnJxbnFzYXZ3eGh0d25kaXVkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg5Mjk5MzUsImV4cCI6MjA4NDUwNTkzNX0.kVg6Yp_GqQAe_-ViZAsVbHFLVb1KEqlqc6lcOPdRNbw",
+        "EXPO_PUBLIC_BACKEND_PROVIDER": "fastapi",
+        "EXPO_PUBLIC_FASTAPI_BASE_URL": "http://localhost:8000",
+        "EXPO_PUBLIC_ENABLE_ADS": "true"
+      }
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://mibrqnqsavwxhtwndiud.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1pYnJxbnFzYXZ3eGh0d25kaXVkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg5Mjk5MzUsImV4cCI6MjA4NDUwNTkzNX0.kVg6Yp_GqQAe_-ViZAsVbHFLVb1KEqlqc6lcOPdRNbw",
+        "EXPO_PUBLIC_BACKEND_PROVIDER": "fastapi",
+        "EXPO_PUBLIC_FASTAPI_BASE_URL": "https://api.coachrapp.io",
+        "EXPO_PUBLIC_ENABLE_ADS": "true"
+      }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://mibrqnqsavwxhtwndiud.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1pYnJxbnFzYXZ3eGh0d25kaXVkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg5Mjk5MzUsImV4cCI6MjA4NDUwNTkzNX0.kVg6Yp_GqQAe_-ViZAsVbHFLVb1KEqlqc6lcOPdRNbw",
+        "EXPO_PUBLIC_BACKEND_PROVIDER": "fastapi",
+        "EXPO_PUBLIC_FASTAPI_BASE_URL": "https://api.coachrapp.io",
+        "EXPO_PUBLIC_ENABLE_ADS": "true"
+      }
     }
   },
   "submit": {

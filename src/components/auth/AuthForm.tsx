@@ -1,13 +1,7 @@
 import { useMemo } from 'react'
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native'
-import { palette } from '../../theme/colors'
+import { StyleSheet, View } from 'react-native'
+import { AppText, Button, Input } from '../ui'
+import { space } from '../../theme/tokens'
 import { AuthMode } from '../../types/auth'
 
 type Props = {
@@ -68,112 +62,98 @@ const AuthForm = ({
   return (
     <View style={styles.form}>
       {isVerificationStep ? (
-        <>
-          <Text style={styles.label}>Verification code</Text>
-          <Text style={styles.helperText}>
-            Enter the 6-digit code sent to {verificationEmail}.
-          </Text>
-          <TextInput
-            value={verificationCode}
-            onChangeText={onVerificationCodeChange}
-            keyboardType="number-pad"
-            placeholder="123456"
-            placeholderTextColor="#8b92a5"
-            style={styles.input}
-            maxLength={6}
-          />
-        </>
+        <Input
+          label="Verification code"
+          hint={`Enter the 6-digit code sent to ${verificationEmail}.`}
+          value={verificationCode}
+          onChangeText={onVerificationCodeChange}
+          keyboardType="number-pad"
+          placeholder="123456"
+          maxLength={6}
+          accessibilityLabel="Verification code"
+        />
       ) : (
         <>
-          <Text style={styles.label}>Email</Text>
-          <TextInput
+          <Input
+            label="Email"
             value={email}
             onChangeText={onEmailChange}
             autoCapitalize="none"
             keyboardType="email-address"
             placeholder="you@example.com"
-            placeholderTextColor="#8b92a5"
-            style={styles.input}
+            accessibilityLabel="Email"
           />
 
-          <Text style={styles.label}>Password</Text>
-          <TextInput
+          <Input
+            label="Password"
             value={password}
             onChangeText={onPasswordChange}
             secureTextEntry
             placeholder="••••••••"
-            placeholderTextColor="#8b92a5"
-            style={styles.input}
+            accessibilityLabel="Password"
           />
 
           {mode === AuthMode.SignUp && (
-            <>
-              <Text style={styles.label}>Confirm password</Text>
-              <TextInput
-                value={confirm}
-                onChangeText={onConfirmChange}
-                secureTextEntry
-                placeholder="••••••••"
-                placeholderTextColor="#8b92a5"
-                style={styles.input}
-              />
-            </>
+            <Input
+              label="Confirm password"
+              value={confirm}
+              onChangeText={onConfirmChange}
+              secureTextEntry
+              placeholder="••••••••"
+              accessibilityLabel="Confirm password"
+            />
           )}
         </>
       )}
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      {status ? <Text style={styles.status}>{status}</Text> : null}
+      {error ? (
+        <AppText variant="body" color="danger">
+          {error}
+        </AppText>
+      ) : null}
+      {status ? (
+        <AppText variant="body" color="secondary">
+          {status}
+        </AppText>
+      ) : null}
 
-      <Pressable
-        style={({ pressed }) => [
-          styles.primaryButton,
-          pressed && { transform: [{ translateY: 1 }] },
-          loading && styles.primaryButtonDisabled,
-        ]}
-        onPress={onSubmit}
-        disabled={loading}
-      >
-        {loading ? (
-          <ActivityIndicator color={palette.accentText} />
-        ) : (
-          <Text style={styles.primaryText}>{ctaLabel}</Text>
-        )}
-      </Pressable>
+      <View style={styles.ctaWrap}>
+        <Button
+          label={ctaLabel}
+          onPress={onSubmit}
+          loading={loading}
+          fullWidth
+          accessibilityLabel={ctaLabel}
+        />
+      </View>
 
       {isVerificationStep ? (
         <>
-          <Pressable
-            style={({ pressed }) => [
-              styles.secondaryButton,
-              pressed && { backgroundColor: 'rgba(255,255,255,0.08)' },
-            ]}
+          <Button
+            label="Resend code"
+            variant="ghost"
             onPress={onResendVerification}
             disabled={loading}
-          >
-            <Text style={styles.secondaryText}>Resend code</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [
-              styles.secondaryButton,
-              pressed && { backgroundColor: 'rgba(255,255,255,0.08)' },
-            ]}
+            fullWidth
+            accessibilityLabel="Resend verification code"
+          />
+          <Button
+            label="Use different email"
+            variant="ghost"
             onPress={onCancelVerification}
             disabled={loading}
-          >
-            <Text style={styles.secondaryText}>Use different email</Text>
-          </Pressable>
+            fullWidth
+            accessibilityLabel="Use a different email"
+          />
         </>
       ) : (
-        <Pressable
-          style={({ pressed }) => [
-            styles.secondaryButton,
-            pressed && { backgroundColor: 'rgba(255,255,255,0.08)' },
-          ]}
+        <Button
+          label={toggleLabel}
+          variant="ghost"
           onPress={onToggleMode}
-        >
-          <Text style={styles.secondaryText}>{toggleLabel}</Text>
-        </Pressable>
+          fullWidth
+          accessibilityLabel={toggleLabel}
+        />
       )}
     </View>
   )
@@ -181,63 +161,11 @@ const AuthForm = ({
 
 const styles = StyleSheet.create({
   form: {
-    marginTop: 12,
-    gap: 10,
+    marginTop: space.sm,
+    gap: space.sm,
   },
-  label: {
-    color: palette.subtext,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  input: {
-    backgroundColor: palette.background,
-    color: palette.text,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: palette.border,
-    fontSize: 15,
-  },
-  helperText: {
-    color: palette.subtext,
-    fontSize: 12,
-    marginTop: -2,
-  },
-  primaryButton: {
-    backgroundColor: palette.accent,
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 6,
-  },
-  primaryButtonDisabled: {
-    opacity: 0.7,
-  },
-  primaryText: {
-    color: palette.accentText,
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  secondaryButton: {
-    paddingVertical: 12,
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  secondaryText: {
-    color: palette.text,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  error: {
-    color: palette.danger,
-    fontSize: 13,
-    marginTop: 4,
-  },
-  status: {
-    color: palette.accent,
-    fontSize: 13,
-    marginTop: 4,
+  ctaWrap: {
+    marginTop: space.xxs,
   },
 })
 

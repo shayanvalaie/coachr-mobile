@@ -1,24 +1,32 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Pressable,
-  ScrollView,
+  FlatList,
   Share,
   StyleSheet,
-  Text,
-  TextInput,
   View,
 } from "react-native";
-import Feather from "@expo/vector-icons/Feather";
-import LineUp from "../components/LineUp";
+import { Feather } from "../icons";
+import LineUp from "../components/lineup/LineupGrid";
 import { backendClient } from "../lib/backend/client";
 import {
   BackendLineupVersionDetail,
   BackendLineupVersionSummary,
   BackendSession,
 } from "../lib/backend/types";
-import { palette } from "../theme/colors";
-import { typeface } from "../theme/typography";
+import {
+  AppPressable,
+  AppText,
+  Button,
+  Card,
+  EmptyState,
+  Input,
+  ScreenContainer,
+  ScreenHeader,
+  SkeletonListRows,
+} from "../components/ui";
+import { theme } from "../theme/colors";
+import { radius, space } from "../theme/tokens";
 import { InningAssignment } from "../types/lineup";
 import { buildPlayerGenderByName } from "../utils/playerNames";
 
@@ -235,59 +243,97 @@ const AllLineupsScreen = ({
     [ensureTeam],
   );
 
-  return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-      <View style={styles.header}>
-        <Pressable
-          style={({ pressed }) => [styles.iconButton, pressed && { opacity: 0.7 }]}
-          onPress={() => {
-            if (selectedDetail) {
-              setSelectedDetail(null);
-              setStatus("");
-              return;
-            }
-            onBack();
-          }}
-        >
-          <Feather name="arrow-left" size={18} color={palette.text} />
-        </Pressable>
-        <View style={styles.headerTextWrap}>
-          <Text style={styles.headerEyebrow}>
-            {selectedDetail ? "Saved Lineup" : "Lineup History"}
-          </Text>
-          <Text style={styles.headerTitle}>
-            {selectedDetail ? "Lineup Detail" : "All Lineups"}
-          </Text>
-        </View>
-        <Pressable
-          style={({ pressed }) => [styles.iconButton, pressed && { opacity: 0.7 }]}
-          onPress={onOpenProfile}
-        >
-          <Feather name="user" size={18} color={palette.text} />
-        </Pressable>
-      </View>
+  const handleBack = useCallback(() => {
+    if (selectedDetail) {
+      setSelectedDetail(null);
+      setStatus("");
+      return;
+    }
+    onBack();
+  }, [onBack, selectedDetail]);
 
-      {selectedDetail ? (
-        <>
-          <View style={styles.heroCard}>
-            <Text style={styles.heroTitle}>
-              {selectedDetail.lineupName || `Lineup v${selectedDetail.versionNumber}`}
-            </Text>
-            <Text style={styles.heroSubtext}>
-              v{selectedDetail.versionNumber} • {selectedDetail.gameTitle || "General"}
-            </Text>
-            <Text style={styles.heroSubtext}>{formatDateTime(selectedDetail.createdAt)}</Text>
+  const profileButton = (
+    <AppPressable
+      onPress={onOpenProfile}
+      accessibilityRole="button"
+      accessibilityLabel="Open profile"
+      style={styles.iconButton}
+      hitSlop={8}
+    >
+      <Feather name="user" size={18} color={theme.text.primary} />
+    </AppPressable>
+  );
+
+  const renderVersionRow = useCallback(
+    ({ item: version }: { item: BackendLineupVersionSummary }) => {
+      const isOpening = activeLineupId === version.id;
+      const title = version.lineupName || `Lineup v${version.versionNumber}`;
+
+      return (
+        <AppPressable
+          style={styles.row}
+          onPress={() => openLineupDetail(version.id)}
+          disabled={isOpening}
+          pressScale={0.98}
+          accessibilityRole="button"
+          accessibilityLabel={`Open ${title}`}
+          accessibilityState={{ disabled: isOpening, busy: isOpening }}
+        >
+          <View style={styles.rowMeta}>
+            <AppText variant="body" family="heading">
+              {title}
+            </AppText>
+            <AppText variant="caption" color="secondary">
+              v{version.versionNumber} • {version.gameTitle || "General"} •{" "}
+              {formatDateTime(version.createdAt)}
+            </AppText>
           </View>
+          {isOpening ? (
+            <ActivityIndicator color={theme.accent.base} size="small" />
+          ) : (
+            <Feather name="chevron-right" size={18} color={theme.text.secondary} />
+          )}
+        </AppPressable>
+      );
+    },
+    [activeLineupId, openLineupDetail],
+  );
 
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Actions</Text>
+  if (selectedDetail) {
+    return (
+      <ScreenContainer scroll contentStyle={styles.content}>
+        <ScreenHeader
+          title="Lineup Detail"
+          subtitle="Saved Lineup"
+          onBack={handleBack}
+          right={profileButton}
+        />
+
+        <Card variant="elevated">
+          <View style={styles.cardInner}>
+            <AppText variant="title" family="display">
+              {selectedDetail.lineupName || `Lineup v${selectedDetail.versionNumber}`}
+            </AppText>
+            <AppText variant="caption" color="secondary">
+              v{selectedDetail.versionNumber} • {selectedDetail.gameTitle || "General"}
+            </AppText>
+            <AppText variant="caption" color="secondary">
+              {formatDateTime(selectedDetail.createdAt)}
+            </AppText>
+          </View>
+        </Card>
+
+        <Card>
+          <View style={styles.cardInner}>
+            <AppText variant="bodyLg" family="heading">
+              Actions
+            </AppText>
             <View style={styles.actionsRow}>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.secondaryButton,
-                  pressed && { opacity: 0.85 },
-                  activeLineupId === selectedDetail.id && { opacity: 0.7 },
-                ]}
+              <Button
+                label="Export Excel"
+                variant="secondary"
+                size="sm"
+                icon="download"
                 onPress={() => {
                   if (!hasProSubscription) {
                     onRequirePro("Lineup exports");
@@ -296,15 +342,13 @@ const AllLineupsScreen = ({
                   void exportLineupVersion(selectedDetail.id, "xlsx");
                 }}
                 disabled={activeLineupId === selectedDetail.id}
-              >
-                <Text style={styles.secondaryText}>Export Excel</Text>
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.secondaryButton,
-                  pressed && { opacity: 0.85 },
-                  activeLineupId === selectedDetail.id && { opacity: 0.7 },
-                ]}
+                accessibilityLabel="Export lineup to Excel"
+              />
+              <Button
+                label="Export PDF"
+                variant="secondary"
+                size="sm"
+                icon="file-text"
                 onPress={() => {
                   if (!hasProSubscription) {
                     onRequirePro("Lineup exports");
@@ -313,14 +357,17 @@ const AllLineupsScreen = ({
                   void exportLineupVersion(selectedDetail.id, "pdf");
                 }}
                 disabled={activeLineupId === selectedDetail.id}
-              >
-                <Text style={styles.secondaryText}>Export PDF</Text>
-              </Pressable>
+                accessibilityLabel="Export lineup to PDF"
+              />
             </View>
           </View>
+        </Card>
 
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Complete Lineup</Text>
+        <Card>
+          <View style={styles.cardInner}>
+            <AppText variant="bodyLg" family="heading">
+              Complete Lineup
+            </AppText>
             <LineUp
               lineup={selectedRows}
               expandedInnings={new Set()}
@@ -328,247 +375,170 @@ const AllLineupsScreen = ({
               playerGenderByName={playerGenderByName}
             />
           </View>
-        </>
-      ) : (
-        <>
-          <View style={styles.heroCard}>
-            <Text style={styles.heroTitle}>Browse every saved lineup</Text>
-            <Text style={styles.heroSubtext}>
-              {isLoading ? "Loading..." : `${lineups.length} total saved versions`}
-            </Text>
-          </View>
+        </Card>
 
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Find lineup</Text>
-            <TextInput
+        {error ? (
+          <AppText variant="caption" color="danger">
+            {error}
+          </AppText>
+        ) : null}
+        {status ? (
+          <AppText variant="caption" color="success">
+            {status}
+          </AppText>
+        ) : null}
+      </ScreenContainer>
+    );
+  }
+
+  return (
+    <ScreenContainer>
+      <FlatList
+        data={isLoading ? [] : filteredLineups}
+        keyExtractor={(item) => item.id}
+        renderItem={renderVersionRow}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={styles.listContent}
+        ListHeaderComponent={
+          <View style={styles.listHeader}>
+            <ScreenHeader
+              title="All Lineups"
+              subtitle="Lineup History"
+              onBack={handleBack}
+              right={profileButton}
+            />
+
+            <Card variant="elevated">
+              <View style={styles.cardInner}>
+                <AppText variant="title" family="display">
+                  Browse every saved lineup
+                </AppText>
+                <AppText variant="caption" color="secondary">
+                  {isLoading ? "Loading..." : `${lineups.length} total saved versions`}
+                </AppText>
+              </View>
+            </Card>
+
+            <Input
+              label="Find lineup"
               value={query}
               onChangeText={setQuery}
               placeholder="Search by name, game, or version"
-              placeholderTextColor={palette.subtext}
-              style={styles.searchInput}
               autoCapitalize="none"
+              accessibilityLabel="Search lineups"
             />
-          </View>
 
-          <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <Text style={styles.cardTitle}>Saved Versions</Text>
-              {isLoading ? <ActivityIndicator color={palette.accent} size="small" /> : null}
+            <View style={styles.sectionRow}>
+              <AppText variant="bodyLg" family="heading">
+                Saved Versions
+              </AppText>
+              {isDetailLoading ? (
+                <View style={styles.loadingRow}>
+                  <ActivityIndicator color={theme.accent.base} size="small" />
+                  <AppText variant="caption" color="secondary">
+                    Opening lineup...
+                  </AppText>
+                </View>
+              ) : null}
             </View>
-
-            {isDetailLoading ? (
-              <View style={styles.loadingRow}>
-                <ActivityIndicator color={palette.accent} size="small" />
-                <Text style={styles.subtleText}>Opening lineup...</Text>
-              </View>
-            ) : null}
-
-            {!isLoading && filteredLineups.length === 0 ? (
-              <Text style={styles.subtleText}>
-                {query.trim().length > 0
-                  ? "No lineups match this search."
-                  : "No saved lineups yet."}
-              </Text>
-            ) : (
-              <View style={styles.list}>
-                {filteredLineups.map((version) => (
-                  <Pressable
-                    key={version.id}
-                    style={({ pressed }) => [
-                      styles.row,
-                      pressed && { opacity: 0.85 },
-                      activeLineupId === version.id && { opacity: 0.65 },
-                    ]}
-                    onPress={() => openLineupDetail(version.id)}
-                    disabled={activeLineupId === version.id}
-                  >
-                    <View style={styles.rowContent}>
-                      <View style={styles.rowMeta}>
-                        <Text style={styles.rowTitle}>
-                          {version.lineupName || `Lineup v${version.versionNumber}`}
-                        </Text>
-                        <Text style={styles.rowSubtext}>
-                          v{version.versionNumber} • {version.gameTitle || "General"} •{" "}
-                          {formatDateTime(version.createdAt)}
-                        </Text>
-                      </View>
-                      {activeLineupId === version.id ? (
-                        <ActivityIndicator color={palette.accent} size="small" />
-                      ) : (
-                        <Feather name="chevron-right" size={18} color={palette.subtext} />
-                      )}
-                    </View>
-                  </Pressable>
-                ))}
-              </View>
-            )}
           </View>
-        </>
-      )}
-
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
-      {status ? <Text style={styles.statusText}>{status}</Text> : null}
-    </ScrollView>
+        }
+        ListEmptyComponent={
+          isLoading ? (
+            <SkeletonListRows count={5} />
+          ) : (
+            <EmptyState
+              icon={query.trim().length > 0 ? "search" : "layers"}
+              title={
+                query.trim().length > 0
+                  ? "No lineups match this search"
+                  : "No saved lineups yet"
+              }
+              body={
+                query.trim().length > 0
+                  ? "Try a different name, game, or version number."
+                  : "Saved lineup versions will show up here."
+              }
+            />
+          )
+        }
+        ListFooterComponent={
+          <View style={styles.listFooter}>
+            {error ? (
+              <AppText variant="caption" color="danger">
+                {error}
+              </AppText>
+            ) : null}
+            {status ? (
+              <AppText variant="caption" color="success">
+                {status}
+              </AppText>
+            ) : null}
+          </View>
+        }
+      />
+    </ScreenContainer>
   );
 };
 
 const styles = StyleSheet.create({
-  scroll: {
-    flex: 1,
-    backgroundColor: palette.background,
+  content: {
+    gap: space.sm,
   },
-  container: {
-    padding: 16,
-    paddingBottom: 28,
-    gap: 12,
+  listContent: {
+    gap: space.xs,
+    paddingBottom: space.lg,
   },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 2,
+  listHeader: {
+    gap: space.sm,
+    marginBottom: space.xxs,
   },
-  headerTextWrap: {
-    alignItems: "center",
-    gap: 2,
-  },
-  headerEyebrow: {
-    color: palette.subtext,
-    fontFamily: typeface.body,
-    fontSize: 10,
-    letterSpacing: 1.6,
-    textTransform: "uppercase",
-  },
-  headerTitle: {
-    color: palette.text,
-    fontFamily: typeface.display,
-    fontSize: 24,
+  listFooter: {
+    gap: space.xxs,
   },
   iconButton: {
     width: 36,
     height: 36,
-    borderRadius: 10,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: theme.border.base,
+    backgroundColor: theme.bg.raised,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: palette.cardAlt,
-    borderWidth: 1,
-    borderColor: palette.border,
   },
-  heroCard: {
-    backgroundColor: palette.cardAlt,
-    borderRadius: 18,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: palette.border,
-    gap: 8,
+  cardInner: {
+    gap: space.xxs,
   },
-  heroTitle: {
-    color: palette.text,
-    fontFamily: typeface.display,
-    fontSize: 22,
-  },
-  heroSubtext: {
-    color: palette.subtext,
-    fontFamily: typeface.body,
-    fontSize: 12,
-  },
-  card: {
-    backgroundColor: palette.card,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: palette.border,
-    padding: 12,
-    gap: 10,
-  },
-  cardHeader: {
+  sectionRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 10,
-  },
-  cardTitle: {
-    color: palette.text,
-    fontFamily: typeface.heading,
-    fontSize: 15,
-  },
-  searchInput: {
-    minHeight: 44,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: palette.cardAlt,
-    color: palette.text,
-    fontFamily: typeface.body,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  list: {
-    gap: 8,
-  },
-  row: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: "rgba(255,255,255,0.02)",
-    padding: 10,
-  },
-  rowContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 10,
-  },
-  rowMeta: {
-    flex: 1,
-    gap: 2,
-  },
-  rowTitle: {
-    color: palette.text,
-    fontFamily: typeface.heading,
-    fontSize: 14,
-  },
-  rowSubtext: {
-    color: palette.subtext,
-    fontFamily: typeface.body,
-    fontSize: 12,
+    gap: space.xs,
   },
   loadingRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: space.xs,
+  },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: space.xs,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: theme.border.base,
+    backgroundColor: theme.bg.raised,
+    padding: space.sm,
+  },
+  rowMeta: {
+    flex: 1,
+    gap: space.xxs,
   },
   actionsRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
-  },
-  secondaryButton: {
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: palette.cardAlt,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-  },
-  secondaryText: {
-    color: palette.text,
-    fontFamily: typeface.heading,
-    fontSize: 12,
-  },
-  subtleText: {
-    color: palette.subtext,
-    fontFamily: typeface.body,
-    fontSize: 12,
-  },
-  errorText: {
-    color: palette.danger,
-    fontFamily: typeface.body,
-    fontSize: 12,
-  },
-  statusText: {
-    color: palette.success,
-    fontFamily: typeface.body,
-    fontSize: 12,
+    gap: space.xs,
   },
 });
 

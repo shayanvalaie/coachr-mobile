@@ -1,14 +1,24 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import FirstTimeTour, {
   FirstTimeTourHandle,
   TourStep,
 } from "../components/FirstTimeTour";
 import Header from "../components/Header";
+import {
+  AppPressable,
+  AppText,
+  Button,
+  Card,
+  EmptyState,
+  MetricTile,
+  ScreenContainer,
+  SkeletonMetricRow,
+} from "../components/ui";
 import { backendClient } from "../lib/backend/client";
 import { BackendGame, BackendSession } from "../lib/backend/types";
-import { palette } from "../theme/colors";
-import { typeface } from "../theme/typography";
+import { theme } from "../theme/colors";
+import { space } from "../theme/tokens";
 import {
   defaultTeamRulesConfig,
   parseTeamRulesConfig,
@@ -110,6 +120,7 @@ const HomeScreen = ({
     rules: defaultTeamRulesConfig,
   });
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const ensureTeam = useCallback(async () => {
@@ -160,6 +171,17 @@ const HomeScreen = ({
     });
   }, [loadDashboard]);
 
+  const handleRefresh = useCallback(() => {
+    setRefreshing(true);
+    loadDashboard()
+      .catch(() => {
+        setError("Unable to load home data.");
+      })
+      .finally(() => {
+        setRefreshing(false);
+      });
+  }, [loadDashboard]);
+
   const readinessText = useMemo(() => {
     const activeCount = summary.rosterCount;
     if (activeCount >= summary.rules.minimumPlayers) {
@@ -170,11 +192,6 @@ const HomeScreen = ({
 
   return (
     <>
-      <View pointerEvents="none" style={styles.bgLayer}>
-        <View style={[styles.bgOrb, styles.bgOrbOne]} />
-        <View style={[styles.bgOrb, styles.bgOrbTwo]} />
-      </View>
-
       <View style={styles.screen}>
         <Header
           onUserPress={onOpenProfile}
@@ -182,116 +199,153 @@ const HomeScreen = ({
           showMenu={false}
         />
 
-        <View style={styles.content}>
-          <View style={styles.heroCard}>
-            <Text style={styles.heroEyebrow}>Home</Text>
-            <Text style={styles.heroTitle}>Ready for game day?</Text>
-            <Text style={styles.heroSubtitle}>{readinessText}</Text>
-            <Pressable
-              ref={generateBtnRef}
-              style={({ pressed }) => [styles.heroPrimaryButton, pressed && { opacity: 0.9 }]}
-              onPress={onOpenLineupPage}
+        <ScreenContainer
+          scroll
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
+          contentStyle={styles.content}
+        >
+          <Card variant="elevated" style={styles.heroCard}>
+            <AppText
+              variant="caption"
+              family="heading"
+              color="accent"
+              style={styles.eyebrow}
             >
-              <Text style={styles.heroPrimaryText}>Generate now</Text>
-            </Pressable>
-          </View>
+              Home
+            </AppText>
+            <AppText variant="display" family="display">
+              Ready for game day?
+            </AppText>
+            <AppText variant="body" color="secondary">
+              {readinessText}
+            </AppText>
+            <View
+              ref={generateBtnRef}
+              collapsable={false}
+              style={styles.heroButtonWrap}
+            >
+              <Button
+                label="Generate now"
+                onPress={onOpenLineupPage}
+                accessibilityLabel="Generate a lineup now"
+              />
+            </View>
+          </Card>
 
           {!loading && !error && summary.lineupsCount === 0 ? (
-            <View style={styles.emptyLineupCard}>
-              <Text style={styles.emptyLineupTitle}>No lineups yet</Text>
-              <Text style={styles.emptyLineupSubtitle}>
-                You haven&apos;t created a lineup yet. Generate your first one to
-                get ready for game day.
-              </Text>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.emptyLineupButton,
-                  pressed && { opacity: 0.9 },
-                ]}
-                onPress={onOpenLineupPage}
-              >
-                <Text style={styles.emptyLineupButtonText}>
-                  Create your first lineup
-                </Text>
-              </Pressable>
-            </View>
+            <Card variant="outline" padding="xxs">
+              <EmptyState
+                icon="clipboard"
+                title="No lineups yet"
+                body="You haven't created a lineup yet. Generate your first one to get ready for game day."
+                action={{
+                  label: "Create your first lineup",
+                  onPress: onOpenLineupPage,
+                }}
+              />
+            </Card>
           ) : null}
 
-          <View style={styles.metricsGrid}>
-            <View style={styles.metricCard}>
-              <Text style={styles.metricLabel}>Roster</Text>
-              <Text style={styles.metricValue}>{summary.rosterCount}</Text>
+          {loading ? (
+            <View style={styles.metricsGrid}>
+              <SkeletonMetricRow count={2} />
+              <SkeletonMetricRow count={2} />
             </View>
-            <View style={styles.metricCard}>
-              <Text style={styles.metricLabel}>Innings</Text>
-              <Text style={styles.metricValue}>{summary.rules.segmentCount}</Text>
+          ) : (
+            <View style={styles.metricsGrid}>
+              <View style={styles.metricsRow}>
+                <MetricTile label="Roster" value={summary.rosterCount} />
+                <MetricTile label="Innings" value={summary.rules.segmentCount} />
+              </View>
+              <View style={styles.metricsRow}>
+                <MetricTile label="On Field" value={summary.rules.playersOnField} />
+                <MetricTile label="Next Game" value={summary.nextGameLabel} small />
+              </View>
             </View>
-            <View style={styles.metricCard}>
-              <Text style={styles.metricLabel}>On Field</Text>
-              <Text style={styles.metricValue}>{summary.rules.playersOnField}</Text>
-            </View>
-            <View style={styles.metricCard}>
-              <Text style={styles.metricLabel}>Next Game</Text>
-              <Text style={styles.metricValueSmall}>{summary.nextGameLabel}</Text>
-            </View>
-          </View>
+          )}
 
-          <View style={styles.quickActionsCard}>
-            <Text style={styles.quickActionsTitle}>Quick Actions</Text>
+          <Card style={styles.quickActionsCard}>
+            <AppText variant="bodyLg" family="heading">
+              Quick Actions
+            </AppText>
             <View style={styles.quickActionsRow}>
-              <Pressable
+              <View
                 ref={rosterBtnRef}
-                style={({ pressed }) => [styles.quickButton, pressed && { opacity: 0.88 }]}
-                onPress={onOpenRosterPage}
+                collapsable={false}
+                style={styles.quickButtonWrap}
               >
-                <Text style={styles.quickButtonText}>Roster</Text>
-              </Pressable>
-              <Pressable
+                <Button
+                  label="Roster"
+                  onPress={onOpenRosterPage}
+                  variant="secondary"
+                  fullWidth
+                  accessibilityLabel="Open roster"
+                />
+              </View>
+              <View
                 ref={rulesBtnRef}
-                style={({ pressed }) => [styles.quickButton, pressed && { opacity: 0.88 }]}
-                onPress={onOpenRulesPage}
+                collapsable={false}
+                style={styles.quickButtonWrap}
               >
-                <Text style={styles.quickButtonText}>Rules</Text>
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [styles.quickButton, pressed && { opacity: 0.88 }]}
-                onPress={onOpenCalendarPage}
-              >
-                <Text style={styles.quickButtonText}>Calendar</Text>
-              </Pressable>
-              <Pressable
+                <Button
+                  label="Rules"
+                  onPress={onOpenRulesPage}
+                  variant="secondary"
+                  fullWidth
+                  accessibilityLabel="Open team rules"
+                />
+              </View>
+              <View collapsable={false} style={styles.quickButtonWrap}>
+                <Button
+                  label="Calendar"
+                  onPress={onOpenCalendarPage}
+                  variant="secondary"
+                  fullWidth
+                  accessibilityLabel="Open calendar"
+                />
+              </View>
+              <View
                 ref={lineupsBtnRef}
-                style={({ pressed }) => [styles.quickButton, pressed && { opacity: 0.88 }]}
-                onPress={onOpenLineupsPage}
+                collapsable={false}
+                style={styles.quickButtonWrap}
               >
-                <Text style={styles.quickButtonText}>All Lineups</Text>
-              </Pressable>
+                <Button
+                  label="All Lineups"
+                  onPress={onOpenLineupsPage}
+                  variant="secondary"
+                  fullWidth
+                  accessibilityLabel="View all lineups"
+                />
+              </View>
             </View>
-          </View>
+          </Card>
 
           {loading ? (
-            <View style={styles.footerMessage}>
-              <ActivityIndicator color={palette.accent} />
-            </View>
+            <View style={styles.footerMessage} />
           ) : error ? (
-            <Pressable
+            <AppPressable
               style={styles.footerMessage}
               onPress={() => {
                 loadDashboard().catch(() => {
                   setError("Unable to load home data.");
                 });
               }}
+              accessibilityRole="button"
+              accessibilityLabel={`${error} Tap to retry`}
             >
-              <Text style={styles.errorText}>{error} Tap to retry.</Text>
-            </Pressable>
+              <AppText variant="caption" color="danger">
+                {error} Tap to retry.
+              </AppText>
+            </AppPressable>
           ) : (
             <View style={styles.footerMessage}>
-              <Text style={styles.subtleText}>
+              <AppText variant="caption" color="muted">
                 Signed in as {session.user.email ?? "your account"}
-              </Text>
+              </AppText>
             </View>
           )}
-        </View>
+        </ScreenContainer>
       </View>
       <FirstTimeTour ref={tourRef} steps={tourSteps} onDone={() => {}} />
     </>
@@ -301,193 +355,47 @@ const HomeScreen = ({
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: palette.background,
+    backgroundColor: theme.bg.base,
   },
   content: {
-    flex: 1,
-    padding: 16,
-    gap: 12,
+    flexGrow: 1,
+    paddingTop: space.md,
+    gap: space.sm,
   },
-  bgLayer: {
-    ...StyleSheet.absoluteFillObject,
-    overflow: "hidden",
-  },
-  bgOrb: {
-    position: "absolute",
-    borderRadius: 999,
-    opacity: 0.2,
-  },
-  bgOrbOne: {
-    width: 220,
-    height: 220,
-    backgroundColor: palette.accent,
-    top: -80,
-    right: -60,
-  },
-  bgOrbTwo: {
-    width: 200,
-    height: 200,
-    backgroundColor: palette.success,
-    bottom: 80,
-    left: -120,
+  eyebrow: {
+    textTransform: "uppercase",
+    letterSpacing: 1.2,
   },
   heroCard: {
-    backgroundColor: palette.cardAlt,
-    borderRadius: 18,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: palette.border,
-    gap: 8,
+    gap: space.xs,
   },
-  heroEyebrow: {
-    color: palette.accent,
-    fontSize: 11,
-    fontFamily: typeface.heading,
-    textTransform: "uppercase",
-    letterSpacing: 1.4,
-  },
-  heroTitle: {
-    color: palette.text,
-    fontSize: 24,
-    fontFamily: typeface.display,
-  },
-  heroSubtitle: {
-    color: palette.subtext,
-    fontSize: 13,
-    fontFamily: typeface.body,
-  },
-  heroPrimaryButton: {
+  heroButtonWrap: {
     alignSelf: "flex-start",
-    backgroundColor: palette.accent,
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: "rgba(242,166,59,0.8)",
-    marginTop: 4,
-  },
-  heroPrimaryText: {
-    color: palette.accentText,
-    fontSize: 14,
-    fontFamily: typeface.heading,
-  },
-  emptyLineupCard: {
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "rgba(242,166,59,0.35)",
-    backgroundColor: palette.cardAlt,
-    padding: 14,
-    gap: 8,
-  },
-  emptyLineupTitle: {
-    color: palette.text,
-    fontSize: 16,
-    fontFamily: typeface.heading,
-  },
-  emptyLineupSubtitle: {
-    color: palette.subtext,
-    fontSize: 13,
-    lineHeight: 19,
-    fontFamily: typeface.body,
-  },
-  emptyLineupButton: {
-    alignSelf: "flex-start",
-    backgroundColor: palette.accent,
-    borderRadius: 10,
-    paddingVertical: 9,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: "rgba(242,166,59,0.8)",
-    marginTop: 4,
-  },
-  emptyLineupButtonText: {
-    color: palette.accentText,
-    fontSize: 13,
-    fontFamily: typeface.heading,
+    marginTop: space.xxs,
   },
   metricsGrid: {
+    gap: space.sm,
+  },
+  metricsRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-  },
-  metricCard: {
-    flexBasis: "48%",
-    flexGrow: 1,
-    minHeight: 78,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: palette.card,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    justifyContent: "space-between",
-  },
-  metricLabel: {
-    color: palette.subtext,
-    fontSize: 11,
-    fontFamily: typeface.body,
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
-  },
-  metricValue: {
-    color: palette.text,
-    fontSize: 24,
-    lineHeight: 28,
-    fontFamily: typeface.display,
-  },
-  metricValueSmall: {
-    color: palette.text,
-    fontSize: 16,
-    lineHeight: 20,
-    fontFamily: typeface.heading,
+    gap: space.sm,
   },
   quickActionsCard: {
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: palette.card,
-    padding: 12,
-    gap: 10,
-  },
-  quickActionsTitle: {
-    color: palette.text,
-    fontSize: 14,
-    fontFamily: typeface.heading,
+    gap: space.sm,
   },
   quickActionsRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
+    gap: space.xs,
   },
-  quickButton: {
+  quickButtonWrap: {
     flexBasis: "48%",
     flexGrow: 1,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: palette.cardAlt,
-    paddingVertical: 11,
-    alignItems: "center",
-  },
-  quickButtonText: {
-    color: palette.text,
-    fontSize: 13,
-    fontFamily: typeface.heading,
   },
   footerMessage: {
     marginTop: "auto",
     minHeight: 24,
     justifyContent: "center",
-  },
-  subtleText: {
-    color: palette.subtext,
-    fontSize: 12,
-    fontFamily: typeface.body,
-  },
-  errorText: {
-    color: palette.danger,
-    fontSize: 12,
-    fontFamily: typeface.body,
   },
 });
 

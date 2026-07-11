@@ -4,17 +4,18 @@ import {
   Animated,
   Pressable,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
-import { Entypo } from "../icons";
-import { palette } from "../theme/colors";
-import { typeface } from "../theme/typography";
+import { Feather } from "../icons";
+import { theme, withAlpha } from "../theme/colors";
+import { radius, space } from "../theme/tokens";
 import { InningAssignment, Player } from "../types/lineup";
-import LineUp from "./LineUp";
+import LineUp from "./lineup/LineupGrid";
+import { AppText } from "./ui";
 
 type Props = {
   activePlayersCount: number;
+  segmentCount: number;
   lineup: InningAssignment[] | null;
   canEditLineup: boolean;
   isInlineEditing: boolean;
@@ -73,12 +74,14 @@ const GeneratingState = () => {
   return (
     <View style={styles.loaderCard}>
       <View style={styles.loaderHeaderRow}>
-        <ActivityIndicator color={palette.accent} />
-        <Text style={styles.loaderTitle}>Generating lineup...</Text>
+        <ActivityIndicator color={theme.accent.base} />
+        <AppText variant="body" family="heading">
+          Generating lineup...
+        </AppText>
       </View>
-      <Text style={styles.loaderText}>
+      <AppText variant="caption" color="secondary">
         Balancing positions, bench rotation, and your custom rules.
-      </Text>
+      </AppText>
       <View style={styles.loaderTrack}>
         <Animated.View style={[styles.loaderFill, { width }]} />
       </View>
@@ -88,6 +91,7 @@ const GeneratingState = () => {
 
 const GameSetup = ({
   activePlayersCount,
+  segmentCount,
   lineup,
   canEditLineup,
   isInlineEditing,
@@ -110,13 +114,26 @@ const GameSetup = ({
   <View style={styles.card}>
     <View style={styles.cardHeader}>
       <View style={styles.headerInfo}>
-        <Text style={styles.eyebrow}>Generate</Text>
-        <Text style={styles.cardTitle}>Lineup Engine</Text>
-        <Text style={styles.caption}>{activePlayersCount} active players</Text>
+        <AppText
+          variant="caption"
+          family="heading"
+          color="accent"
+          style={styles.eyebrow}
+        >
+          Generate
+        </AppText>
+        <AppText variant="title" family="display" style={styles.cardTitle}>
+          Lineup Engine
+        </AppText>
+        <AppText variant="caption" color="secondary">
+          {activePlayersCount} active players
+        </AppText>
       </View>
       <View style={styles.cardHeaderActions}>
         <View style={styles.badge}>
-          <Text style={styles.badgeText}>{lineup?.length ?? 0}/7</Text>
+          <AppText variant="caption" family="mono" color="success">
+            {lineup?.length ?? 0}/{segmentCount}
+          </AppText>
         </View>
         <Pressable
           style={({ pressed }) => [
@@ -124,11 +141,16 @@ const GameSetup = ({
             pressed && { opacity: 0.7 },
           ]}
           onPress={onToggleCollapse}
+          accessibilityRole="button"
+          accessibilityLabel={
+            collapsed ? "Expand lineup engine" : "Collapse lineup engine"
+          }
+          accessibilityState={{ expanded: !collapsed }}
         >
-          <Entypo
-            name={collapsed ? "chevron-small-down" : "chevron-small-up"}
+          <Feather
+            name={collapsed ? "chevron-down" : "chevron-up"}
             size={24}
-            color={palette.text}
+            color={theme.text.primary}
           />
         </Pressable>
       </View>
@@ -142,8 +164,12 @@ const GameSetup = ({
               pressed && { opacity: 0.9 },
             ]}
             onPress={onEditSelection}
+            accessibilityRole="button"
+            accessibilityLabel="Edit player selection"
           >
-            <Text style={styles.quickActionText}>Edit selection</Text>
+            <AppText variant="body" family="heading">
+              Edit selection
+            </AppText>
           </Pressable>
           <Pressable
             style={({ pressed }) => [
@@ -151,8 +177,12 @@ const GameSetup = ({
               pressed && { opacity: 0.9 },
             ]}
             onPress={onSelectAll}
+            accessibilityRole="button"
+            accessibilityLabel="Select all players"
           >
-            <Text style={styles.quickActionText}>Select all</Text>
+            <AppText variant="body" family="heading">
+              Select all
+            </AppText>
           </Pressable>
         </View>
         <View style={styles.generateWrap}>
@@ -165,10 +195,13 @@ const GameSetup = ({
             ]}
             onPress={onGenerate}
             disabled={isGenerating}
+            accessibilityRole="button"
+            accessibilityLabel="Generate lineup"
+            accessibilityState={{ disabled: isGenerating, busy: isGenerating }}
           >
-            <Text style={styles.primaryText}>
+            <AppText variant="bodyLg" family="heading" color="onAccent">
               {isGenerating ? "Working..." : "Generate lineup"}
-            </Text>
+            </AppText>
           </Pressable>
         </View>
         {lineup ? (
@@ -183,10 +216,18 @@ const GameSetup = ({
               ]}
               onPress={onEditLineup}
               disabled={!canEditLineup}
+              accessibilityRole="button"
+              accessibilityLabel={
+                isInlineEditing ? "Done editing lineup" : "Edit lineup"
+              }
+              accessibilityState={{
+                disabled: !canEditLineup,
+                selected: isInlineEditing,
+              }}
             >
-              <Text style={styles.editLineupText}>
+              <AppText variant="caption" family="heading" color="success">
                 {isInlineEditing ? "Done editing" : "Edit lineup"}
-              </Text>
+              </AppText>
             </Pressable>
             <Pressable
               style={({ pressed }) => [
@@ -195,22 +236,32 @@ const GameSetup = ({
                 pressed && { opacity: 0.9 },
               ]}
               onPress={onSaveLineup}
+              accessibilityRole="button"
+              accessibilityLabel="Save lineup"
             >
-              <Text style={styles.saveButtonText}>Save lineup</Text>
+              <AppText variant="caption" family="heading">
+                Save lineup
+              </AppText>
             </Pressable>
           </View>
         ) : null}
 
         {isGenerating ? <GeneratingState /> : null}
         {!isGenerating && status ? (
-          <Text style={styles.status}>{status}</Text>
+          <AppText variant="body" color="success">
+            {status}
+          </AppText>
         ) : null}
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {error ? (
+          <AppText variant="body" color="danger">
+            {error}
+          </AppText>
+        ) : null}
 
-        <Text style={styles.hint}>
+        <AppText variant="body" color="secondary">
           Engine honors locked/fixed players, minimum women requirements,
           catcher rules, and fair bench rotation.
-        </Text>
+        </AppText>
 
         <LineUp
           lineup={lineup}
@@ -230,12 +281,12 @@ export default memo(GameSetup);
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: palette.card,
-    borderRadius: 20,
-    padding: 16,
-    gap: 12,
+    backgroundColor: theme.bg.raised,
+    borderRadius: radius.xl,
+    padding: space.md,
+    gap: space.sm,
     borderWidth: 1,
-    borderColor: palette.border,
+    borderColor: theme.border.base,
   },
   cardHeader: {
     flexDirection: "row",
@@ -244,91 +295,65 @@ const styles = StyleSheet.create({
   },
   headerInfo: {
     flex: 1,
-    paddingRight: 12,
+    paddingRight: space.sm,
   },
   cardHeaderActions: {
     flexDirection: "row",
-    gap: 8,
+    gap: space.xs,
     alignItems: "center",
     justifyContent: "flex-end",
   },
   cardTitle: {
-    color: palette.text,
-    fontSize: 22,
-    fontFamily: typeface.display,
     letterSpacing: 0.4,
   },
-  caption: {
-    color: palette.subtext,
-    fontFamily: typeface.body,
-    fontSize: 12,
-  },
   eyebrow: {
-    color: palette.accent,
-    fontSize: 11,
     letterSpacing: 1.4,
     textTransform: "uppercase",
-    fontFamily: typeface.heading,
     marginBottom: 2,
   },
   primaryButton: {
-    backgroundColor: palette.accent,
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    backgroundColor: theme.accent.base,
+    borderRadius: radius.md,
+    paddingVertical: space.sm,
+    paddingHorizontal: space.md,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "rgba(242,166,59,0.7)",
-  },
-  primaryText: {
-    color: palette.accentText,
-    fontSize: 14,
-    fontFamily: typeface.heading,
+    borderColor: withAlpha(theme.accent.base, 0.7),
   },
   iconButton: {
     borderWidth: 1,
-    borderColor: palette.border,
-    borderRadius: 12,
-    paddingVertical: 8,
+    borderColor: theme.border.base,
+    borderRadius: radius.md,
+    paddingVertical: space.xs,
     paddingHorizontal: 10,
-    backgroundColor: palette.cardAlt,
+    backgroundColor: theme.bg.elevated,
   },
   badge: {
     borderWidth: 1,
-    borderColor: "rgba(126,207,157,0.45)",
-    borderRadius: 10,
-    backgroundColor: "rgba(126,207,157,0.15)",
+    borderColor: withAlpha(theme.success.base, 0.45),
+    borderRadius: radius.sm,
+    backgroundColor: theme.success.subtle,
     paddingHorizontal: 10,
     paddingVertical: 7,
   },
-  badgeText: {
-    color: palette.success,
-    fontFamily: typeface.mono,
-    fontSize: 12,
-  },
   editLineupButton: {
-    borderRadius: 10,
+    borderRadius: radius.sm,
     borderWidth: 1,
-    borderColor: "rgba(126,207,157,0.45)",
-    backgroundColor: "rgba(126,207,157,0.14)",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    borderColor: withAlpha(theme.success.base, 0.45),
+    backgroundColor: theme.success.subtle,
+    paddingHorizontal: space.sm,
+    paddingVertical: space.xs,
   },
   editLineupButtonActive: {
-    backgroundColor: "rgba(126,207,157,0.22)",
+    backgroundColor: withAlpha(theme.success.base, 0.22),
   },
   editLineupButtonDisabled: {
     opacity: 0.55,
   },
-  editLineupText: {
-    color: palette.success,
-    fontFamily: typeface.heading,
-    fontSize: 12,
-  },
   actionsRow: {
     flexDirection: "row",
-    gap: 10,
+    gap: space.xs,
     marginTop: 2,
   },
   quickActionButton: {
@@ -336,17 +361,12 @@ const styles = StyleSheet.create({
     minHeight: 46,
     justifyContent: "center",
     alignItems: "center",
-    borderRadius: 12,
+    borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: palette.cardAlt,
+    borderColor: theme.border.base,
+    backgroundColor: theme.bg.elevated,
     paddingVertical: 10,
-    paddingHorizontal: 12,
-  },
-  quickActionText: {
-    color: palette.text,
-    fontFamily: typeface.heading,
-    fontSize: 13,
+    paddingHorizontal: space.sm,
   },
   generateWrap: {
     marginTop: 2,
@@ -355,77 +375,48 @@ const styles = StyleSheet.create({
     minHeight: 46,
   },
   saveRow: {
-    marginTop: 8,
+    marginTop: space.xs,
     flexDirection: "row",
     justifyContent: "flex-end",
-    gap: 8,
+    gap: space.xs,
   },
   saveRowButton: {
     minHeight: 36,
   },
   saveInlineButton: {
     minWidth: 112,
-    borderRadius: 12,
+    borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.28)",
-    backgroundColor: "rgba(21, 47, 39, 0.9)",
+    borderColor: withAlpha(theme.text.primary, 0.28),
+    backgroundColor: withAlpha(theme.bg.raised, 0.9),
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 12,
+    paddingHorizontal: space.sm,
     paddingVertical: 6,
-  },
-  saveButtonText: {
-    color: palette.text,
-    fontFamily: typeface.heading,
-    fontSize: 12,
   },
   loaderCard: {
     borderWidth: 1,
-    borderColor: "rgba(242,166,59,0.45)",
-    borderRadius: 12,
-    backgroundColor: "rgba(242,166,59,0.1)",
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    gap: 8,
+    borderColor: theme.accent.subtleBorder,
+    borderRadius: radius.md,
+    backgroundColor: theme.accent.subtle,
+    paddingHorizontal: space.sm,
+    paddingVertical: space.sm,
+    gap: space.xs,
   },
   loaderHeaderRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-  },
-  loaderTitle: {
-    color: palette.text,
-    fontFamily: typeface.heading,
-    fontSize: 14,
-  },
-  loaderText: {
-    color: palette.subtext,
-    fontFamily: typeface.body,
-    fontSize: 12,
+    gap: space.xs,
   },
   loaderTrack: {
     height: 6,
-    borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.12)",
+    borderRadius: radius.pill,
+    backgroundColor: withAlpha(theme.text.primary, 0.12),
     overflow: "hidden",
   },
   loaderFill: {
     height: "100%",
-    borderRadius: 999,
-    backgroundColor: palette.accent,
-  },
-  status: {
-    color: palette.success,
-    fontFamily: typeface.body,
-  },
-  error: {
-    color: palette.danger,
-    fontFamily: typeface.body,
-  },
-  hint: {
-    color: palette.subtext,
-    fontSize: 13,
-    lineHeight: 18,
-    fontFamily: typeface.body,
+    borderRadius: radius.pill,
+    backgroundColor: theme.accent.base,
   },
 });

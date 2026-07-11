@@ -1,7 +1,9 @@
 import React, { memo } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import { Entypo } from "../icons";
-import { palette } from "../theme/colors";
+import { StyleSheet, View } from "react-native";
+import { Feather } from "../icons";
+import { theme } from "../theme/colors";
+import { space } from "../theme/tokens";
+import { AppText, Card } from "./ui";
 
 type Props = {
   title: string;
@@ -11,57 +13,44 @@ type Props = {
 };
 
 const ProfileItem = ({ title, subtitle, onPress, danger = false }: Props) => (
-  <Pressable
-    style={({ pressed }) => [
-      styles.item,
-      pressed && { opacity: 0.85 },
-      danger && styles.dangerItem,
-    ]}
+  <Card
     onPress={onPress}
-    accessibilityRole="button"
+    padding="md"
+    style={[styles.item, danger && styles.dangerItem]}
+    accessibilityLabel={subtitle ? `${title}. ${subtitle}` : title}
   >
     <View style={styles.textGroup}>
-      <Text style={[styles.title, danger && styles.dangerText]}>{title}</Text>
-      {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+      <AppText variant="bodyLg" family="heading" color={danger ? "danger" : "primary"}>
+        {title}
+      </AppText>
+      {subtitle ? (
+        <AppText variant="body" color="secondary">
+          {subtitle}
+        </AppText>
+      ) : null}
     </View>
-    <Entypo
-      name="chevron-small-right"
-      size={22}
-      color={danger ? palette.danger : palette.subtext}
+    <Feather
+      name="chevron-right"
+      size={20}
+      color={danger ? theme.danger.base : theme.text.secondary}
     />
-  </Pressable>
+  </Card>
 );
 
 export default memo(ProfileItem);
 
 const styles = StyleSheet.create({
   item: {
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    backgroundColor: palette.card,
-    borderRadius: 12,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    borderWidth: 1,
-    borderColor: palette.border,
+    gap: space.sm,
   },
   dangerItem: {
-    borderColor: "rgba(248,107,107,0.3)",
+    borderColor: theme.danger.subtleBorder,
   },
   textGroup: {
     flex: 1,
-    gap: 4,
-  },
-  title: {
-    color: palette.text,
-    fontWeight: "800",
-  },
-  subtitle: {
-    color: palette.subtext,
-    fontSize: 13,
-  },
-  dangerText: {
-    color: palette.danger,
+    gap: 2,
   },
 });

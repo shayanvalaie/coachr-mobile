@@ -449,29 +449,39 @@ export const supabaseBackendClient: BackendClient = {
       return invokeEdgeFunction(accessToken, payload);
     }
   },
+  // The methods below are FastAPI-only. Passive loads fail soft (empty data)
+  // so switching EXPO_PUBLIC_BACKEND_PROVIDER back to "supabase" never crashes
+  // the app; user-initiated actions throw a readable message that screens
+  // surface as a toast. FastAPI is the production-supported provider.
   saveLineupVersion: async (_payload) => {
-    throw new Error("Lineup history is currently available only with the FastAPI backend.");
+    throw new Error("Saving lineup versions requires the FastAPI backend.");
   },
   getLineupVersions: async (_teamId: string, _gameId?: string | null) => {
-    throw new Error("Lineup history is currently available only with the FastAPI backend.");
+    if (__DEV__) {
+      console.log("[backend] getLineupVersions unsupported on supabase provider; returning []");
+    }
+    return [];
   },
   getLineupVersion: async (_teamId: string, _lineupId: string) => {
-    throw new Error("Lineup history is currently available only with the FastAPI backend.");
+    throw new Error("Lineup history requires the FastAPI backend.");
   },
   deleteLineupVersion: async (_teamId: string, _lineupId: string) => {
-    throw new Error("Lineup history is currently available only with the FastAPI backend.");
+    throw new Error("Lineup history requires the FastAPI backend.");
   },
   exportLineupVersion: async (
     _teamId: string,
     _lineupId: string,
     _format: "xlsx" | "pdf",
   ) => {
-    throw new Error("Lineup export is currently available only with the FastAPI backend.");
+    throw new Error("Lineup export requires the FastAPI backend.");
   },
   verifySubscription: async () => {
-    throw new Error("Subscription verification is currently available only with the FastAPI backend.");
+    throw new Error("Subscription verification requires the FastAPI backend.");
   },
   getSubscriptionStatus: async () => {
-    throw new Error("Subscription status is currently available only with the FastAPI backend.");
+    if (__DEV__) {
+      console.log("[backend] getSubscriptionStatus unsupported on supabase provider; returning inactive");
+    }
+    return { isPro: false, productId: null, status: null, expiresAt: null };
   },
 };

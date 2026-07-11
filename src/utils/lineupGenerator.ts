@@ -200,7 +200,7 @@ export const generateLineup = (
 
   const lockMapResult = buildLockMap(players)
   if (lockMapResult.error) return { error: lockMapResult.error }
-  const lockMap = lockMapResult.lockMap
+  const lockMap = lockMapResult.lockMap ?? new Map<Position, Player>()
 
   const pitcherResult = selectPitcher(players)
   if (pitcherResult.error) return { error: pitcherResult.error }
@@ -397,7 +397,7 @@ export const buildPlayersFromRows = (rows: any[][]): Player[] => {
   )
 
   if (nameIndex === -1) {
-    console.log('[buildPlayersFromRows] No name column found. Headers:', normalizedHeaders)
+    if (__DEV__) console.log('[buildPlayersFromRows] No name column found. Headers:', normalizedHeaders)
     return []
   }
 

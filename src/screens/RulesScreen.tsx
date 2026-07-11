@@ -2,19 +2,27 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   LayoutAnimation,
   Platform,
-  Pressable,
-  ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   UIManager,
   View,
 } from "react-native";
-import Feather from "@expo/vector-icons/Feather";
+import { Feather } from "../icons";
 import { BackendSession } from "../lib/backend/types";
 import { backendClient } from "../lib/backend/client";
-import { palette } from "../theme/colors";
-import { typeface } from "../theme/typography";
+import {
+  AppPressable,
+  AppText,
+  Button,
+  Card,
+  Chip,
+  Input,
+  MetricTile,
+  ScreenContainer,
+  ScreenHeader,
+  useToast,
+} from "../components/ui";
+import { theme } from "../theme/colors";
+import { radius, space } from "../theme/tokens";
 import {
   defaultTeamRulesConfig,
   parseTeamRulesConfig,
@@ -29,7 +37,11 @@ type Props = {
   onOpenProfile: () => void;
 };
 
+const capitalize = (value: string) =>
+  value.charAt(0).toUpperCase() + value.slice(1);
+
 const RulesScreen = ({ session, onBack, onOpenProfile }: Props) => {
+  const toast = useToast();
   const [teamId, setTeamId] = useState<string | null>(null);
   const [rulesConfig, setRulesConfig] = useState<TeamRulesConfig>(
     defaultTeamRulesConfig,
@@ -153,12 +165,13 @@ const RulesScreen = ({ session, onBack, onOpenProfile }: Props) => {
 
       await backendClient.upsertTeamRules(team, stringifyTeamRulesConfig(rulesConfig));
       setStatus("Rules saved.");
+      toast.show({ message: "Rules saved.", type: "success" });
     } catch (_err) {
       setError("Failed to save rules.");
     } finally {
       setIsSavingRules(false);
     }
-  }, [ensureTeam, rulesConfig]);
+  }, [ensureTeam, rulesConfig, toast]);
 
   const benchPerInning = useMemo(
     () => Math.max(rulesConfig.minimumPlayers - rulesConfig.playersOnField, 0),
@@ -166,89 +179,70 @@ const RulesScreen = ({ session, onBack, onOpenProfile }: Props) => {
   );
 
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-      <View style={styles.header}>
-        <Pressable
-          style={({ pressed }) => [styles.iconButton, pressed && { opacity: 0.7 }]}
-          onPress={onBack}
-        >
-          <Feather name="arrow-left" size={18} color={palette.text} />
-        </Pressable>
+    <ScreenContainer keyboard scroll contentStyle={styles.content}>
+      <ScreenHeader
+        title="Lineup Rules"
+        subtitle="Set defaults once. Use Advanced only when needed."
+        onBack={onBack}
+        right={
+          <AppPressable
+            onPress={onOpenProfile}
+            accessibilityRole="button"
+            accessibilityLabel="Open profile"
+            style={styles.iconButton}
+            hitSlop={8}
+          >
+            <Feather name="user" size={18} color={theme.text.primary} />
+          </AppPressable>
+        }
+      />
 
-        <View style={styles.headerTextWrap}>
-          <Text style={styles.headerEyebrow}>Rules Workspace</Text>
-          <Text style={styles.headerTitle}>Lineup Rules</Text>
-        </View>
-
-        <Pressable
-          style={({ pressed }) => [styles.iconButton, pressed && { opacity: 0.7 }]}
-          onPress={onOpenProfile}
-        >
-          <Feather name="user" size={18} color={palette.text} />
-        </Pressable>
+      <View style={styles.metricsRow}>
+        <MetricTile small label="Sport" value={capitalize(rulesConfig.sport)} />
+        <MetricTile
+          small
+          label="Innings"
+          value={`${rulesConfig.segmentCount} ${rulesConfig.segmentLabel}`}
+        />
+        <MetricTile small label="Bench / Inning" value={benchPerInning} />
       </View>
 
-      <View style={styles.heroCard}>
-        <Text style={styles.heroTitle}>Rules</Text>
-        <Text style={styles.heroSubtext}>
-          Set defaults once. Use Advanced only when needed.
-        </Text>
-        <View style={styles.metricsRow}>
-          <View style={styles.metric}>
-            <Text style={styles.metricLabel}>Sport</Text>
-            <Text style={styles.metricValue}>{rulesConfig.sport}</Text>
-          </View>
-          <View style={styles.metric}>
-            <Text style={styles.metricLabel}>Innings</Text>
-            <Text style={styles.metricValue}>
-              {rulesConfig.segmentCount} {rulesConfig.segmentLabel}
-            </Text>
-          </View>
-          <View style={styles.metric}>
-            <Text style={styles.metricLabel}>Bench / Inning</Text>
-            <Text style={styles.metricValue}>{benchPerInning}</Text>
-          </View>
-        </View>
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Sport Presets</Text>
-        <View style={styles.chipRow}>
-          {Object.keys(sportPresets).map((sportKey) => {
-            const selected = rulesConfig.sport.toLowerCase() === sportKey;
-            return (
-              <Pressable
+      <Card>
+        <View style={styles.cardInner}>
+          <AppText variant="bodyLg" family="heading">
+            Sport Presets
+          </AppText>
+          <View style={styles.chipRow}>
+            {Object.keys(sportPresets).map((sportKey) => (
+              <Chip
                 key={sportKey}
-                style={[styles.chip, selected && styles.chipActive]}
+                label={capitalize(sportKey)}
+                selected={rulesConfig.sport.toLowerCase() === sportKey}
                 onPress={() => applySportPreset(sportKey)}
-              >
-                <Text style={[styles.chipText, selected && styles.chipTextActive]}>
-                  {sportKey}
-                </Text>
-              </Pressable>
-            );
-          })}
+              />
+            ))}
+          </View>
         </View>
-      </View>
+      </Card>
 
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Core Rules</Text>
-        <View style={styles.row}>
-          <View style={styles.field}>
-            <Text style={styles.label}>Inning Label</Text>
-            <TextInput
+      <Card>
+        <View style={styles.cardInner}>
+          <AppText variant="bodyLg" family="heading">
+            Core Rules
+          </AppText>
+          <View style={styles.row}>
+            <Input
+              label="Inning Label"
               value={rulesConfig.segmentLabel}
               onChangeText={(value) =>
                 updateRulesConfig({ segmentLabel: value.trim() || "inning" })
               }
               placeholder="inning"
-              placeholderTextColor={palette.subtext}
-              style={styles.input}
+              containerStyle={styles.field}
+              accessibilityLabel="Inning label"
             />
-          </View>
-          <View style={styles.field}>
-            <Text style={styles.label}>Inning Count</Text>
-            <TextInput
+            <Input
+              label="Inning Count"
               value={String(rulesConfig.segmentCount)}
               onChangeText={(value) =>
                 updateRulesConfig({
@@ -256,13 +250,13 @@ const RulesScreen = ({ session, onBack, onOpenProfile }: Props) => {
                 })
               }
               keyboardType="number-pad"
-              placeholderTextColor={palette.subtext}
-              style={styles.input}
+              containerStyle={styles.field}
+              accessibilityLabel="Inning count"
             />
           </View>
-          <View style={styles.field}>
-            <Text style={styles.label}>Minimum Players</Text>
-            <TextInput
+          <View style={styles.row}>
+            <Input
+              label="Minimum Players"
               value={String(rulesConfig.minimumPlayers)}
               onChangeText={(value) =>
                 updateRulesConfig({
@@ -270,15 +264,11 @@ const RulesScreen = ({ session, onBack, onOpenProfile }: Props) => {
                 })
               }
               keyboardType="number-pad"
-              placeholderTextColor={palette.subtext}
-              style={styles.input}
+              containerStyle={styles.field}
+              accessibilityLabel="Minimum players"
             />
-          </View>
-        </View>
-        <View style={styles.row}>
-          <View style={styles.field}>
-            <Text style={styles.label}>Players On Field</Text>
-            <TextInput
+            <Input
+              label="Players On Field"
               value={String(rulesConfig.playersOnField)}
               onChangeText={(value) =>
                 updateRulesConfig({
@@ -286,13 +276,13 @@ const RulesScreen = ({ session, onBack, onOpenProfile }: Props) => {
                 })
               }
               keyboardType="number-pad"
-              placeholderTextColor={palette.subtext}
-              style={styles.input}
+              containerStyle={styles.field}
+              accessibilityLabel="Players on field"
             />
           </View>
-          <View style={styles.field}>
-            <Text style={styles.label}>Max Consecutive Bench</Text>
-            <TextInput
+          <View style={styles.row}>
+            <Input
+              label="Max Consecutive Bench"
               value={String(rulesConfig.maxConsecutiveBench)}
               onChangeText={(value) =>
                 updateRulesConfig({
@@ -300,296 +290,191 @@ const RulesScreen = ({ session, onBack, onOpenProfile }: Props) => {
                 })
               }
               keyboardType="number-pad"
-              placeholderTextColor={palette.subtext}
-              style={styles.input}
+              containerStyle={styles.field}
+              accessibilityLabel="Max consecutive bench"
             />
           </View>
         </View>
-      </View>
+      </Card>
 
-      <View style={styles.card}>
-        <Pressable
-          style={({ pressed }) => [styles.sectionRow, pressed && { opacity: 0.85 }]}
-          onPress={toggleAdvancedRules}
-        >
-          <View>
-            <Text style={styles.sectionTitle}>Advanced Rules</Text>
-            <Text style={styles.sectionSubtext}>Lineup slots and custom instructions</Text>
-          </View>
-          <Feather
-            name={showAdvancedRules ? "chevron-up" : "chevron-down"}
-            size={18}
-            color={palette.text}
-          />
-        </Pressable>
-
-        {showAdvancedRules ? (
-          <View style={styles.advancedContent}>
-            <View style={styles.sectionRow}>
-              <Text style={styles.label}>Lineup Slots</Text>
-              <Pressable
-                style={({ pressed }) => [styles.secondaryButton, pressed && { opacity: 0.8 }]}
-                onPress={normalizeSlotsToFieldCount}
-              >
-                <Text style={styles.secondaryButtonText}>Auto-size</Text>
-              </Pressable>
+      <Card>
+        <View style={styles.cardInner}>
+          <AppPressable
+            style={styles.sectionRow}
+            onPress={toggleAdvancedRules}
+            pressScale={1}
+            accessibilityRole="button"
+            accessibilityLabel="Advanced Rules"
+            accessibilityState={{ expanded: showAdvancedRules }}
+          >
+            <View style={styles.sectionTitleWrap}>
+              <AppText variant="bodyLg" family="heading">
+                Advanced Rules
+              </AppText>
+              <AppText variant="caption" color="secondary">
+                Lineup slots and custom instructions
+              </AppText>
             </View>
-            <View style={styles.slotInputRow}>
-              <TextInput
-                value={slotDraft}
-                onChangeText={setSlotDraft}
-                placeholder="Add slot (e.g. GK, QB, Wing)"
-                placeholderTextColor={palette.subtext}
-                style={[styles.input, styles.slotInput]}
-              />
-              <Pressable
-                style={({ pressed }) => [styles.secondaryButton, pressed && { opacity: 0.8 }]}
-                onPress={addSlot}
-              >
-                <Text style={styles.secondaryButtonText}>Add</Text>
-              </Pressable>
-            </View>
-            <View style={styles.slotWrap}>
-              {rulesConfig.lineupSlots.length ? (
-                rulesConfig.lineupSlots.map((slot) => (
-                  <Pressable
-                    key={slot}
-                    style={({ pressed }) => [styles.slotChip, pressed && { opacity: 0.8 }]}
-                    onPress={() => removeSlot(slot)}
-                  >
-                    <Text style={styles.slotChipText}>{slot}</Text>
-                    <Feather name="x" size={14} color={palette.subtext} />
-                  </Pressable>
-                ))
-              ) : (
-                <Text style={styles.emptyText}>No lineup slots set yet.</Text>
-              )}
-            </View>
-
-            <Text style={styles.label}>Custom Instructions</Text>
-            <TextInput
-              value={rulesConfig.customInstructions}
-              onChangeText={(value) => updateRulesConfig({ customInstructions: value })}
-              placeholder="League-specific constraints or coaching preferences."
-              placeholderTextColor={palette.subtext}
-              style={styles.textarea}
-              multiline
-              textAlignVertical="top"
+            <Feather
+              name={showAdvancedRules ? "chevron-up" : "chevron-down"}
+              size={18}
+              color={theme.text.primary}
             />
-          </View>
-        ) : (
-          <Text style={styles.collapsedHint}>Hidden to keep this page compact.</Text>
-        )}
-      </View>
+          </AppPressable>
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      {status ? <Text style={styles.status}>{status}</Text> : null}
+          {showAdvancedRules ? (
+            <View style={styles.advancedContent}>
+              <View style={styles.sectionRow}>
+                <AppText variant="caption" family="heading" color="secondary">
+                  Lineup Slots
+                </AppText>
+                <Button
+                  label="Auto-size"
+                  variant="secondary"
+                  size="sm"
+                  onPress={normalizeSlotsToFieldCount}
+                  accessibilityLabel="Auto-size lineup slots to field count"
+                />
+              </View>
+              <View style={styles.slotInputRow}>
+                <Input
+                  label="Add slot"
+                  value={slotDraft}
+                  onChangeText={setSlotDraft}
+                  placeholder="e.g. GK, QB, Wing"
+                  containerStyle={styles.slotInput}
+                  accessibilityLabel="Add slot"
+                />
+                <Button
+                  label="Add"
+                  variant="secondary"
+                  onPress={addSlot}
+                  accessibilityLabel="Add lineup slot"
+                />
+              </View>
+              <View style={styles.slotWrap}>
+                {rulesConfig.lineupSlots.length ? (
+                  rulesConfig.lineupSlots.map((slot) => (
+                    <AppPressable
+                      key={slot}
+                      style={styles.slotChip}
+                      onPress={() => removeSlot(slot)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remove ${slot} slot`}
+                    >
+                      <AppText variant="caption" family="heading">
+                        {slot}
+                      </AppText>
+                      <Feather name="x" size={14} color={theme.text.secondary} />
+                    </AppPressable>
+                  ))
+                ) : (
+                  <AppText variant="caption" color="secondary">
+                    No lineup slots set yet.
+                  </AppText>
+                )}
+              </View>
+
+              <Input
+                label="Custom Instructions"
+                value={rulesConfig.customInstructions}
+                onChangeText={(value) => updateRulesConfig({ customInstructions: value })}
+                placeholder="League-specific constraints or coaching preferences."
+                multiline
+                textAlignVertical="top"
+                style={styles.textarea}
+                accessibilityLabel="Custom instructions"
+              />
+            </View>
+          ) : (
+            <AppText variant="caption" color="secondary">
+              Hidden to keep this page compact.
+            </AppText>
+          )}
+        </View>
+      </Card>
+
+      {error ? (
+        <AppText variant="caption" color="danger">
+          {error}
+        </AppText>
+      ) : null}
+      {status ? (
+        <AppText variant="caption" color="success">
+          {status}
+        </AppText>
+      ) : null}
 
       <View style={styles.footerButtons}>
-        <Pressable
-          style={({ pressed }) => [styles.ghostButton, pressed && { opacity: 0.8 }]}
-          onPress={resetToDefault}
-        >
-          <Text style={styles.ghostButtonText}>Reset defaults</Text>
-        </Pressable>
-        <Pressable
-          style={({ pressed }) => [
-            styles.primaryButton,
-            pressed && { opacity: 0.85 },
-            isSavingRules && { opacity: 0.7 },
-          ]}
-          onPress={handleSaveRules}
-          disabled={isSavingRules}
-        >
-          <Text style={styles.primaryButtonText}>
-            {isSavingRules ? "Saving..." : "Save rules"}
-          </Text>
-        </Pressable>
+        <View style={styles.footerButton}>
+          <Button
+            label="Reset defaults"
+            variant="secondary"
+            onPress={resetToDefault}
+            fullWidth
+            accessibilityLabel="Reset rules to defaults"
+          />
+        </View>
+        <View style={styles.footerButton}>
+          <Button
+            label="Save rules"
+            onPress={handleSaveRules}
+            loading={isSavingRules}
+            fullWidth
+            accessibilityLabel="Save rules"
+          />
+        </View>
       </View>
-    </ScrollView>
+    </ScreenContainer>
   );
 };
 
 const styles = StyleSheet.create({
-  scroll: {
-    flex: 1,
-    backgroundColor: palette.background,
-  },
-  container: {
-    padding: 16,
-    paddingBottom: 28,
-    gap: 10,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 2,
-  },
-  headerTextWrap: {
-    alignItems: "center",
-    gap: 2,
-  },
-  headerEyebrow: {
-    color: palette.subtext,
-    fontFamily: typeface.body,
-    fontSize: 10,
-    letterSpacing: 1.6,
-    textTransform: "uppercase",
-  },
-  headerTitle: {
-    color: palette.text,
-    fontFamily: typeface.display,
-    fontSize: 24,
+  content: {
+    gap: space.sm,
   },
   iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 36,
+    height: 36,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: theme.border.base,
+    backgroundColor: theme.bg.raised,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: palette.cardAlt,
-    borderWidth: 1,
-    borderColor: palette.border,
-  },
-  heroCard: {
-    backgroundColor: palette.cardAlt,
-    borderRadius: 20,
-    padding: 14,
-    gap: 6,
-    borderWidth: 1,
-    borderColor: palette.border,
-  },
-  heroTitle: {
-    color: palette.text,
-    fontFamily: typeface.display,
-    fontSize: 21,
-  },
-  heroSubtext: {
-    color: palette.subtext,
-    fontFamily: typeface.body,
-    fontSize: 11,
   },
   metricsRow: {
     flexDirection: "row",
+    gap: space.xs,
+  },
+  cardInner: {
+    gap: space.sm,
+  },
+  chipRow: {
+    flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
-    marginTop: 4,
+    gap: space.xs,
   },
-  metric: {
+  row: {
+    flexDirection: "row",
+    gap: space.sm,
+  },
+  field: {
     flex: 1,
-    minWidth: 98,
-    backgroundColor: palette.card,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: palette.border,
-  },
-  metricLabel: {
-    color: palette.subtext,
-    fontFamily: typeface.body,
-    fontSize: 11,
-  },
-  metricValue: {
-    color: palette.text,
-    fontFamily: typeface.heading,
-    fontSize: 13,
-    marginTop: 2,
-    textTransform: "capitalize",
-  },
-  card: {
-    backgroundColor: palette.card,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: palette.border,
-    padding: 12,
-    gap: 8,
-  },
-  sectionTitle: {
-    color: palette.text,
-    fontFamily: typeface.heading,
-    fontSize: 15,
   },
   sectionRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 8,
+    gap: space.xs,
   },
-  sectionSubtext: {
-    color: palette.subtext,
-    fontFamily: typeface.body,
-    fontSize: 12,
-    marginTop: 2,
-  },
-  chipRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  chip: {
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: palette.cardAlt,
-  },
-  chipActive: {
-    borderColor: palette.accent,
-    backgroundColor: "rgba(242, 166, 59, 0.16)",
-  },
-  chipText: {
-    color: palette.subtext,
-    fontFamily: typeface.heading,
-    fontSize: 12,
-    textTransform: "capitalize",
-  },
-  chipTextActive: {
-    color: palette.text,
-  },
-  row: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  field: {
-    flex: 1,
-    gap: 6,
-  },
-  label: {
-    color: palette.subtext,
-    fontFamily: typeface.heading,
-    fontSize: 12,
-  },
-  input: {
-    minHeight: 40,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: palette.cardAlt,
-    color: palette.text,
-    fontFamily: typeface.body,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  secondaryButton: {
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: palette.cardAlt,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-  },
-  secondaryButtonText: {
-    color: palette.text,
-    fontFamily: typeface.heading,
-    fontSize: 12,
+  sectionTitleWrap: {
+    gap: space.xxs,
   },
   slotInputRow: {
     flexDirection: "row",
-    gap: 8,
-    alignItems: "center",
+    gap: space.xs,
+    alignItems: "flex-end",
   },
   slotInput: {
     flex: 1,
@@ -597,92 +482,32 @@ const styles = StyleSheet.create({
   slotWrap: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
+    gap: space.xs,
   },
   slotChip: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    borderRadius: 999,
+    gap: space.xxs,
+    borderRadius: radius.pill,
     borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: palette.cardAlt,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  slotChipText: {
-    color: palette.text,
-    fontFamily: typeface.heading,
-    fontSize: 12,
-  },
-  emptyText: {
-    color: palette.subtext,
-    fontFamily: typeface.body,
-    fontSize: 12,
+    borderColor: theme.border.base,
+    backgroundColor: theme.bg.elevated,
+    paddingHorizontal: space.sm,
+    minHeight: 32,
+    justifyContent: "center",
   },
   textarea: {
     minHeight: 100,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: palette.cardAlt,
-    color: palette.text,
-    fontFamily: typeface.body,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    lineHeight: 18,
   },
   advancedContent: {
-    gap: 8,
-  },
-  collapsedHint: {
-    color: palette.subtext,
-    fontFamily: typeface.body,
-    fontSize: 12,
-  },
-  error: {
-    color: palette.danger,
-    fontFamily: typeface.body,
-    fontSize: 12,
-  },
-  status: {
-    color: palette.success,
-    fontFamily: typeface.body,
-    fontSize: 12,
+    gap: space.sm,
   },
   footerButtons: {
     flexDirection: "row",
-    gap: 10,
+    gap: space.sm,
   },
-  ghostButton: {
+  footerButton: {
     flex: 1,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: palette.cardAlt,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 12,
-  },
-  ghostButtonText: {
-    color: palette.text,
-    fontFamily: typeface.heading,
-    fontSize: 13,
-  },
-  primaryButton: {
-    flex: 1,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(242,166,59,0.75)",
-    backgroundColor: palette.accent,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 12,
-  },
-  primaryButtonText: {
-    color: palette.accentText,
-    fontFamily: typeface.heading,
-    fontSize: 13,
   },
 });
 

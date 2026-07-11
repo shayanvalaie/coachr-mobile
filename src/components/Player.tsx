@@ -1,17 +1,11 @@
 import React, { memo, useCallback, useMemo } from "react";
-import {
-  Pressable,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
-import { Entypo } from "../icons";
-import { palette } from "../theme/colors";
-import { typeface } from "../theme/typography";
+import { StyleSheet, Switch, View } from "react-native";
+import { Feather } from "../icons";
+import { theme } from "../theme/colors";
+import { radius, space } from "../theme/tokens";
 import { Player, Position } from "../types/lineup";
 import { parsePositions } from "../utils/lineupGenerator";
+import { AppPressable, AppText, Button, Card, Chip, Input } from "./ui";
 
 type Props = {
   player: Player;
@@ -83,6 +77,7 @@ const PlayerCard = ({
     [isActive, onToggleActive],
   );
 
+  const displayName = player.name?.trim() || "Unnamed Player";
   const initials = (player.name || "NP")
     .split(" ")
     .map((part) => part[0])
@@ -91,373 +86,286 @@ const PlayerCard = ({
     .toUpperCase();
 
   return (
-    <Pressable
-      style={[
-        styles.playerRow,
-        !isActive && styles.playerInactive,
-        isDragging && styles.playerDragging,
-      ]}
+    // Root stays pressable so the long-press drag handle keeps working;
+    // pressScale is disabled so it does not fight the drag lift animation.
+    <AppPressable
+      pressScale={1}
       onLongPress={onDragLongPress}
       delayLongPress={500}
+      style={!isActive && styles.inactive}
     >
-      <View style={styles.rowHeader}>
-        <View style={styles.identityWrap}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{initials}</Text>
-          </View>
-          <View style={styles.nameWrap}>
-            <View style={styles.nameRow}>
-              {player.gender === "female" ? (
-                <View style={styles.genderBadge}>
-                  <Text style={styles.genderBadgeText}>F</Text>
-                </View>
-              ) : null}
-              <Text style={styles.nameText} numberOfLines={1}>
-                {player.name?.trim() || "Unnamed Player"}
-              </Text>
+      <Card
+        variant="raised"
+        padding="sm"
+        style={[styles.card, isDragging && styles.cardDragging]}
+      >
+        <View style={styles.rowHeader}>
+          <View style={styles.identityWrap}>
+            <View style={styles.avatar}>
+              <AppText variant="body" family="heading" color="accent">
+                {initials}
+              </AppText>
             </View>
-            <Text style={styles.positionsPreview} numberOfLines={1}>
-              {normalizedDesiredPositions.length > 0
-                ? normalizedDesiredPositions.join(" • ")
-                : "No preferred positions"}
-            </Text>
+            <View style={styles.nameWrap}>
+              <View style={styles.nameRow}>
+                {player.gender === "female" ? (
+                  <View
+                    style={styles.genderBadge}
+                    accessibilityLabel="Female player"
+                  >
+                    <AppText
+                      variant="caption"
+                      family="heading"
+                      color="accent"
+                      style={styles.genderBadgeText}
+                    >
+                      F
+                    </AppText>
+                  </View>
+                ) : null}
+                <AppText
+                  variant="bodyLg"
+                  family="heading"
+                  numberOfLines={1}
+                  style={styles.nameText}
+                >
+                  {displayName}
+                </AppText>
+              </View>
+              <AppText variant="caption" color="secondary" numberOfLines={1}>
+                {normalizedDesiredPositions.length > 0
+                  ? normalizedDesiredPositions.join(" • ")
+                  : "No preferred positions"}
+              </AppText>
+            </View>
+          </View>
+
+          <View style={styles.rowHeaderActions}>
+            <Chip
+              label={isActive ? "Active" : "Bench"}
+              selected={isActive}
+              onPress={handleToggleActive}
+            />
+            <AppPressable
+              style={styles.iconButton}
+              onPress={onToggleExpand}
+              accessibilityRole="button"
+              accessibilityLabel={
+                isExpanded
+                  ? `Collapse ${displayName}`
+                  : `Expand ${displayName}`
+              }
+              accessibilityState={{ expanded: isExpanded }}
+              hitSlop={4}
+            >
+              <Feather
+                name={isExpanded ? "chevron-up" : "chevron-down"}
+                size={20}
+                color={theme.text.primary}
+              />
+            </AppPressable>
           </View>
         </View>
 
-        <View style={styles.rowHeaderActions}>
-          <Pressable
-            style={[styles.statePill, isActive ? styles.statePillActive : null]}
-            onPress={handleToggleActive}
-          >
-            <Text
-              style={[styles.statePillText, isActive ? styles.statePillTextActive : null]}
-            >
-              {isActive ? "Active" : "Bench"}
-            </Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [styles.iconButton, pressed && { opacity: 0.7 }]}
-            onPress={onToggleExpand}
-          >
-            <Entypo
-              name={isExpanded ? "chevron-small-up" : "chevron-small-down"}
-              size={24}
-              color={palette.text}
-            />
-          </Pressable>
-        </View>
-      </View>
-
-      {isExpanded && (
-        <>
-          <View style={styles.field}>
-            <Text style={styles.label}>Name</Text>
-            <TextInput
+        {isExpanded && (
+          <>
+            <Input
+              label="Name"
               value={player.name}
               onChangeText={handleNameChange}
               placeholder="Player name"
-              placeholderTextColor={palette.subtext}
-              style={styles.input}
             />
-          </View>
 
-          <View style={styles.field}>
-            <Text style={styles.label}>Desired positions</Text>
-            <View style={styles.inlineChips}>
-              {normalizedLineupSlots.map((slot) => {
-                const active = normalizedDesiredPositions.includes(slot as Position);
-                return (
-                  <Pressable
+            <View style={styles.field}>
+              <AppText variant="caption" family="heading" color="secondary">
+                Desired positions
+              </AppText>
+              <View style={styles.inlineChips}>
+                {normalizedLineupSlots.map((slot) => (
+                  <Chip
                     key={slot}
-                    style={[styles.chip, active && styles.chipActive]}
+                    label={slot}
+                    selected={normalizedDesiredPositions.includes(
+                      slot as Position,
+                    )}
                     onPress={() => handlePositionToggle(slot)}
-                  >
-                    <Text style={[styles.chipText, active && styles.chipTextActive]}>
-                      {slot}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+                  />
+                ))}
+              </View>
             </View>
-          </View>
 
-          <View style={styles.field}>
-            <Text style={styles.label}>Gender</Text>
-            <View style={styles.inlineChips}>
-              {(["male", "female"] as const).map((g) => (
-                <Pressable
-                  key={g}
-                  style={[styles.chip, player.gender === g && styles.chipActive]}
-                  onPress={() => handleGenderSelect(g)}
-                >
-                  <Text
-                    style={[
-                      styles.chipText,
-                      player.gender === g && styles.chipTextActive,
-                    ]}
-                  >
-                    {g[0].toUpperCase() + g.slice(1)}
-                  </Text>
-                </Pressable>
-              ))}
+            <View style={styles.field}>
+              <AppText variant="caption" family="heading" color="secondary">
+                Gender
+              </AppText>
+              <View style={styles.inlineChips}>
+                {(["male", "female"] as const).map((g) => (
+                  <Chip
+                    key={g}
+                    label={g[0].toUpperCase() + g.slice(1)}
+                    selected={player.gender === g}
+                    onPress={() => handleGenderSelect(g)}
+                  />
+                ))}
+              </View>
             </View>
-          </View>
 
-          <View style={styles.toggleRow}>
             <View style={styles.switchRow}>
-              <Text style={styles.label}>Lock position</Text>
+              <AppText variant="caption" family="heading" color="secondary">
+                Lock position
+              </AppText>
               <Switch
                 value={player.lockInPosition}
                 disabled={normalizedDesiredPositions.length !== 1}
                 onValueChange={handleLockChange}
-                trackColor={{
-                  true: palette.success,
-                  false: "#6a716d",
+                accessibilityRole="switch"
+                accessibilityLabel="Lock position"
+                accessibilityState={{
+                  checked: player.lockInPosition,
+                  disabled: normalizedDesiredPositions.length !== 1,
                 }}
-                thumbColor={player.lockInPosition ? "#123124" : "#e5dcc8"}
+                trackColor={{
+                  true: theme.accent.base,
+                  false: theme.border.strong,
+                }}
+                thumbColor={
+                  player.lockInPosition
+                    ? theme.text.onAccent
+                    : theme.text.primary
+                }
               />
             </View>
-          </View>
 
-          <View style={styles.bottomActions}>
-            <Pressable
-              style={({ pressed }) => [
-                styles.saveButton,
-                pressed && { opacity: 0.9 },
-                isSaving && { opacity: 0.7 },
-              ]}
-              onPress={onSave}
-              disabled={isSaving}
-            >
-              <Text style={styles.saveText}>{isSaving ? "Saving" : "Save player"}</Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [
-                styles.removeButton,
-                pressed && { opacity: 0.8 },
-              ]}
-              onPress={onRemove}
-            >
-              <Text style={styles.removeText}>Remove</Text>
-            </Pressable>
-          </View>
-        </>
-      )}
-    </Pressable>
+            <View style={styles.bottomActions}>
+              <Button
+                label="Save player"
+                variant="secondary"
+                size="sm"
+                icon="check"
+                onPress={onSave}
+                loading={isSaving}
+                accessibilityLabel={`Save ${displayName}`}
+              />
+              <Button
+                label="Remove"
+                variant="danger"
+                size="sm"
+                icon="trash-2"
+                onPress={onRemove}
+                accessibilityLabel={`Remove ${displayName}`}
+              />
+            </View>
+          </>
+        )}
+      </Card>
+    </AppPressable>
   );
 };
 
 export default memo(PlayerCard);
 
 const styles = StyleSheet.create({
-  playerRow: {
-    borderWidth: 1,
-    borderColor: palette.border,
-    borderRadius: 16,
-    padding: 12,
-    gap: 10,
-    backgroundColor: "rgba(255,255,255,0.02)",
-  },
-  playerInactive: {
+  inactive: {
     opacity: 0.72,
   },
-  playerDragging: {
+  card: {
+    gap: space.sm,
+  },
+  cardDragging: {
     // Thicker accent border + brighter surface so the picked-up card
     // clearly reads as raised. Padding drops by 1 to offset the extra
     // border width and keep the content from shifting.
     borderWidth: 2,
-    borderColor: "rgba(242,166,59,0.65)",
-    backgroundColor: "rgba(255,255,255,0.06)",
-    padding: 11,
+    borderColor: theme.accent.subtleBorder,
+    backgroundColor: theme.bg.elevated,
+    padding: space.sm - 1,
   },
   rowHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    gap: 10,
+    gap: space.sm,
     alignItems: "center",
   },
   identityWrap: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: space.sm,
     flex: 1,
   },
   avatar: {
     width: 40,
     height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(242,166,59,0.18)",
+    borderRadius: radius.pill,
+    backgroundColor: theme.accent.subtle,
     borderWidth: 1,
-    borderColor: "rgba(242,166,59,0.5)",
+    borderColor: theme.accent.subtleBorder,
     alignItems: "center",
     justifyContent: "center",
   },
-  avatarText: {
-    color: palette.accent,
-    fontFamily: typeface.heading,
-    fontSize: 13,
-  },
   nameWrap: {
     flex: 1,
-    gap: 3,
+    gap: space.xxs / 2,
     minWidth: 0,
   },
   rowHeaderActions: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: space.xs,
   },
   iconButton: {
     borderWidth: 1,
-    borderColor: palette.border,
-    borderRadius: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 8,
-    backgroundColor: palette.cardAlt,
-  },
-  saveButton: {
-    borderWidth: 1,
-    borderColor: "rgba(242,166,59,0.5)",
-    borderRadius: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    backgroundColor: "rgba(242,166,59,0.14)",
-  },
-  saveText: {
-    color: palette.accent,
-    fontFamily: typeface.heading,
-    fontSize: 12,
+    borderColor: theme.border.base,
+    borderRadius: radius.sm,
+    padding: space.xs,
+    backgroundColor: theme.bg.elevated,
   },
   nameText: {
-    color: palette.text,
-    fontSize: 15,
-    fontFamily: typeface.heading,
     flex: 1,
   },
   nameRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: space.xxs,
   },
   genderBadge: {
     width: 16,
     height: 16,
-    borderRadius: 999,
+    borderRadius: radius.pill,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "rgba(242,166,59,0.58)",
-    backgroundColor: "rgba(242,166,59,0.2)",
+    borderColor: theme.accent.subtleBorder,
+    backgroundColor: theme.accent.subtle,
   },
   genderBadgeText: {
-    color: palette.accent,
-    fontFamily: typeface.heading,
     fontSize: 10,
+    lineHeight: 12,
     includeFontPadding: false,
     textAlignVertical: "center",
-    lineHeight: 12,
-  },
-  positionsPreview: {
-    color: palette.subtext,
-    fontSize: 11,
-    fontFamily: typeface.body,
   },
   field: {
-    gap: 6,
-  },
-  label: {
-    color: palette.subtext,
-    fontSize: 12,
-    fontFamily: typeface.heading,
-  },
-  input: {
-    backgroundColor: palette.cardAlt,
-    color: palette.text,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: palette.border,
-    fontFamily: typeface.body,
+    gap: space.xs,
   },
   inlineChips: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
-  },
-  chip: {
-    borderWidth: 1,
-    borderColor: palette.border,
-    borderRadius: 20,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    backgroundColor: palette.cardAlt,
-  },
-  chipActive: {
-    backgroundColor: palette.accent,
-    borderColor: palette.accent,
-  },
-  chipText: {
-    color: palette.text,
-    fontFamily: typeface.heading,
-    fontSize: 12,
-  },
-  chipTextActive: {
-    color: palette.accentText,
-  },
-  toggleRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "center",
-    gap: 10,
-  },
-  statePill: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: palette.cardAlt,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  statePillActive: {
-    borderColor: "rgba(126,207,157,0.55)",
-    backgroundColor: "rgba(126,207,157,0.2)",
-  },
-  statePillText: {
-    color: palette.subtext,
-    fontFamily: typeface.heading,
-    fontSize: 11,
-  },
-  statePillTextActive: {
-    color: palette.success,
+    gap: space.xs,
   },
   switchRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
+    justifyContent: "space-between",
+    gap: space.xs,
+    paddingHorizontal: space.sm,
+    paddingVertical: space.xxs,
     borderWidth: 1,
-    borderColor: palette.border,
-    borderRadius: 12,
-    backgroundColor: palette.cardAlt,
+    borderColor: theme.border.base,
+    borderRadius: radius.md,
+    backgroundColor: theme.bg.elevated,
   },
   bottomActions: {
     flexDirection: "row",
-    gap: 8,
+    gap: space.xs,
     flexWrap: "wrap",
-  },
-  removeButton: {
-    alignSelf: "flex-start",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "rgba(239,107,91,0.45)",
-    backgroundColor: "rgba(239,107,91,0.12)",
-  },
-  removeText: {
-    color: palette.danger,
-    fontFamily: typeface.heading,
   },
 });

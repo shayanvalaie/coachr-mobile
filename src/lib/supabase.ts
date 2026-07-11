@@ -1,6 +1,6 @@
 import 'react-native-url-polyfill/auto'
 import { createClient } from '@supabase/supabase-js'
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import { secureStorage } from './secureStorage'
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL
 const supabaseKey =
@@ -9,9 +9,6 @@ const supabaseKey =
 if (!supabaseUrl || !supabaseKey) {
   throw new Error('Missing Supabase environment variables')
 }
-
-console.log('Supabase URL:', process.env.EXPO_PUBLIC_SUPABASE_URL)
-console.log('Has Anon Key:', !!process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY)
 
 const MAX_IN_FLIGHT_SUPABASE_REQUESTS = 4
 const MAX_NETWORK_RETRIES = 3
@@ -58,9 +55,9 @@ const probeConnectivity = async () => {
   const check = async (label: string, url: string) => {
     try {
       const res = await fetch(url, { method: 'GET' })
-      console.log('[network probe]', label, `${res.status} ${res.statusText}`)
+      if (__DEV__) console.log('[network probe]', label, `${res.status} ${res.statusText}`)
     } catch (err) {
-      console.log('[network probe]', label, 'failed', err)
+      if (__DEV__) console.log('[network probe]', label, 'failed', err)
     }
   }
 
@@ -102,7 +99,7 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
     fetch: supabaseFetch,
   },
   auth: {
-    storage: AsyncStorage,
+    storage: secureStorage,
     // Keep refresh enabled in dev/prod so Edge Functions receive a valid JWT.
     autoRefreshToken: true,
     persistSession: true,

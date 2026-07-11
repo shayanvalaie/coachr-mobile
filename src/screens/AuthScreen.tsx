@@ -2,14 +2,15 @@ import { useState } from "react";
 import { Keyboard, StyleSheet, TouchableWithoutFeedback, View } from "react-native";
 import AuthForm from "../components/auth/AuthForm";
 import AuthHeader from "../components/auth/AuthHeader";
-import { palette } from "../theme/colors";
+import { Card, ScreenContainer } from "../components/ui";
+import { space } from "../theme/tokens";
 import { AuthMode } from "../types/auth";
 import { activeBackendProvider, backendClient } from "../lib/backend/client";
 
 const AuthScreen = () => {
   const [mode, setMode] = useState<AuthMode>(AuthMode.SignIn);
-  const [email, setEmail] = useState("valaieshayanse@gmail.com");
-  const [password, setPassword] = useState("Pxblack4!");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [verificationEmail, setVerificationEmail] = useState<string | null>(
     null,
@@ -171,50 +172,48 @@ const AuthScreen = () => {
   };
 
   return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-      <View style={styles.container}>
-      <View style={styles.card}>
-        <AuthHeader mode={mode} />
-        <AuthForm
-          mode={mode}
-          email={email}
-          password={password}
-          confirm={confirm}
-          verificationEmail={verificationEmail}
-          verificationCode={verificationCode}
-          status={status}
-          error={error}
-          loading={loading}
-          onEmailChange={setEmail}
-          onPasswordChange={setPassword}
-          onConfirmChange={setConfirm}
-          onVerificationCodeChange={setVerificationCode}
-          onSubmit={handleSubmit}
-          onResendVerification={handleResendVerification}
-          onCancelVerification={handleCancelVerification}
-          onToggleMode={handleToggleMode}
-        />
-      </View>
-    </View>
-    </TouchableWithoutFeedback>
+    <ScreenContainer keyboard scroll contentStyle={styles.scrollContent}>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+        <View style={styles.centerWrap}>
+          <Card variant="elevated" padding="lg" style={styles.card}>
+            <AuthHeader mode={mode} />
+            <AuthForm
+              mode={mode}
+              email={email}
+              password={password}
+              confirm={confirm}
+              verificationEmail={verificationEmail}
+              verificationCode={verificationCode}
+              status={status}
+              error={error}
+              loading={loading}
+              onEmailChange={setEmail}
+              onPasswordChange={setPassword}
+              onConfirmChange={setConfirm}
+              onVerificationCodeChange={setVerificationCode}
+              onSubmit={handleSubmit}
+              onResendVerification={handleResendVerification}
+              onCancelVerification={handleCancelVerification}
+              onToggleMode={handleToggleMode}
+            />
+          </Card>
+        </View>
+      </TouchableWithoutFeedback>
+    </ScreenContainer>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  scrollContent: {
+    flexGrow: 1,
+  },
+  centerWrap: {
     flex: 1,
-    padding: 24,
     justifyContent: "center",
+    paddingVertical: space.lg,
   },
   card: {
-    backgroundColor: palette.card,
-    borderRadius: 16,
-    padding: 24,
-    gap: 12,
-    shadowColor: "#000",
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 8 },
+    gap: space.sm,
   },
 });
 

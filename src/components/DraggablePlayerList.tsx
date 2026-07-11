@@ -8,6 +8,7 @@ import {
   View,
 } from "react-native";
 import * as Haptics from "expo-haptics";
+import { shadow, space } from "../theme/tokens";
 import { Player } from "../types/lineup";
 import PlayerCard from "./Player";
 
@@ -28,7 +29,7 @@ type Props = {
 
 const DEFAULT_ROW_HEIGHT = 108;
 // Must match styles.listWrap gap so swap distances line up with layout.
-const ROW_GAP = 10;
+const ROW_GAP = space.sm;
 
 const DraggablePlayerList = ({
   players,
@@ -303,7 +304,7 @@ const DraggablePlayerList = ({
 
 const styles = StyleSheet.create({
   listWrap: {
-    gap: 10,
+    gap: ROW_GAP,
   },
   rowWrap: {
     zIndex: 1,
@@ -315,11 +316,7 @@ const styles = StyleSheet.create({
   },
   // Raised look — dropped immediately on release.
   liftedRow: {
-    shadowColor: "#000",
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 10,
+    ...shadow.float,
   },
 });
 

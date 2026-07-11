@@ -1,17 +1,17 @@
 import React from "react";
-import {
-  Pressable,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { SafeAreaView, StyleSheet } from "react-native";
 import ProfileItem from "../components/ProfileItem";
-import { useSubscription, IAP_SKUS } from "../lib/iap";
+import {
+  AppText,
+  Card,
+  ScreenContainer,
+  ScreenHeader,
+} from "../components/ui";
 import { safeSignOut } from "../lib/auth";
 import { BackendSession } from "../lib/backend/types";
-import { palette } from "../theme/colors";
+import { IAP_SKUS, useSubscription } from "../lib/iap";
+import { theme } from "../theme/colors";
+import { space } from "../theme/tokens";
 
 type Props = {
   session: BackendSession;
@@ -27,40 +27,40 @@ const ProfileScreen = ({ session, onClose, onOpenSubscribe }: Props) => {
 
   const planLabel = isPro
     ? isDevUnlocked
-      ? "Pro — Dev unlock"
+      ? "Pro (Dev unlock)"
       : activeSku === IAP_SKUS.ANNUAL
-      ? "Pro — Annual"
-      : "Pro — Monthly"
+      ? "Pro Annual"
+      : "Pro Monthly"
     : "Free";
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.container}>
-        <View style={styles.headerRow}>
-          <Pressable
-            onPress={onClose}
-            style={({ pressed }) => [
-              styles.backButton,
-              pressed && { opacity: 0.7 },
-            ]}
-            accessibilityLabel="Back"
-          >
-            <Text style={styles.backText}>Back</Text>
-          </Pressable>
-        </View>
+      <ScreenContainer scroll contentStyle={styles.content}>
+        <ScreenHeader title="Profile" onBack={onClose} />
 
-        <View style={styles.card}>
-          <Text style={styles.eyebrow}>Profile</Text>
-          <Text style={styles.title}>Signed in as</Text>
-          <Text style={styles.subtitle}>{email}</Text>
-        </View>
+        <Card variant="elevated">
+          <AppText
+            variant="caption"
+            family="heading"
+            color="accent"
+            style={styles.eyebrow}
+          >
+            Account
+          </AppText>
+          <AppText variant="title" family="heading" style={styles.cardTitle}>
+            Signed in as
+          </AppText>
+          <AppText variant="body" color="secondary">
+            {email}
+          </AppText>
+        </Card>
 
         <ProfileItem
           title="Sign out"
           danger
           onPress={() => {
             safeSignOut().catch((err) => {
-              console.log("[sign out error]", err);
+              if (__DEV__) console.log("[sign out error]", err);
             });
           }}
         />
@@ -95,7 +95,7 @@ const ProfileScreen = ({ session, onClose, onOpenSubscribe }: Props) => {
             onPress={() => clearSubscription()}
           />
         )}
-      </ScrollView>
+      </ScreenContainer>
     </SafeAreaView>
   );
 };
@@ -105,50 +105,16 @@ export default ProfileScreen;
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: palette.background,
+    backgroundColor: theme.bg.base,
   },
-  headerRow: {
-    marginBottom: 4,
-  },
-  backButton: {
-    alignSelf: "flex-start",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: palette.card,
-  },
-  backText: {
-    color: palette.text,
-    fontWeight: "700",
-  },
-  container: {
-    padding: 16,
-    gap: 12,
-  },
-  card: {
-    backgroundColor: palette.card,
-    borderRadius: 16,
-    padding: 16,
-    gap: 6,
-    borderWidth: 1,
-    borderColor: palette.border,
+  content: {
+    gap: space.sm,
   },
   eyebrow: {
-    color: palette.accent,
-    fontSize: 13,
-    letterSpacing: 1,
     textTransform: "uppercase",
-    fontWeight: "700",
+    letterSpacing: 1,
   },
-  title: {
-    color: palette.text,
-    fontSize: 18,
-    fontWeight: "800",
-  },
-  subtitle: {
-    color: palette.subtext,
-    fontSize: 14,
+  cardTitle: {
+    marginTop: space.xxs,
   },
 });

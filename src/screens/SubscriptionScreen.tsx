@@ -1,20 +1,28 @@
 import React from "react";
-import {
-  ActivityIndicator,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-  Pressable,
-} from "react-native";
+import { StyleSheet, View } from "react-native";
 import { useSubscription, IAP_SKUS } from "../lib/iap";
-import { palette } from "../theme/colors";
-import { typeface } from "../theme/typography";
+import {
+  AppText,
+  Button,
+  Card,
+  Chip,
+  ScreenContainer,
+  ScreenHeader,
+} from "../components/ui";
+import { Feather } from "../icons";
+import { theme } from "../theme/colors";
+import { space } from "../theme/tokens";
 
 type Props = {
   onBack: () => void;
 };
+
+const BENEFITS = [
+  "No ads during lineup generation.",
+  "Import rosters from spreadsheets.",
+  "Export lineups to Excel and PDF.",
+  "Full access to the calendar workspace.",
+];
 
 const SubscriptionScreen = ({ onBack }: Props) => {
   const { isPro, activeSku, products, loading, purchase, restore } =
@@ -26,347 +34,201 @@ const SubscriptionScreen = ({ onBack }: Props) => {
   const annual = products.find((p) => p.sku === IAP_SKUS.ANNUAL);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.container}>
-        <Pressable
-          onPress={onBack}
-          style={({ pressed }) => [
-            styles.backButton,
-            pressed && { opacity: 0.8 },
-          ]}
-        >
-          <Text style={styles.backText}>Back</Text>
-        </Pressable>
+    <ScreenContainer scroll contentStyle={styles.content}>
+      <ScreenHeader title="Coachr Pro" subtitle="Upgrade" onBack={onBack} />
 
-        <Text style={styles.eyebrow}>Upgrade</Text>
-        <Text style={styles.title}>Coachr Pro</Text>
-
-        {isPro ? (
-          <View style={styles.activeCard}>
-            <Text style={styles.activeLabel}>You're on Pro</Text>
-            <Text style={styles.activePlan}>
+      {isPro ? (
+        <Card style={styles.activeCard}>
+          <View style={styles.cardInner}>
+            <AppText
+              variant="caption"
+              family="heading"
+              color="accent"
+              style={styles.eyebrow}
+            >
+              You're on Pro
+            </AppText>
+            <AppText variant="title" family="display">
               {isDevUnlocked
                 ? "Development unlock"
                 : activeSku === IAP_SKUS.ANNUAL
                   ? "Annual plan"
                   : "Monthly plan"}
-            </Text>
-            <Text style={styles.activeNote}>
+            </AppText>
+            <AppText variant="body" color="secondary">
               {isDevUnlocked
                 ? "This build bypasses subscription gating so you can access the full app in development."
                 : "Manage or cancel in your App Store settings."}
-            </Text>
+            </AppText>
           </View>
-        ) : (
-          <>
-            <Text style={styles.subtitle}>
-              Unlock the premium tools for coaches who want cleaner workflows
-              and no interruptions.
-            </Text>
+        </Card>
+      ) : (
+        <>
+          <AppText variant="bodyLg" color="secondary">
+            Unlock the premium tools for coaches who want cleaner workflows
+            and no interruptions.
+          </AppText>
 
-            <View style={styles.benefitsCard}>
-              <Text style={styles.benefitsTitle}>Everything in Pro</Text>
+          <Card>
+            <View style={styles.cardInner}>
+              <AppText variant="bodyLg" family="heading">
+                Everything in Pro
+              </AppText>
               <View style={styles.benefitsList}>
-                <Text style={styles.benefitItem}>
-                  No ads during lineup generation.
-                </Text>
-                <Text style={styles.benefitItem}>
-                  Import rosters from spreadsheets.
-                </Text>
-                <Text style={styles.benefitItem}>
-                  Export lineups to Excel and PDF.
-                </Text>
-                <Text style={styles.benefitItem}>
-                  Full access to the calendar workspace.
-                </Text>
+                {BENEFITS.map((benefit) => (
+                  <View key={benefit} style={styles.benefitRow}>
+                    <Feather name="check" size={16} color={theme.accent.base} />
+                    <AppText
+                      variant="body"
+                      color="secondary"
+                      style={styles.benefitText}
+                    >
+                      {benefit}
+                    </AppText>
+                  </View>
+                ))}
               </View>
             </View>
+          </Card>
 
-            {!hasProducts ? (
-              <View style={styles.unavailableCard}>
-                <Text style={styles.unavailableTitle}>
+          {!hasProducts ? (
+            <Card>
+              <View style={styles.cardInner}>
+                <AppText variant="bodyLg" family="heading">
                   Subscription products unavailable
-                </Text>
-                <Text style={styles.unavailableBody}>
+                </AppText>
+                <AppText variant="body" color="secondary">
                   Coachr couldn&apos;t load the monthly and annual plans from the
                   store for this build.
-                </Text>
-                <Text style={styles.unavailableBody}>
+                </AppText>
+                <AppText variant="body" color="secondary">
                   On the iOS simulator, attach a StoreKit configuration file to
                   the `coachrmobile` scheme or test on a real device with sandbox
                   / TestFlight.
-                </Text>
+                </AppText>
                 {__DEV__ ? (
-                  <Text style={styles.unavailableHint}>
+                  <AppText variant="caption" color="muted">
                     Expected product IDs: {IAP_SKUS.MONTHLY}, {IAP_SKUS.ANNUAL}
-                  </Text>
+                  </AppText>
                 ) : null}
               </View>
+            </Card>
+          ) : null}
+
+          <View style={styles.plans}>
+            {annual ? (
+              <Card style={styles.planSelected}>
+                <View style={styles.cardInner}>
+                  <View style={styles.badgeRow}>
+                    <Chip label="Best value" selected icon="star" />
+                  </View>
+                  <AppText variant="title" family="heading">
+                    {annual.title}
+                  </AppText>
+                  <AppText variant="display" family="display">
+                    {annual.localizedPrice}
+                  </AppText>
+                  <AppText variant="caption" color="secondary">
+                    per {annual.period}
+                  </AppText>
+                  <View style={styles.ctaWrap}>
+                    <Button
+                      label="Choose annual"
+                      onPress={() => purchase(annual.sku)}
+                      loading={loading}
+                      fullWidth
+                      accessibilityLabel="Choose annual plan"
+                    />
+                  </View>
+                </View>
+              </Card>
             ) : null}
 
-            <View style={styles.cards}>
-              {monthly ? (
-                <View style={styles.card}>
-                  <Text style={styles.plan}>{monthly.title}</Text>
-                  <Text style={styles.price}>{monthly.localizedPrice}</Text>
-                  <Text style={styles.per}>per {monthly.period}</Text>
-                  <Pressable
-                    disabled={loading}
-                    onPress={() => purchase(monthly.sku)}
-                    style={({ pressed }) => [
-                      styles.cta,
-                      pressed && styles.ctaPressed,
-                      loading && styles.ctaDisabled,
-                    ]}
-                  >
-                    {loading ? (
-                      <ActivityIndicator
-                        color={palette.accentText}
-                        size="small"
-                      />
-                    ) : (
-                      <Text style={styles.ctaText}>Choose monthly</Text>
-                    )}
-                  </Pressable>
+            {monthly ? (
+              <Card>
+                <View style={styles.cardInner}>
+                  <AppText variant="title" family="heading">
+                    {monthly.title}
+                  </AppText>
+                  <AppText variant="display" family="display">
+                    {monthly.localizedPrice}
+                  </AppText>
+                  <AppText variant="caption" color="secondary">
+                    per {monthly.period}
+                  </AppText>
+                  <View style={styles.ctaWrap}>
+                    <Button
+                      label="Choose monthly"
+                      variant="secondary"
+                      onPress={() => purchase(monthly.sku)}
+                      loading={loading}
+                      fullWidth
+                      accessibilityLabel="Choose monthly plan"
+                    />
+                  </View>
                 </View>
-              ) : null}
+              </Card>
+            ) : null}
+          </View>
 
-              {annual ? (
-                <View style={styles.cardHighlight}>
-                  <Text style={styles.badge}>Best value</Text>
-                  <Text style={styles.plan}>{annual.title}</Text>
-                  <Text style={styles.price}>{annual.localizedPrice}</Text>
-                  <Text style={styles.per}>per {annual.period}</Text>
-                  <Pressable
-                    disabled={loading}
-                    onPress={() => purchase(annual.sku)}
-                    style={({ pressed }) => [
-                      styles.cta,
-                      pressed && styles.ctaPressed,
-                      loading && styles.ctaDisabled,
-                    ]}
-                  >
-                    {loading ? (
-                      <ActivityIndicator
-                        color={palette.accentText}
-                        size="small"
-                      />
-                    ) : (
-                      <Text style={styles.ctaText}>Choose annual</Text>
-                    )}
-                  </Pressable>
-                </View>
-              ) : null}
-            </View>
+          <Button
+            label="Restore purchases"
+            variant="ghost"
+            onPress={restore}
+            disabled={loading}
+            fullWidth
+            accessibilityLabel="Restore purchases"
+          />
 
-            <Pressable
-              disabled={loading}
-              onPress={restore}
-              style={({ pressed }) => [
-                styles.restoreButton,
-                pressed && { opacity: 0.7 },
-              ]}
-            >
-              <Text style={styles.restoreText}>Restore purchases</Text>
-            </Pressable>
-
-            <Text style={styles.note}>
-              You can cancel anytime in your app store settings.
-            </Text>
-          </>
-        )}
-      </ScrollView>
-    </SafeAreaView>
+          <AppText variant="caption" color="muted" style={styles.note}>
+            You can cancel anytime in your app store settings.
+          </AppText>
+        </>
+      )}
+    </ScreenContainer>
   );
 };
 
 export default SubscriptionScreen;
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: palette.background,
+  content: {
+    gap: space.sm,
   },
-  container: {
-    padding: 16,
-    gap: 14,
-  },
-  backButton: {
-    alignSelf: "flex-start",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: palette.card,
-  },
-  backText: {
-    color: palette.text,
-    fontWeight: "700",
+  cardInner: {
+    gap: space.xs,
   },
   eyebrow: {
-    color: palette.accent,
-    fontSize: 13,
-    letterSpacing: 1,
-    textTransform: "uppercase",
-    fontWeight: "700",
-  },
-  title: {
-    color: palette.text,
-    fontSize: 24,
-    fontWeight: "800",
-  },
-  subtitle: {
-    color: palette.subtext,
-    fontSize: 15,
-    lineHeight: 20,
-    fontFamily: typeface.body,
-  },
-  activeCard: {
-    backgroundColor: palette.card,
-    borderRadius: 14,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: palette.accent,
-    gap: 6,
-  },
-  activeLabel: {
-    color: palette.accent,
-    fontFamily: typeface.heading,
-    fontSize: 12,
     textTransform: "uppercase",
     letterSpacing: 1.2,
   },
-  activePlan: {
-    color: palette.text,
-    fontFamily: typeface.display,
-    fontSize: 20,
-  },
-  activeNote: {
-    color: palette.subtext,
-    fontFamily: typeface.body,
-    fontSize: 13,
-  },
-  benefitsCard: {
-    backgroundColor: palette.card,
-    borderRadius: 14,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: palette.border,
-    gap: 10,
-  },
-  benefitsTitle: {
-    color: palette.text,
-    fontFamily: typeface.heading,
-    fontSize: 16,
+  activeCard: {
+    borderColor: theme.accent.subtleBorder,
   },
   benefitsList: {
-    gap: 8,
+    gap: space.xs,
   },
-  unavailableCard: {
-    backgroundColor: palette.card,
-    borderRadius: 14,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: palette.border,
-    gap: 8,
+  benefitRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: space.xs,
   },
-  unavailableTitle: {
-    color: palette.text,
-    fontFamily: typeface.heading,
-    fontSize: 16,
+  benefitText: {
+    flex: 1,
   },
-  unavailableBody: {
-    color: palette.subtext,
-    fontFamily: typeface.body,
-    fontSize: 14,
-    lineHeight: 19,
+  plans: {
+    gap: space.sm,
   },
-  unavailableHint: {
-    color: palette.accent,
-    fontFamily: typeface.body,
-    fontSize: 12,
-    lineHeight: 18,
+  planSelected: {
+    borderColor: theme.accent.subtleBorder,
   },
-  benefitItem: {
-    color: palette.subtext,
-    fontFamily: typeface.body,
-    fontSize: 14,
-    lineHeight: 19,
+  badgeRow: {
+    flexDirection: "row",
   },
-  cards: {
-    gap: 12,
-  },
-  card: {
-    backgroundColor: palette.card,
-    borderRadius: 14,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: palette.border,
-    gap: 6,
-  },
-  cardHighlight: {
-    backgroundColor: palette.card,
-    borderRadius: 14,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: palette.accent,
-    gap: 6,
-  },
-  badge: {
-    alignSelf: "flex-start",
-    color: palette.accent,
-    fontWeight: "800",
-    fontSize: 12,
-    textTransform: "uppercase",
-  },
-  plan: {
-    color: palette.text,
-    fontSize: 18,
-    fontWeight: "800",
-    fontFamily: typeface.heading,
-  },
-  price: {
-    color: palette.text,
-    fontSize: 24,
-    fontWeight: "800",
-    fontFamily: typeface.display,
-  },
-  per: {
-    color: palette.subtext,
-    fontFamily: typeface.body,
-  },
-  cta: {
-    marginTop: 8,
-    backgroundColor: palette.accent,
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  ctaPressed: {
-    transform: [{ translateY: 1 }],
-  },
-  ctaDisabled: {
-    opacity: 0.6,
-  },
-  ctaText: {
-    color: palette.accentText,
-    fontWeight: "800",
-  },
-  restoreButton: {
-    alignSelf: "center",
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-  },
-  restoreText: {
-    color: palette.subtext,
-    fontFamily: typeface.body,
-    fontSize: 14,
-    textDecorationLine: "underline",
+  ctaWrap: {
+    marginTop: space.xs,
   },
   note: {
-    color: palette.subtext,
-    fontSize: 12,
-    fontFamily: typeface.body,
+    textAlign: "center",
   },
 });

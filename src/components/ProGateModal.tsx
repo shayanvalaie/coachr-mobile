@@ -1,6 +1,8 @@
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
-import { palette } from "../theme/colors";
-import { typeface } from "../theme/typography";
+import { StyleSheet, View } from "react-native";
+import { space } from "../theme/tokens";
+import AppText from "./ui/AppText";
+import Button from "./ui/Button";
+import Sheet from "./ui/Sheet";
 
 type Props = {
   visible: boolean;
@@ -10,100 +12,40 @@ type Props = {
 };
 
 const ProGateModal = ({ visible, featureLabel, onClose, onUpgrade }: Props) => (
-  <Modal animationType="fade" transparent visible={visible} onRequestClose={onClose}>
-    <View style={styles.backdrop}>
-      <View style={styles.card}>
-        <Text style={styles.eyebrow}>Coachr Pro</Text>
-        <Text style={styles.title}>Upgrade to unlock this feature</Text>
-        <Text style={styles.body}>
-          {featureLabel} is available on Coachr Pro. Upgrade to remove ads, unlock
-          imports and exports, and access the calendar.
-        </Text>
-        <View style={styles.actions}>
-          <Pressable
-            style={({ pressed }) => [styles.secondaryButton, pressed && { opacity: 0.85 }]}
-            onPress={onClose}
-          >
-            <Text style={styles.secondaryText}>Not now</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [styles.primaryButton, pressed && { opacity: 0.85 }]}
-            onPress={onUpgrade}
-          >
-            <Text style={styles.primaryText}>Upgrade to Pro</Text>
-          </Pressable>
-        </View>
+  <Sheet visible={visible} onClose={onClose} title="Upgrade to unlock this feature">
+    <AppText variant="caption" family="heading" color="accent" style={styles.eyebrow}>
+      Coachr Pro
+    </AppText>
+    <AppText variant="body" color="secondary">
+      {featureLabel} is available on Coachr Pro. Upgrade to remove ads, unlock
+      imports and exports, and access the calendar.
+    </AppText>
+    <View style={styles.actions}>
+      <View style={styles.action}>
+        <Button label="Not now" variant="secondary" onPress={onClose} />
+      </View>
+      <View style={styles.action}>
+        <Button label="Upgrade to Pro" onPress={onUpgrade} />
       </View>
     </View>
-  </Modal>
+  </Sheet>
 );
 
 export default ProGateModal;
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: "rgba(4, 12, 8, 0.72)",
-    justifyContent: "center",
-    padding: 20,
-  },
-  card: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: palette.card,
-    padding: 18,
-    gap: 10,
-  },
   eyebrow: {
-    color: palette.accent,
-    fontFamily: typeface.heading,
-    fontSize: 12,
     textTransform: "uppercase",
     letterSpacing: 1.2,
-  },
-  title: {
-    color: palette.text,
-    fontFamily: typeface.display,
-    fontSize: 24,
-  },
-  body: {
-    color: palette.subtext,
-    fontFamily: typeface.body,
-    fontSize: 14,
-    lineHeight: 20,
+    marginTop: -space.xs,
   },
   actions: {
     flexDirection: "row",
-    gap: 10,
-    marginTop: 4,
+    gap: space.sm,
+    marginTop: space.xxs,
+    marginBottom: space.xs,
   },
-  secondaryButton: {
+  action: {
     flex: 1,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: palette.cardAlt,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  secondaryText: {
-    color: palette.text,
-    fontFamily: typeface.heading,
-    fontSize: 13,
-  },
-  primaryButton: {
-    flex: 1,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(242,166,59,0.72)",
-    backgroundColor: palette.accent,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  primaryText: {
-    color: palette.accentText,
-    fontFamily: typeface.heading,
-    fontSize: 13,
   },
 });

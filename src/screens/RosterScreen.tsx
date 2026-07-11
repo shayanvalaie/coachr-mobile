@@ -3,21 +3,30 @@ import {
   Alert,
   LayoutAnimation,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   UIManager,
   View,
 } from "react-native";
-import Feather from "@expo/vector-icons/Feather";
 import * as DocumentPicker from "expo-document-picker";
 import * as XLSX from "xlsx";
 import DraggablePlayerList from "../components/DraggablePlayerList";
+import {
+  AppPressable,
+  AppText,
+  Button,
+  Card,
+  EmptyState,
+  MetricTile,
+  ScreenContainer,
+  ScreenHeader,
+  useToast,
+} from "../components/ui";
+import { Feather } from "../icons";
 import { backendClient } from "../lib/backend/client";
 import { BackendSession } from "../lib/backend/types";
-import { palette } from "../theme/colors";
-import { typeface } from "../theme/typography";
+import { theme } from "../theme/colors";
+import { radius, space } from "../theme/tokens";
 import { Player } from "../types/lineup";
 import { defaultTeamRulesConfig, parseTeamRulesConfig } from "../types/rules";
 import { buildPlayersFromRows, createPlayer } from "../utils/lineupGenerator";
@@ -52,6 +61,7 @@ const RosterScreen = ({
   hasProSubscription,
   onRequirePro,
 }: Props) => {
+  const toast = useToast();
   const [teamId, setTeamId] = useState<string | null>(null);
   const [roster, setRoster] = useState<Player[]>([]);
   const [lineupSlots, setLineupSlots] = useState<string[]>(
@@ -63,8 +73,13 @@ const RosterScreen = ({
   );
   const [isDraggingPlayers, setIsDraggingPlayers] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  // Transient progress copy only (importing/saving); outcomes go to toasts.
   const [status, setStatus] = useState("");
-  const [error, setError] = useState<string | null>(null);
+
+  const showError = useCallback(
+    (message: string) => toast.show({ message, type: "error" }),
+    [toast],
+  );
 
   const ensureTeam = useCallback(async () => {
     if (teamId) return teamId;
@@ -78,7 +93,6 @@ const RosterScreen = ({
 
   const loadRoster = useCallback(async () => {
     try {
-      setError(null);
       const team = await ensureTeam();
       if (!team) return;
 
@@ -91,15 +105,15 @@ const RosterScreen = ({
       setActiveIds(new Set(nextRoster.map((p) => p.id)));
       setExpandedPlayers(new Set());
     } catch (_err) {
-      setError("Unable to load roster from server.");
+      showError("Unable to load roster from server.");
     }
-  }, [ensureTeam]);
+  }, [ensureTeam, showError]);
 
   useEffect(() => {
     loadRoster().catch(() => {
-      setError("Unable to load roster from server.");
+      showError("Unable to load roster from server.");
     });
-  }, [loadRoster]);
+  }, [loadRoster, showError]);
 
   useEffect(() => {
     if (
@@ -161,14 +175,14 @@ const RosterScreen = ({
         if (!team) return;
         await backendClient.deleteTeamPlayer(team, id);
       } catch (_err) {
-        setError("Failed to remove player.");
+        showError("Failed to remove player.");
         // Re-sync from the server so local state matches persisted state.
         loadRoster().catch(() => {
-          setError("Unable to load roster from server.");
+          showError("Unable to load roster from server.");
         });
       }
     },
-    [ensureTeam, loadRoster],
+    [ensureTeam, loadRoster, showError],
   );
 
   const togglePlayer = useCallback((id: string) => {
@@ -198,7 +212,7 @@ const RosterScreen = ({
     async (player: Player) => {
       const team = await ensureTeam();
       if (!team) {
-        setError("Unable to ensure team for saving.");
+        showError("Unable to ensure team for saving.");
         return;
       }
 
@@ -228,7 +242,7 @@ const RosterScreen = ({
         return next;
       });
     },
-    [ensureTeam],
+    [ensureTeam, showError],
   );
 
   const handleSavePlayer = useCallback(
@@ -238,35 +252,33 @@ const RosterScreen = ({
 
       setIsSaving(true);
       setStatus("");
-      setError(null);
       try {
         await savePlayer(player);
-        setStatus("Player saved.");
+        toast.show({ message: "Player saved.", type: "success" });
       } catch (_err) {
-        setError("Failed to save player.");
+        showError("Failed to save player.");
       } finally {
         setIsSaving(false);
       }
     },
-    [roster, savePlayer],
+    [roster, savePlayer, showError, toast],
   );
 
   const handleSaveAll = useCallback(async () => {
     setIsSaving(true);
     setStatus("");
-    setError(null);
     try {
       for (const player of roster) {
         // eslint-disable-next-line no-await-in-loop
         await savePlayer(player);
       }
-      setStatus("Roster saved.");
+      toast.show({ message: "Roster saved.", type: "success" });
     } catch (_err) {
-      setError("Failed to save all players.");
+      showError("Failed to save all players.");
     } finally {
       setIsSaving(false);
     }
-  }, [roster, savePlayer]);
+  }, [roster, savePlayer, showError, toast]);
 
   const handleRemoveAll = useCallback(() => {
     if (roster.length === 0) return;
@@ -287,7 +299,6 @@ const RosterScreen = ({
             setActiveIds(new Set());
             setExpandedPlayers(new Set());
             setStatus("");
-            setError(null);
 
             // Persist the deletions so they survive a reload.
             try {
@@ -298,23 +309,22 @@ const RosterScreen = ({
                   backendClient.deleteTeamPlayer(team, id),
                 ),
               );
-              setStatus("All players removed.");
+              toast.show({ message: "All players removed.", type: "success" });
             } catch (_err) {
-              setError("Failed to remove all players.");
+              showError("Failed to remove all players.");
               // Re-sync from the server so local state matches persisted state.
               loadRoster().catch(() => {
-                setError("Unable to load roster from server.");
+                showError("Unable to load roster from server.");
               });
             }
           },
         },
       ],
     );
-  }, [roster, ensureTeam, loadRoster]);
+  }, [roster, ensureTeam, loadRoster, showError, toast]);
 
   const handleImportRoster = useCallback(async () => {
     setStatus("Importing roster...");
-    setError(null);
 
     // --- Parse phase ---
     let importedPlayers;
@@ -344,7 +354,7 @@ const RosterScreen = ({
       }) as any[][];
       importedPlayers = buildPlayersFromRows(rows);
     } catch (_err) {
-      setError(
+      showError(
         "Unable to read the file. Make sure it is a valid Excel spreadsheet.",
       );
       setStatus("");
@@ -352,14 +362,14 @@ const RosterScreen = ({
     }
 
     if (importedPlayers.length === 0) {
-      setError("No players found in the uploaded file.");
+      showError("No players found in the uploaded file.");
       setStatus("");
       return;
     }
 
     const duplicateNames = findDuplicatePlayerNames(importedPlayers);
     if (duplicateNames.length > 0) {
-      setError(
+      showError(
         `Duplicate player names found in sheet: ${duplicateNames.join(", ")}.`,
       );
       setStatus("");
@@ -372,13 +382,13 @@ const RosterScreen = ({
     try {
       team = await ensureTeam();
       if (!team) {
-        setError("Unable to load your team.");
+        showError("Unable to load your team.");
         setStatus("");
         return;
       }
       existingRoster = await backendClient.getTeamRoster(team);
     } catch (_err) {
-      setError(
+      showError(
         "Unable to reach the server. Check your connection and try again.",
       );
       setStatus("");
@@ -387,7 +397,7 @@ const RosterScreen = ({
 
     const existingDuplicates = findDuplicatePlayerNames(existingRoster);
     if (existingDuplicates.length > 0) {
-      setError(
+      showError(
         `Team roster already has duplicate names: ${existingDuplicates.join(", ")}. Resolve those first.`,
       );
       setStatus("");
@@ -420,8 +430,8 @@ const RosterScreen = ({
       setActiveIds(new Set(nextRoster.map((p) => p.id)));
       setExpandedPlayers(new Set());
       const summary = `No new players imported. ${duplicateExistingNames.length} already exist for this team.`;
-      setStatus(summary);
-      Alert.alert("Import complete", summary);
+      setStatus("");
+      toast.show({ message: summary, type: "info" });
       return;
     }
 
@@ -460,306 +470,179 @@ const RosterScreen = ({
       parts.push(`Failed to save: ${failedNames.join(", ")}.`);
 
     const summary = parts.join(" ");
-    setStatus(summary);
+    setStatus("");
     if (failedNames.length > 0 && savedCount === 0) {
-      setError(
+      showError(
         `Failed to save imported players. Check your connection and try again.`,
       );
-      setStatus("");
     } else {
-      Alert.alert("Import complete", summary);
+      toast.show({ message: summary, type: "success" });
     }
-  }, [ensureTeam]);
+  }, [ensureTeam, showError, toast]);
+
+  const handleImportPress = useCallback(() => {
+    if (!hasProSubscription) {
+      onRequirePro("Roster import");
+      return;
+    }
+    void handleImportRoster();
+  }, [hasProSubscription, onRequirePro, handleImportRoster]);
 
   return (
-    <ScrollView
-      style={styles.scroll}
-      contentContainerStyle={styles.container}
-      scrollEnabled={!isDraggingPlayers}
-    >
-      <View style={styles.header}>
-        <Pressable
-          style={({ pressed }) => [
-            styles.iconButton,
-            pressed && { opacity: 0.7 },
-          ]}
-          onPress={onBack}
-        >
-          <Feather name="arrow-left" size={18} color={palette.text} />
-        </Pressable>
-
-        <View style={styles.headerTextWrap}>
-          <Text style={styles.headerEyebrow}>Roster Workspace</Text>
-          <Text style={styles.headerTitle}>Roster Builder</Text>
-        </View>
-
-        <Pressable
-          style={({ pressed }) => [
-            styles.iconButton,
-            pressed && { opacity: 0.7 },
-          ]}
-          onPress={onOpenProfile}
-        >
-          <Feather name="user" size={18} color={palette.text} />
-        </Pressable>
-      </View>
-
-      <View style={styles.heroCard}>
-        <Text style={styles.heroTitle}>Roster</Text>
-        <Text style={styles.heroSubtext}>
-          Manage players and keep your game-day list ready.
-        </Text>
-        <View style={styles.metricsRow}>
-          <View style={styles.metric}>
-            <Text style={styles.metricLabel}>Total Players</Text>
-            <Text style={styles.metricValue}>{roster.length}</Text>
-          </View>
-          <View style={styles.metric}>
-            <Text style={styles.metricLabel}>Active</Text>
-            <Text style={styles.metricValue}>{activeCount}</Text>
-          </View>
-        </View>
-      </View>
-
-      <View style={styles.actionsCard}>
-        <Pressable
-          style={({ pressed }) => [
-            styles.secondaryButton,
-            styles.actionButton,
-            pressed && { opacity: 0.85 },
-          ]}
-          onPress={() => {
-            if (!hasProSubscription) {
-              onRequirePro("Roster import");
-              return;
-            }
-            void handleImportRoster();
-          }}
-        >
-          <Text style={styles.secondaryText}>Import</Text>
-        </Pressable>
-        <Pressable
-          style={({ pressed }) => [
-            styles.secondaryButton,
-            styles.actionButton,
-            pressed && { opacity: 0.85 },
-            isSaving && { opacity: 0.7 },
-          ]}
-          onPress={handleSaveAll}
-          disabled={isSaving}
-        >
-          <Text style={styles.secondaryText}>
-            {isSaving ? "Saving..." : "Save all"}
-          </Text>
-        </Pressable>
-        <Pressable
-          style={({ pressed }) => [
-            styles.secondaryButton,
-            styles.actionButton,
-            pressed && { opacity: 0.85 },
-          ]}
-          onPress={handleAddPlayer}
-        >
-          <Text style={styles.secondaryText}>Add player</Text>
-        </Pressable>
-        <Pressable
-          style={({ pressed }) => [
-            styles.secondaryButton,
-            styles.dangerButton,
-            styles.actionButton,
-            pressed && { opacity: 0.85 },
-            roster.length === 0 && { opacity: 0.5 },
-          ]}
-          onPress={handleRemoveAll}
-          disabled={roster.length === 0}
-        >
-          <Text style={styles.dangerText}>Delete all</Text>
-        </Pressable>
-        <Pressable
-          style={({ pressed }) => [
-            styles.primaryButton,
-            styles.actionButton,
-            pressed && { opacity: 0.85 },
-          ]}
-          onPress={onOpenLineupPage}
-        >
-          <Text style={styles.primaryText}>Generate</Text>
-        </Pressable>
-      </View>
-
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      {status ? <Text style={styles.status}>{status}</Text> : null}
-
-      <View style={styles.listWrap}>
-        <DraggablePlayerList
-          players={roster}
-          expandedPlayers={expandedPlayers}
-          activeIds={activeIds}
-          isSaving={isSaving}
-          lineupSlots={lineupSlots}
-          onDragStateChange={setIsDraggingPlayers}
-          onReorderPlayers={handleReorderPlayers}
-          onToggleExpand={togglePlayer}
-          onToggleActive={handleToggleActive}
-          onUpdatePlayer={updatePlayer}
-          onRemovePlayer={removePlayer}
-          onSavePlayer={handleSavePlayer}
+    <ScreenContainer keyboard padded={false}>
+      {/* Single scroll container. DraggablePlayerList's PanResponder drag
+          measures rows against a plain sibling View and freezes scrolling
+          while dragging, so the list must NOT be virtualized (see that
+          component) and this ScrollView stays the only scroller. */}
+      <ScrollView
+        style={styles.flex}
+        contentContainerStyle={styles.content}
+        scrollEnabled={!isDraggingPlayers}
+        keyboardShouldPersistTaps="handled"
+      >
+        <ScreenHeader
+          title="Roster Builder"
+          subtitle="Manage players and keep your game-day list ready."
+          onBack={onBack}
+          right={
+            <AppPressable
+              onPress={onOpenProfile}
+              accessibilityRole="button"
+              accessibilityLabel="Open profile"
+              style={styles.iconButton}
+              hitSlop={8}
+            >
+              <Feather name="user" size={18} color={theme.text.primary} />
+            </AppPressable>
+          }
         />
-      </View>
-    </ScrollView>
+
+        <View style={styles.metricsRow}>
+          <MetricTile label="Total players" value={roster.length} small />
+          <MetricTile label="Active" value={activeCount} small />
+        </View>
+
+        <Card padding="sm" style={styles.actionsCard}>
+          <View style={styles.actionsRow}>
+            <View style={styles.actionItem}>
+              <Button
+                label="Import"
+                variant="secondary"
+                size="sm"
+                icon="upload"
+                onPress={handleImportPress}
+              />
+            </View>
+            <View style={styles.actionItem}>
+              <Button
+                label="Save all"
+                variant="secondary"
+                size="sm"
+                icon="save"
+                onPress={handleSaveAll}
+                loading={isSaving}
+              />
+            </View>
+            <View style={styles.actionItem}>
+              <Button
+                label="Add player"
+                variant="secondary"
+                size="sm"
+                icon="plus"
+                onPress={handleAddPlayer}
+              />
+            </View>
+          </View>
+          <View style={styles.actionsRow}>
+            <View style={styles.actionItem}>
+              <Button
+                label="Delete all"
+                variant="danger"
+                icon="trash-2"
+                onPress={handleRemoveAll}
+                disabled={roster.length === 0}
+              />
+            </View>
+            <View style={styles.actionItemWide}>
+              <Button
+                label="Generate"
+                variant="primary"
+                icon="zap"
+                onPress={onOpenLineupPage}
+              />
+            </View>
+          </View>
+        </Card>
+
+        {status ? (
+          <AppText variant="caption" color="secondary">
+            {status}
+          </AppText>
+        ) : null}
+
+        {roster.length === 0 ? (
+          <EmptyState
+            icon="users"
+            title="No players yet"
+            body="Add players by hand or import an Excel roster."
+            action={{ label: "Add player", onPress: handleAddPlayer }}
+          />
+        ) : (
+          <DraggablePlayerList
+            players={roster}
+            expandedPlayers={expandedPlayers}
+            activeIds={activeIds}
+            isSaving={isSaving}
+            lineupSlots={lineupSlots}
+            onDragStateChange={setIsDraggingPlayers}
+            onReorderPlayers={handleReorderPlayers}
+            onToggleExpand={togglePlayer}
+            onToggleActive={handleToggleActive}
+            onUpdatePlayer={updatePlayer}
+            onRemovePlayer={removePlayer}
+            onSavePlayer={handleSavePlayer}
+          />
+        )}
+      </ScrollView>
+    </ScreenContainer>
   );
 };
 
 const styles = StyleSheet.create({
-  scroll: {
+  flex: {
     flex: 1,
-    backgroundColor: palette.background,
   },
-  container: {
-    padding: 16,
-    paddingBottom: 28,
-    gap: 10,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 2,
-  },
-  headerTextWrap: {
-    alignItems: "center",
-    gap: 2,
-  },
-  headerEyebrow: {
-    color: palette.subtext,
-    fontFamily: typeface.body,
-    fontSize: 10,
-    letterSpacing: 1.6,
-    textTransform: "uppercase",
-  },
-  headerTitle: {
-    color: palette.text,
-    fontFamily: typeface.display,
-    fontSize: 24,
+  content: {
+    paddingHorizontal: space.md,
+    paddingBottom: space.lg,
+    gap: space.sm,
   },
   iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 36,
+    height: 36,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: theme.border.base,
+    backgroundColor: theme.bg.raised,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: palette.cardAlt,
-    borderWidth: 1,
-    borderColor: palette.border,
-  },
-  heroCard: {
-    backgroundColor: palette.cardAlt,
-    borderRadius: 20,
-    padding: 14,
-    gap: 6,
-    borderWidth: 1,
-    borderColor: palette.border,
-  },
-  heroTitle: {
-    color: palette.text,
-    fontFamily: typeface.display,
-    fontSize: 22,
-  },
-  heroSubtext: {
-    color: palette.subtext,
-    fontFamily: typeface.body,
-    fontSize: 11,
   },
   metricsRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginTop: 4,
-  },
-  metric: {
-    flex: 1,
-    minWidth: 120,
-    backgroundColor: palette.card,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: palette.border,
-  },
-  metricLabel: {
-    color: palette.subtext,
-    fontFamily: typeface.body,
-    fontSize: 11,
-  },
-  metricValue: {
-    color: palette.text,
-    fontFamily: typeface.heading,
-    fontSize: 15,
-    marginTop: 2,
+    gap: space.xs,
   },
   actionsCard: {
-    backgroundColor: palette.card,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: palette.border,
-    padding: 10,
+    gap: space.xs,
+  },
+  actionsRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
+    gap: space.xs,
   },
-  actionButton: {
+  actionItem: {
     flex: 1,
-    minWidth: 98,
   },
-  secondaryButton: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: palette.border,
-    paddingVertical: 10,
-    paddingHorizontal: 10,
-    backgroundColor: palette.cardAlt,
-  },
-  secondaryText: {
-    color: palette.text,
-    fontFamily: typeface.heading,
-    fontSize: 13,
-    textAlign: "center",
-  },
-  dangerButton: {
-    borderColor: "rgba(239,107,91,0.5)",
-  },
-  dangerText: {
-    color: palette.danger,
-    fontFamily: typeface.heading,
-    fontSize: 13,
-    textAlign: "center",
-  },
-  primaryButton: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(242,166,59,0.6)",
-    paddingVertical: 10,
-    paddingHorizontal: 10,
-    backgroundColor: palette.accent,
-  },
-  primaryText: {
-    color: palette.accentText,
-    fontFamily: typeface.heading,
-    fontSize: 13,
-    textAlign: "center",
-  },
-  listWrap: {
-    gap: 10,
-  },
-  error: {
-    color: palette.danger,
-    fontFamily: typeface.body,
-    fontSize: 12,
-  },
-  status: {
-    color: palette.success,
-    fontFamily: typeface.body,
-    fontSize: 12,
+  actionItemWide: {
+    flex: 2,
   },
 });
 

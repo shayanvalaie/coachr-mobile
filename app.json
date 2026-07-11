@@ -6,12 +6,12 @@
     "scheme": "coachr",
     "orientation": "default",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#0f1f18"
     },
     "ios": {
       "supportsTablet": true,
@@ -43,7 +43,9 @@
       ],
       "expo-font",
       "expo-screen-orientation",
-      "react-native-iap"
+      "react-native-iap",
+      "expo-secure-store",
+      "@react-native-community/datetimepicker"
     ],
     "extra": {
       "eas": {

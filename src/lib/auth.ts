@@ -28,6 +28,6 @@ export const safeSignOut = async (): Promise<void> => {
       throw localError;
     }
 
-    console.log("[sign out fallback] global logout unreachable due to network");
+    if (__DEV__) console.log("[sign out fallback] global logout unreachable due to network");
   }
 };

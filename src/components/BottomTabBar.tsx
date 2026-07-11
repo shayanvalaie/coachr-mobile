@@ -1,8 +1,10 @@
 import React, { memo } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import Feather from "@expo/vector-icons/Feather";
-import { palette } from "../theme/colors";
-import { typeface } from "../theme/typography";
+import { StyleSheet, View } from "react-native";
+import { Feather, IconName } from "../icons";
+import { theme } from "../theme/colors";
+import { radius, space } from "../theme/tokens";
+import AppPressable from "./ui/AppPressable";
+import AppText from "./ui/AppText";
 
 export type MainTabKey = "home" | "roster" | "lineup" | "calendar" | "profile";
 
@@ -11,7 +13,7 @@ type Props = {
   onSelectTab: (tab: MainTabKey) => void;
 };
 
-const tabs: Array<{ key: MainTabKey; label: string; icon: keyof typeof Feather.glyphMap }> = [
+const tabs: Array<{ key: MainTabKey; label: string; icon: IconName }> = [
   { key: "home", label: "Home", icon: "home" },
   { key: "roster", label: "Roster", icon: "users" },
   { key: "lineup", label: "Lineup", icon: "target" },
@@ -26,24 +28,29 @@ const BottomTabBar = ({ activeTab, onSelectTab }: Props) => {
         {tabs.map((tab) => {
           const active = tab.key === activeTab;
           return (
-            <Pressable
+            <AppPressable
               key={tab.key}
-              style={({ pressed }) => [
-                styles.tabButton,
-                active && styles.tabButtonActive,
-                pressed && { opacity: 0.88 },
-              ]}
+              style={[styles.tabButton, active && styles.tabButtonActive]}
               onPress={() => onSelectTab(tab.key)}
               accessibilityRole="tab"
+              accessibilityLabel={tab.label}
               accessibilityState={{ selected: active }}
+              pressScale={0.96}
             >
               <Feather
                 name={tab.icon}
                 size={18}
-                color={active ? palette.success : palette.subtext}
+                color={active ? theme.accent.base : theme.text.secondary}
               />
-              <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{tab.label}</Text>
-            </Pressable>
+              <AppText
+                variant="caption"
+                family="heading"
+                color={active ? "accent" : "secondary"}
+                style={styles.tabLabel}
+              >
+                {tab.label}
+              </AppText>
+            </AppPressable>
           );
         })}
       </View>
@@ -55,44 +62,40 @@ export default memo(BottomTabBar);
 
 const styles = StyleSheet.create({
   wrap: {
-    backgroundColor: palette.background,
-    paddingHorizontal: 12,
-    paddingTop: 8,
-    paddingBottom: 12,
+    backgroundColor: theme.bg.base,
+    paddingHorizontal: space.sm,
+    paddingTop: space.xs,
+    paddingBottom: space.sm,
     borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.08)",
+    borderTopColor: theme.border.subtle,
   },
   tabBar: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: palette.card,
+    backgroundColor: theme.bg.raised,
     borderWidth: 1,
-    borderColor: palette.border,
-    borderRadius: 16,
-    paddingHorizontal: 4,
-    paddingVertical: 4,
+    borderColor: theme.border.base,
+    borderRadius: radius.lg,
+    paddingHorizontal: space.xxs,
+    paddingVertical: space.xxs,
     gap: 2,
   },
   tabButton: {
     flex: 1,
     minHeight: 52,
-    borderRadius: 12,
+    borderRadius: radius.md,
     alignItems: "center",
     justifyContent: "center",
     gap: 3,
   },
   tabButtonActive: {
-    backgroundColor: "rgba(126,207,157,0.16)",
+    backgroundColor: theme.accent.subtle,
     borderWidth: 1,
-    borderColor: "rgba(126,207,157,0.48)",
+    borderColor: theme.accent.subtleBorder,
   },
   tabLabel: {
-    color: palette.subtext,
-    fontFamily: typeface.heading,
     fontSize: 10,
-  },
-  tabLabelActive: {
-    color: palette.success,
+    lineHeight: 13,
   },
 });
