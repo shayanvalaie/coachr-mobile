@@ -111,6 +111,14 @@ const HomeStackNavigator = ({ session }: SessionProps) => {
             session={session}
             onBack={() => navigation.goBack()}
             onOpenProfile={() => navigation.navigate("ProfileTab")}
+            onGenerateLineup={() =>
+              navigation.navigate("LineupTab", {
+                launch: buildLaunchRequest({
+                  gameId: null,
+                  autoGenerate: true,
+                }),
+              })
+            }
             hasProSubscription={proGate.isPro}
             onRequirePro={proGate.open}
           />

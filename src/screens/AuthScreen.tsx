@@ -5,7 +5,7 @@ import AuthHeader from "../components/auth/AuthHeader";
 import { Card, ScreenContainer } from "../components/ui";
 import { space } from "../theme/tokens";
 import { AuthMode } from "../types/auth";
-import { activeBackendProvider, backendClient } from "../lib/backend/client";
+import { backendClient } from "../lib/backend/client";
 
 const AuthScreen = () => {
   const [mode, setMode] = useState<AuthMode>(AuthMode.SignIn);
@@ -22,7 +22,6 @@ const AuthScreen = () => {
 
   const isLikelyEmail = (value: string) =>
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-  const isFastApiBackend = activeBackendProvider === "fastapi";
 
   const handleSubmit = async () => {
     setError(null);
@@ -87,9 +86,8 @@ const AuthScreen = () => {
         if (signInError) {
           const message = signInError.message.toLowerCase();
           if (
-            isFastApiBackend &&
-            (message.includes("email not verified") ||
-              message.includes("verification"))
+            message.includes("email not verified") ||
+            message.includes("verification")
           ) {
             setVerificationEmail(normalizedEmail);
             setVerificationCode("");
@@ -107,20 +105,13 @@ const AuthScreen = () => {
         const { data, error: signUpError } = await backendClient.auth.signUp({
           email: normalizedEmail,
           password,
-          options: {
-            emailRedirectTo: "coachr://auth-callback",
-          },
         });
         if (signUpError) throw signUpError;
         const needsEmailVerify = !data.session;
         if (needsEmailVerify) {
-          if (isFastApiBackend) {
-            setVerificationEmail(normalizedEmail);
-            setVerificationCode("");
-            setStatus("Verification code sent. Check your email.");
-          } else {
-            setStatus("Check your email to confirm your account.");
-          }
+          setVerificationEmail(normalizedEmail);
+          setVerificationCode("");
+          setStatus("Verification code sent. Check your email.");
         } else {
           setStatus("Account created and signed in.");
         }

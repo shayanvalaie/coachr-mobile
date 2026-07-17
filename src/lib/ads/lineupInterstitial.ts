@@ -1,5 +1,4 @@
 import { Platform } from "react-native";
-import { devProOverride } from "../proAccess";
 
 type AdEventTypeShape = {
   LOADED: string;
@@ -56,7 +55,7 @@ const getLineupInterstitialUnitId = (): string | null => {
 };
 
 export const presentLineupInterstitial = async (
-  isPro = devProOverride,
+  isPro = false,
 ): Promise<void> => {
   if (!ADS_MODULE_AVAILABLE || isPro) return;
 

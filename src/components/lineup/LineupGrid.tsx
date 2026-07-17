@@ -45,9 +45,11 @@ const EMPTY_MARKER = "-";
 const DEFAULT_ROW_HEIGHT = 44;
 
 // Off-palette rose used to tint grid rows for female players. Kept as a local
-// hex constant (not a semantic token): the tint is unique to the lineup grid
+// constant (not a semantic token): the tint is unique to the lineup grid
 // and must stay visually distinct from both accent (amber) and danger (red).
-const FEMALE_ROW_TINT = "#c96f95";
+// Semi-transparent so the tint stays subtle and the cell markers (incl. the
+// red X's) remain legible over it.
+const FEMALE_ROW_TINT = "rgba(201, 111, 149, 0.45)";
 
 const LineupGrid = ({
   lineup,

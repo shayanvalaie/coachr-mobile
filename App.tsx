@@ -7,7 +7,6 @@ import { DarkTheme, NavigationContainer } from "@react-navigation/native";
 import ErrorBoundary from "./src/components/ErrorBoundary";
 import { ToastProvider } from "./src/components/ui";
 import { SubscriptionProvider, useSubscription } from "./src/lib/iap";
-import { devProOverride } from "./src/lib/proAccess";
 import { ProGateProvider } from "./src/lib/proGate";
 import { navigationRef } from "./src/navigation/navigationRef";
 import RootNavigator from "./src/navigation/RootNavigator";
@@ -35,8 +34,9 @@ const navigationTheme = {
 };
 
 const AdsInitializer = () => {
-  const { isPro: iapIsPro } = useSubscription();
-  const isPro = iapIsPro || devProOverride;
+  // Ads follow the same single Pro status as everything else, so toggling
+  // Pro on/off flips ad display too.
+  const { isPro } = useSubscription();
 
   const adsEnabled =
     process.env.EXPO_PUBLIC_ENABLE_ADS === "true" && !!mobileAds && !isPro;

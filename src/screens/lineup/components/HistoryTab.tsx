@@ -2,6 +2,7 @@ import { ReactNode, useCallback } from "react";
 import { ActivityIndicator, FlatList, StyleSheet, View } from "react-native";
 import {
   AppText,
+  Button,
   EmptyState,
   SkeletonListRows,
 } from "../../../components/ui";
@@ -23,6 +24,8 @@ type Props = {
   lineupHistory: BackendLineupVersionSummary[];
   historyLoading: boolean;
   historyError: string | null;
+  isGenerating: boolean;
+  onGenerate: () => void;
   renderVersion: (version: BackendLineupVersionSummary) => ReactNode;
 };
 
@@ -38,6 +41,8 @@ const HistoryTab = ({
   lineupHistory,
   historyLoading,
   historyError,
+  isGenerating,
+  onGenerate,
   renderVersion,
 }: Props) => {
   const renderItem = useCallback(
@@ -57,6 +62,14 @@ const HistoryTab = ({
       ListHeaderComponent={
         <View style={styles.listHeader}>
           {header}
+          <Button
+            label="Generate"
+            icon="zap"
+            onPress={onGenerate}
+            loading={isGenerating}
+            disabled={isGenerating}
+            accessibilityLabel="Generate a new lineup"
+          />
           {hasProSubscription && (
             <GameContextCard
               games={games}

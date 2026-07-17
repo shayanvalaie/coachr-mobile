@@ -1,6 +1,6 @@
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
-import { useSupabaseAuth } from "../hooks/useSupabaseAuth";
+import { useBackendAuth } from "../hooks/useBackendAuth";
 import AuthScreen from "../screens/AuthScreen";
 import SubscriptionScreen from "../screens/SubscriptionScreen";
 import { theme } from "../theme/colors";
@@ -10,7 +10,7 @@ import { RootStackParamList } from "./types";
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 
 const RootNavigator = () => {
-  const { session, initializing } = useSupabaseAuth();
+  const { session, initializing } = useBackendAuth();
 
   if (initializing) {
     return (

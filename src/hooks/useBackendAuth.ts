@@ -3,7 +3,7 @@ import { backendClient } from "../lib/backend/client";
 import { BackendSession } from "../lib/backend/types";
 
 // Subscribes to auth changes and exposes the current session.
-export const useSupabaseAuth = () => {
+export const useBackendAuth = () => {
   const [session, setSession] = useState<BackendSession | null>(null);
   const [initializing, setInitializing] = useState(true);
 

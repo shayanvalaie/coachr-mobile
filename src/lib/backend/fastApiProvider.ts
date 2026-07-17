@@ -136,6 +136,12 @@ const listeners = new Set<
 
 let loaded = false;
 let cachedSession: BackendSession | null = null;
+// Single-flight guard: dedupes concurrent /auth/refresh calls. Because the
+// backend rotates (revokes) the refresh token on every refresh, two concurrent
+// refreshes would race — the first rotates the token, the second sends the now
+// revoked token, 401s, and wipes the session (spurious sign-out on reload).
+// All concurrent callers await the same in-flight promise instead.
+let inFlightRefresh: Promise<BackendAuthResponse> | null = null;
 
 const ensureLoaded = async () => {
   if (loaded) return;
@@ -386,6 +392,8 @@ const mapSubscriptionStatus = (raw: any): BackendSubscriptionStatus => ({
   productId: typeof raw?.productId === "string" ? raw.productId : null,
   status: raw?.status ?? null,
   expiresAt: typeof raw?.expiresAt === "string" ? raw.expiresAt : null,
+  proAccess: typeof raw?.proAccess === "boolean" ? raw.proAccess : null,
+  isAdmin: !!raw?.isAdmin,
 });
 
 export const fastApiBackendClient: BackendClient = {
@@ -477,23 +485,34 @@ export const fastApiBackendClient: BackendClient = {
         return buildAuthResponse(null, new Error("No refresh token available."));
       }
 
-      try {
-        const parsed = (await requestJson(
-          "/auth/refresh",
-          {
-            method: "POST",
-            body: JSON.stringify({ refreshToken: cachedSession.refreshToken }),
-          },
-          "Failed to refresh session",
-        )) as FastApiAuthPayload | null;
+      // Coalesce concurrent refreshes onto a single network call so the
+      // rotating refresh token is only spent once.
+      if (inFlightRefresh) return inFlightRefresh;
 
-        const session = parsed?.session ?? null;
-        await persistSession(session, "TOKEN_REFRESHED");
-        return buildAuthResponse(session);
-      } catch (err) {
-        await persistSession(null, "SIGNED_OUT");
-        return buildAuthResponse(null, err);
-      }
+      const refreshToken = cachedSession.refreshToken;
+      inFlightRefresh = (async () => {
+        try {
+          const parsed = (await requestJson(
+            "/auth/refresh",
+            {
+              method: "POST",
+              body: JSON.stringify({ refreshToken }),
+            },
+            "Failed to refresh session",
+          )) as FastApiAuthPayload | null;
+
+          const session = parsed?.session ?? null;
+          await persistSession(session, "TOKEN_REFRESHED");
+          return buildAuthResponse(session);
+        } catch (err) {
+          await persistSession(null, "SIGNED_OUT");
+          return buildAuthResponse(null, err);
+        } finally {
+          inFlightRefresh = null;
+        }
+      })();
+
+      return inFlightRefresh;
     },
     onAuthStateChange: (callback) => {
       listeners.add(callback);
@@ -693,6 +712,18 @@ export const fastApiBackendClient: BackendClient = {
       "/subscriptions/status",
       { method: "GET" },
       "Unable to fetch subscription status",
+    )) as any;
+
+    return mapSubscriptionStatus(payload);
+  },
+  setProAccess: async (enabled: boolean | null) => {
+    const payload = (await authedRequest(
+      "/subscriptions/pro-access",
+      {
+        method: "POST",
+        body: JSON.stringify({ enabled }),
+      },
+      "Unable to update Pro access",
     )) as any;
 
     return mapSubscriptionStatus(payload);

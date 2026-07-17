@@ -1,3 +1,4 @@
+import { RefObject } from "react";
 import { StyleSheet, View } from "react-native";
 import GameSetup from "../../../components/GameSetup";
 import { AppText, Card, MetricTile } from "../../../components/ui";
@@ -37,6 +38,7 @@ type Props = {
   ) => void;
   playerGenderByName?: Record<string, Player["gender"]>;
   onLineupDragStateChange?: (isDragging: boolean) => void;
+  lineupAnchorRef?: RefObject<View | null>;
 };
 
 // Build tab: rules snapshot, game context (Pro), and the generation engine.
@@ -66,6 +68,7 @@ const BuildTab = ({
   onSetLineupCell,
   playerGenderByName,
   onLineupDragStateChange,
+  lineupAnchorRef,
 }: Props) => (
   <>
     <Card variant="elevated" padding="sm">
@@ -123,6 +126,7 @@ const BuildTab = ({
       onSetLineupCell={onSetLineupCell}
       playerGenderByName={playerGenderByName}
       onLineupDragStateChange={onLineupDragStateChange}
+      lineupAnchorRef={lineupAnchorRef}
     />
   </>
 );

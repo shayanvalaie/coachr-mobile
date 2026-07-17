@@ -2,14 +2,14 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 
 // SecureStore warns above ~2048 bytes per value on Android and may drop larger
-// values on some devices. Supabase session JSON exceeds that, so values are
-// split into chunks, each stored under its own SecureStore key.
+// values on some devices. Session JSON can exceed that, so values are split
+// into chunks, each stored under its own SecureStore key.
 const CHUNK_SIZE = 1800;
 
 const chunkCountKey = (key: string) => `${key}.chunkCount`;
 const chunkKey = (key: string, index: number) => `${key}.chunk.${index}`;
 
-// SecureStore keys only allow [A-Za-z0-9._-]; Supabase keys can contain other
+// SecureStore keys only allow [A-Za-z0-9._-]; storage keys can contain other
 // characters (e.g. ":"), so sanitize deterministically.
 const sanitizeKey = (key: string) => key.replace(/[^A-Za-z0-9._-]/g, "_");
 

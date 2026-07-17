@@ -9,7 +9,6 @@ import {
 import ProGateModal from "../components/ProGateModal";
 import { navigateFromRef } from "../navigation/navigationRef";
 import { useSubscription } from "./iap";
-import { devProOverride } from "./proAccess";
 
 type ProGateContextValue = {
   // Shows the Pro upsell for a feature label ("Calendar", "Exports").
@@ -29,8 +28,11 @@ export const useProGate = (): ProGateContextValue => {
 };
 
 export const ProGateProvider = ({ children }: { children: ReactNode }) => {
-  const { isPro: iapIsPro } = useSubscription();
-  const isPro = iapIsPro || devProOverride;
+  // Single source of truth: the Pro status from SubscriptionProvider, which
+  // is driven by the admin toggle (server `has_pro_access` flag). No extra
+  // dev override here — otherwise toggling Pro off in a dev build wouldn't
+  // gate anything.
+  const { isPro } = useSubscription();
 
   const [state, setState] = useState({
     visible: false,

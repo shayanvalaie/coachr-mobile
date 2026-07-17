@@ -116,30 +116,53 @@ export type ActiveSubResult = {
   isPro: boolean;
   activeSku: IapSku | null;
   transactionId: string | null;
+  /** Raw store product id (may be an unknown/legacy sku). */
+  productId: string | null;
+  /** Apple original transaction id — links renewals to one subscription. */
+  originalTransactionId: string | null;
+  /** Store purchase token / JWS representation, when available. */
+  purchaseToken: string | null;
+};
+
+const EMPTY_ACTIVE: ActiveSubResult = {
+  isPro: false,
+  activeSku: null,
+  transactionId: null,
+  productId: null,
+  originalTransactionId: null,
+  purchaseToken: null,
 };
 
 export const checkActiveSubscriptions = async (): Promise<ActiveSubResult> => {
   try {
     const subs = await getActiveSubscriptions(ALL_SKUS);
     if (subs.length === 0) {
-      return { isPro: false, activeSku: null, transactionId: null };
+      return EMPTY_ACTIVE;
     }
-    // Pick the first active subscription (should only be one for this app)
-    const active = subs[0];
-    const sku = isKnownSku(active.productId)
-      ? active.productId
-      : null;
+    // Pick the first active subscription (should only be one for this app).
+    // Fields beyond productId/transactionId aren't on every platform's type,
+    // so read them through a loose shape rather than the strict union.
+    const active = subs[0] as unknown as {
+      productId: string;
+      transactionId?: string | null;
+      originalTransactionIdentifierIOS?: string | null;
+      purchaseToken?: string | null;
+    };
+    const sku = isKnownSku(active.productId) ? active.productId : null;
     const result: ActiveSubResult = {
       isPro: true,
       activeSku: sku,
       transactionId: active.transactionId ?? null,
+      productId: active.productId ?? null,
+      originalTransactionId: active.originalTransactionIdentifierIOS ?? null,
+      purchaseToken: active.purchaseToken ?? null,
     };
     // Persist so the app can show Pro instantly on next cold start
     await persistSubscription(result.isPro, result.activeSku, result.transactionId);
     return result;
   } catch (err) {
     if (__DEV__) console.warn("[iap] checkActiveSubscriptions failed", err);
-    return { isPro: false, activeSku: null, transactionId: null };
+    return EMPTY_ACTIVE;
   }
 };
 
@@ -152,24 +175,14 @@ export const checkActiveSubscriptions = async (): Promise<ActiveSubResult> => {
 export const requestSubscriptionPurchase = async (
   sku: string,
 ): Promise<void> => {
-  if (Platform.OS === "ios") {
-    await requestPurchase({
-      request: { apple: { sku } },
-      type: "subs",
-    });
-  } else {
-    // Android needs skus array and an offerToken. For basic subscriptions
-    // without offer tokens we pass the sku in both fields.
-    await requestPurchase({
-      request: {
-        google: {
-          skus: [sku],
-          subscriptionOffers: [{ sku, offerToken: sku }],
-        },
-      },
-      type: "subs",
-    });
+  if (Platform.OS !== "ios") {
+    // iOS-only for now — Android IAP is intentionally unsupported.
+    throw new Error("In-app purchases are only available on iOS.");
   }
+  await requestPurchase({
+    request: { apple: { sku } },
+    type: "subs",
+  });
 };
 
 // ─── Transaction finishing ──────────────────────────────────────────────────

@@ -22,10 +22,7 @@ import { theme } from "../../theme/colors";
 import { radius, space } from "../../theme/tokens";
 import { InningAssignment } from "../../types/lineup";
 import { LineupLaunchRequest } from "../../types/lineupLaunch";
-import {
-  cloneLineupRows,
-  normalizeLineupRows,
-} from "../../utils/lineupTransforms";
+import { normalizeLineupRows } from "../../utils/lineupTransforms";
 import BuildTab from "./components/BuildTab";
 import EditLineupOverlay from "./components/EditLineupOverlay";
 import HistoryCard from "./components/HistoryCard";
@@ -62,7 +59,7 @@ const LineupScreen = ({
   onEditModeChange,
 }: Props) => {
   // Cross-cutting document/UI state shared between the hooks below.
-  const [activeTab, setActiveTab] = useState<"build" | "history">("build");
+  const [activeTab, setActiveTab] = useState<"build" | "history">("history");
   const [lineup, setLineup] = useState<InningAssignment[] | null>(null);
   const [lineupParentVersionId, setLineupParentVersionId] = useState<
     string | null
@@ -81,6 +78,14 @@ const LineupScreen = ({
   const [status, setStatus] = useState("");
   const [error, setError] = useState<string | null>(null);
   const handledLaunchRequestIdsRef = useRef<Set<number>>(new Set());
+  // Refs used to auto-scroll the freshly generated lineup into view: the build
+  // ScrollView, a wrapper for measuring the viewport top, an anchor wrapping the
+  // lineup grid deep inside GameSetup, and the live scroll offset.
+  const buildScrollRef = useRef<ScrollView>(null);
+  const buildScrollWrapRef = useRef<View>(null);
+  const lineupAnchorRef = useRef<View>(null);
+  const buildScrollOffsetRef = useRef(0);
+  const wasGeneratingRef = useRef(false);
 
   useEffect(() => {
     if (
@@ -118,6 +123,7 @@ const LineupScreen = ({
     pendingDeleteLineup,
     setPendingDeleteLineup,
     isDeletingLineup,
+    isExporting,
     loadLineupHistory,
     openLineupHistoryDetail,
     confirmDeleteLineup,
@@ -195,6 +201,38 @@ const LineupScreen = ({
     setSaveModalVisible,
     setSaveLineupName,
   });
+
+  // When a generation run finishes with a lineup, scroll the grid to the top of
+  // the viewport so the user sees the result without hunting for it. Only fires
+  // on the generating -> idle transition, so inline edits don't yank the scroll.
+  useEffect(() => {
+    const justFinished = wasGeneratingRef.current && !isGenerating;
+    wasGeneratingRef.current = isGenerating;
+    if (!justFinished) return;
+    if (activeTab !== "build") return;
+    if (!lineup || lineup.length === 0) return;
+
+    // Wait for the post-generation LayoutAnimation to settle before measuring.
+    // measureInWindow works on both RN architectures (New Arch rejects the
+    // numeric node handle that measureLayout would need). We translate the
+    // anchor's window position into a scroll offset via the live scroll offset
+    // and the viewport's own window position.
+    const timer = setTimeout(() => {
+      const scroll = buildScrollRef.current;
+      const anchor = lineupAnchorRef.current;
+      const wrap = buildScrollWrapRef.current;
+      if (!scroll || !anchor || !wrap) return;
+      wrap.measureInWindow((_wx, wy) => {
+        anchor.measureInWindow((_ax, ay) => {
+          const target =
+            buildScrollOffsetRef.current + (ay - wy) - space.md;
+          scroll.scrollTo({ y: Math.max(target, 0), animated: true });
+        });
+      });
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [activeTab, isGenerating, lineup]);
 
   useEffect(() => {
     if (!launchRequest) return;
@@ -303,7 +341,9 @@ const LineupScreen = ({
         : null,
     [selectedHistoryDetail],
   );
-  const showingHistoryDetail = !!selectedHistoryDetail && !lineupInlineEditMode;
+  // Saved lineups now open straight into the landscape editor, so a history
+  // lineup in the overlay is always an edit (never a read-only detail view).
+  const isHistoryEdit = !!selectedHistoryDetail;
   const editModalLineup = lineupInlineEditMode
     ? selectedHistoryDetail
       ? historyEditRows
@@ -311,9 +351,6 @@ const LineupScreen = ({
     : selectedHistoryDetail
       ? selectedHistoryRows
       : lineup;
-  const editModalExpandedInnings = showingHistoryDetail
-    ? new Set<number>()
-    : expandedInnings;
 
   const profileButton = (
     <AppPressable
@@ -339,24 +376,6 @@ const LineupScreen = ({
         <AppPressable
           style={[
             styles.tabButton,
-            activeTab === "build" && styles.tabButtonActive,
-          ]}
-          onPress={() => setActiveTab("build")}
-          accessibilityRole="tab"
-          accessibilityLabel="Generate tab"
-          accessibilityState={{ selected: activeTab === "build" }}
-        >
-          <AppText
-            variant="caption"
-            family="heading"
-            color={activeTab === "build" ? "accent" : "secondary"}
-          >
-            Generate
-          </AppText>
-        </AppPressable>
-        <AppPressable
-          style={[
-            styles.tabButton,
             activeTab === "history" && styles.tabButtonActive,
           ]}
           onPress={() => setActiveTab("history")}
@@ -372,6 +391,24 @@ const LineupScreen = ({
             Line Ups
           </AppText>
         </AppPressable>
+        <AppPressable
+          style={[
+            styles.tabButton,
+            activeTab === "build" && styles.tabButtonActive,
+          ]}
+          onPress={() => setActiveTab("build")}
+          accessibilityRole="tab"
+          accessibilityLabel="Generate tab"
+          accessibilityState={{ selected: activeTab === "build" }}
+        >
+          <AppText
+            variant="caption"
+            family="heading"
+            color={activeTab === "build" ? "accent" : "secondary"}
+          >
+            Generate
+          </AppText>
+        </AppPressable>
       </View>
     </View>
   );
@@ -380,10 +417,16 @@ const LineupScreen = ({
     <View style={styles.root}>
       <ScreenContainer padded={false}>
         {activeTab === "build" ? (
+          <View ref={buildScrollWrapRef} collapsable={false} style={styles.flex}>
           <ScrollView
+            ref={buildScrollRef}
             style={styles.flex}
             contentContainerStyle={styles.buildContent}
             scrollEnabled={!isDraggingLineupRow}
+            scrollEventThrottle={16}
+            onScroll={(e) => {
+              buildScrollOffsetRef.current = e.nativeEvent.contentOffset.y;
+            }}
           >
             {header}
             <BuildTab
@@ -429,8 +472,10 @@ const LineupScreen = ({
               onSetLineupCell={applyInlinePositionSwap}
               playerGenderByName={playerGenderByName}
               onLineupDragStateChange={setIsDraggingLineupRow}
+              lineupAnchorRef={lineupAnchorRef}
             />
           </ScrollView>
+          </View>
         ) : (
           <HistoryTab
             header={header}
@@ -442,6 +487,11 @@ const LineupScreen = ({
             lineupHistory={lineupHistory}
             historyLoading={historyLoading}
             historyError={historyError}
+            isGenerating={isGenerating}
+            onGenerate={() => {
+              setActiveTab("build");
+              void runLineupGeneration();
+            }}
             renderVersion={(version) => (
               <HistoryCard
                 version={version}
@@ -457,37 +507,18 @@ const LineupScreen = ({
       {editModalVisible && (
         <EditLineupOverlay
           title={
-            showingHistoryDetail
+            isHistoryEdit
               ? selectedHistoryDetail!.lineupName ||
                 `Lineup v${selectedHistoryDetail!.versionNumber}`
               : "Edit lineup"
           }
-          showingHistoryDetail={showingHistoryDetail}
+          isHistoryEdit={isHistoryEdit}
           lineup={editModalLineup}
-          expandedInnings={editModalExpandedInnings}
+          expandedInnings={expandedInnings}
           editable={lineupInlineEditMode}
           isSaving={isSavingVersion}
-          exportBusy={activeHistoryId === selectedHistoryDetail?.id}
+          exportBusy={isExporting}
           playerGenderByName={playerGenderByName}
-          onStartEdit={() => {
-            if (!selectedHistoryRows || selectedHistoryRows.length === 0) {
-              setError("Unable to edit this lineup.");
-              return;
-            }
-            LayoutAnimation.configureNext(
-              LayoutAnimation.Presets.easeInEaseOut,
-            );
-            setHistoryEditRows(cloneLineupRows(selectedHistoryRows));
-            setLineupParentVersionId(selectedHistoryDetail!.id);
-            setLineupInlineEditMode(true);
-            setSaveModalVisible(false);
-            setActiveTab("history");
-            onEditModeChange?.(true);
-            setStatus(
-              `Editing lineup v${selectedHistoryDetail!.versionNumber} in the wider editor.`,
-            );
-            setError(null);
-          }}
           onExport={(format) => {
             if (!hasProSubscription) {
               onRequirePro("Lineup exports");

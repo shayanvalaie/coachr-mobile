@@ -280,9 +280,11 @@ export const useLineupEditor = ({
         return;
       }
 
+      let spinnerStartedAt: number | null = null;
       try {
         const team = await ensureTeam();
         if (!team) return;
+        spinnerStartedAt = Date.now();
         setIsSavingVersion(true);
         setError(null);
 
@@ -372,6 +374,16 @@ export const useLineupEditor = ({
             : "Unable to save lineup version.";
         setError(message);
       } finally {
+        // Keep the spinner up for a minimum beat so a fast save doesn't flicker.
+        if (spinnerStartedAt !== null) {
+          const elapsed = Date.now() - spinnerStartedAt;
+          const MIN_SPINNER_MS = 600;
+          if (elapsed < MIN_SPINNER_MS) {
+            await new Promise((resolve) =>
+              setTimeout(resolve, MIN_SPINNER_MS - elapsed),
+            );
+          }
+        }
         setIsSavingVersion(false);
       }
     },

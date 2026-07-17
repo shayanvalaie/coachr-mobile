@@ -14,6 +14,7 @@ import {
 } from "../../../lib/backend/types";
 import { InningAssignment } from "../../../types/lineup";
 import {
+  cloneLineupRows,
   normalizeLineupRows,
   summarizeLineupComparison,
 } from "../../../utils/lineupTransforms";
@@ -76,6 +77,9 @@ export const useLineupHistory = ({
   const [pendingDeleteLineup, setPendingDeleteLineup] =
     useState<BackendLineupVersionSummary | null>(null);
   const [isDeletingLineup, setIsDeletingLineup] = useState(false);
+  // Export gets its own busy flag, kept separate from `activeHistoryId` so the
+  // history-card spinner never gets wedged by an in-flight or dismissed share.
+  const [isExporting, setIsExporting] = useState(false);
 
   const loadLineupHistory = useCallback(
     async (team: string, gameId: string | null) => {
@@ -112,12 +116,17 @@ export const useLineupHistory = ({
         setError(null);
         setActiveHistoryId(lineupId);
         const detail = await backendClient.getLineupVersion(team, lineupId);
+        // Open saved lineups straight into the landscape editor: seed the edit
+        // buffer with the saved rows so users land in edit mode with just
+        // Save / Cancel, no intermediate read-only step.
+        const editableRows = normalizeLineupRows(detail.rows as any[]);
         setSelectedHistoryDetail(detail);
-        setHistoryEditRows(null);
+        setHistoryEditRows(cloneLineupRows(editableRows));
+        setLineupParentVersionId(detail.id);
         setActiveTab("history");
         await lockOrientation(ORIENTATION_LOCK_LANDSCAPE);
         setEditModalVisible(true);
-        setLineupInlineEditMode(false);
+        setLineupInlineEditMode(true);
         onEditModeChange?.(true);
       } catch (_err) {
         toast.show({ message: "Unable to open lineup details.", type: "error" });
@@ -133,6 +142,7 @@ export const useLineupHistory = ({
       setError,
       setHistoryEditRows,
       setLineupInlineEditMode,
+      setLineupParentVersionId,
       toast,
     ],
   );
@@ -234,10 +244,10 @@ export const useLineupHistory = ({
 
   const exportLineupVersion = useCallback(
     async (lineupId: string, format: "xlsx" | "pdf") => {
+      setIsExporting(true);
       try {
         const team = await ensureTeam();
         if (!team) return;
-        setActiveHistoryId(lineupId);
 
         const exported = await backendClient.exportLineupVersion(
           team,
@@ -253,22 +263,34 @@ export const useLineupHistory = ({
         await FileSystem.writeAsStringAsync(uri, exported.base64Data, {
           encoding: "base64",
         });
-        await Share.share({
+
+        // The file is ready. Clear the busy state before opening the native
+        // share sheet: its promise only settles when the user dismisses the
+        // sheet, so awaiting it would keep the export buttons disabled the whole
+        // time it is open (and can hang if the sheet fails to present under the
+        // landscape orientation lock). Fire-and-forget instead.
+        setIsExporting(false);
+        Share.share({
           title: exported.fileName,
           message: `Lineup export: ${exported.fileName}`,
           url: uri,
-        });
-        toast.show({
-          message: `${format.toUpperCase()} exported.`,
-          type: "success",
-        });
+        })
+          .then(() => {
+            toast.show({
+              message: `${format.toUpperCase()} exported.`,
+              type: "success",
+            });
+          })
+          .catch(() => {
+            // Share dismissed or cancelled — nothing to report.
+          });
       } catch (_err) {
         toast.show({
           message: `Unable to export ${format.toUpperCase()}.`,
           type: "error",
         });
       } finally {
-        setActiveHistoryId(null);
+        setIsExporting(false);
       }
     },
     [ensureTeam, toast],
@@ -287,6 +309,7 @@ export const useLineupHistory = ({
     pendingDeleteLineup,
     setPendingDeleteLineup,
     isDeletingLineup,
+    isExporting,
     loadLineupHistory,
     openLineupHistoryDetail,
     confirmDeleteLineup,

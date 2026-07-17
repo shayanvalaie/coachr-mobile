@@ -30,10 +30,15 @@ import {
 import type { IapSku, SubscriptionProduct } from "./types";
 import { ALL_SKUS } from "./types";
 
+// In dev (simulator/Expo) StoreKit/Billing isn't available, so we don't
+// simulate the store at all — Pro comes from the server `has_pro_access`
+// override or the dev unlock. Real store flows only run in release builds.
+const IAP_ENABLED = !__DEV__;
+
 // ─── Context type ──────────────────────────────────────────────────────────
 
 type SubscriptionContextValue = {
-  /** Whether the user currently has an active Pro subscription. */
+  /** Whether the user currently has Pro access (any source). */
   isPro: boolean;
   /** The currently-active subscription SKU, if any. */
   activeSku: IapSku | null;
@@ -49,6 +54,12 @@ type SubscriptionContextValue = {
   restore: () => Promise<void>;
   /** Clear subscription state (dev/testing only). */
   clearSubscription: () => Promise<void>;
+  /** Whether the signed-in user is an admin (ADMIN_EMAILS allowlist). */
+  isAdmin: boolean;
+  /** Whether the admin Pro override is currently on (server flag === true). */
+  adminProEnabled: boolean;
+  /** Set the admin Pro override on/off. Persisted server-side; admin only. */
+  setAdminProEnabled: (enabled: boolean) => Promise<void>;
 };
 
 const SubscriptionContext = createContext<SubscriptionContextValue | null>(
@@ -72,8 +83,12 @@ export const SubscriptionProvider = ({
   children: React.ReactNode;
 }) => {
   const proUnlockedInDev = __DEV__;
-  const [adminOverride, setAdminOverride] = useState(false);
-  const [isPro, setIsPro] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  // Server-side admin override: true = force Pro on, false = force off,
+  // null = no override (fall back to store subscription / dev unlock).
+  const [proAccessFlag, setProAccessFlag] = useState<boolean | null>(null);
+  // Real store subscription state (release builds only).
+  const [storePro, setStorePro] = useState(false);
   const [activeSku, setActiveSku] = useState<IapSku | null>(null);
   const [products, setProducts] = useState<SubscriptionProduct[]>([]);
   const [loading, setLoading] = useState(false);
@@ -81,10 +96,17 @@ export const SubscriptionProvider = ({
 
   const mountedRef = useRef(true);
   useEffect(() => {
+    // Restore on setup, not just clear on cleanup: React re-runs effects
+    // (dev double-invoke, Fast Refresh, remount) on the same fiber without
+    // re-initialising the ref. Without this the ref stays false after the
+    // first cleanup and every `mountedRef.current` guard silently no-ops.
+    mountedRef.current = true;
     return () => {
       mountedRef.current = false;
     };
   }, []);
+
+  // ── Admin identity (email allowlist — instant, offline) ────────────────
 
   useEffect(() => {
     const isAdminEmail = (email: string | null | undefined) =>
@@ -92,88 +114,86 @@ export const SubscriptionProvider = ({
 
     backendClient.auth.getSession().then(({ data }) => {
       if (mountedRef.current) {
-        setAdminOverride(isAdminEmail(data.session?.user.email));
+        setIsAdmin(isAdminEmail(data.session?.user.email));
       }
     });
 
     const { data } = backendClient.auth.onAuthStateChange((_event, session) => {
       if (mountedRef.current) {
-        setAdminOverride(isAdminEmail(session?.user.email));
+        setIsAdmin(isAdminEmail(session?.user.email));
       }
     });
 
     return () => data.subscription.unsubscribe();
   }, []);
 
-  const normalizeSubState = useCallback(
-    (pro: boolean, sku: IapSku | null) => {
-      if (proUnlockedInDev || adminOverride) {
-        return { isPro: true, activeSku: sku };
-      }
-      if (!pro) {
-        return { isPro: false, activeSku: null as IapSku | null };
-      }
-      return { isPro: true, activeSku: sku };
-    },
-    [proUnlockedInDev, adminOverride],
-  );
+  // ── Effective Pro state ────────────────────────────────────────────────
+  // The server override wins in both directions so admins can preview the
+  // free experience (flag=false) even in a dev build.
+  const isPro = useMemo(() => {
+    if (proAccessFlag === true) return true;
+    if (proAccessFlag === false) return false;
+    return proUnlockedInDev || storePro;
+  }, [proAccessFlag, storePro, proUnlockedInDev]);
 
-  const applySubState = useCallback(
-    (pro: boolean, sku: IapSku | null) => {
-      if (!mountedRef.current) return;
-      const next = normalizeSubState(pro, sku);
-      setIsPro(next.isPro);
-      setActiveSku(next.activeSku);
-    },
-    [normalizeSubState],
-  );
+  const adminProEnabled = proAccessFlag === true;
+
+  // ── Admin Pro override toggle (server-backed) ──────────────────────────
+
+  const setAdminProEnabled = useCallback(async (enabled: boolean) => {
+    const status = await backendClient.setProAccess(enabled);
+    if (mountedRef.current) setProAccessFlag(status.proAccess);
+  }, []);
 
   // ── Initialisation ─────────────────────────────────────────────────────
 
   const init = useCallback(async () => {
-    // Show persisted state immediately (fast cold-start)
-    const persisted = await readPersistedSubscription();
-    applySubState(persisted.isPro, persisted.activeSku);
-    if (proUnlockedInDev && !persisted.isPro) {
-      await persistSubscription(true, persisted.activeSku, persisted.transactionId);
+    // 1. Server override flag — authoritative for admin/testing.
+    const status = await backendClient.getSubscriptionStatus().catch(() => null);
+    if (mountedRef.current && status) {
+      setProAccessFlag(status.proAccess);
     }
 
-    // Connect to the store
-    const connected = await connectToStore();
-    if (!connected) {
-      if (__DEV__) console.warn("[iap] store connection failed — using cached state");
-      setInitializing(false);
-      return;
+    // 2. Real store subscription (release builds only).
+    if (IAP_ENABLED) {
+      const persisted = await readPersistedSubscription();
+      if (mountedRef.current) {
+        setStorePro(persisted.isPro);
+        setActiveSku(persisted.activeSku);
+      }
+
+      const connected = await connectToStore();
+      if (connected) {
+        const [prods, activeSub] = await Promise.all([
+          fetchSubscriptionProducts(),
+          checkActiveSubscriptions(),
+        ]);
+        if (mountedRef.current) {
+          setProducts(prods);
+          setStorePro(activeSub.isPro);
+          setActiveSku(activeSub.activeSku);
+        }
+        if (!activeSub.isPro && persisted.isPro) {
+          await persistSubscription(false, null, null);
+        }
+      } else if (__DEV__) {
+        console.warn("[iap] store connection failed — using cached state");
+      }
     }
 
-    // Fetch products, check store subs, and fetch server status in parallel
-    const [prods, activeSub, serverStatus] = await Promise.all([
-      fetchSubscriptionProducts(),
-      checkActiveSubscriptions(),
-      backendClient.getSubscriptionStatus().catch(() => null),
-    ]);
-
-    if (!mountedRef.current) return;
-    setProducts(prods);
-
-    // Store is the primary gate. Server can only revoke (not grant) Pro,
-    // preventing stale backend test data from bypassing the store.
-    const next = normalizeSubState(
-      activeSub.isPro && serverStatus?.isPro !== false,
-      activeSub.activeSku,
-    );
-    applySubState(next.isPro, next.activeSku);
-
-    if (!next.isPro && persisted.isPro) {
-      await persistSubscription(false, null, null);
-    }
-
-    setInitializing(false);
-  }, [applySubState, normalizeSubState, proUnlockedInDev]);
+    if (mountedRef.current) setInitializing(false);
+  }, []);
 
   // ── Purchase ───────────────────────────────────────────────────────────
 
   const purchase = useCallback(async (sku: IapSku) => {
+    if (!IAP_ENABLED) {
+      Alert.alert(
+        "Not available",
+        "In-app purchases aren't available in this build. Use the admin Pro toggle for testing.",
+      );
+      return;
+    }
     setLoading(true);
     try {
       await requestSubscriptionPurchase(sku);
@@ -191,24 +211,41 @@ export const SubscriptionProvider = ({
   // ── Restore ────────────────────────────────────────────────────────────
 
   const restore = useCallback(async () => {
+    if (!IAP_ENABLED) {
+      Alert.alert(
+        "Not available",
+        "Restoring purchases isn't available in this build.",
+      );
+      return;
+    }
     setLoading(true);
     try {
       const result = await checkActiveSubscriptions();
       if (!mountedRef.current) return;
-      const next = normalizeSubState(result.isPro, result.activeSku);
-      applySubState(next.isPro, next.activeSku);
-      if (proUnlockedInDev) {
-        Alert.alert(
-          "Pro unlocked in development",
-          "Development builds always have Pro access enabled.",
-        );
-      } else if (!next.isPro) {
+      setStorePro(result.isPro);
+      setActiveSku(result.activeSku);
+      if (!result.isPro) {
         await persistSubscription(false, null, null);
         Alert.alert(
           "No purchases found",
           "We couldn't find any active Pro subscriptions for this account.",
         );
       } else {
+        // Re-sync the backend so its subscription row (and the webhook link
+        // via originalTransactionId) is (re)created on a new device/reinstall.
+        if (result.productId && result.transactionId) {
+          try {
+            await backendClient.verifySubscription({
+              productId: result.productId,
+              transactionId: result.transactionId,
+              originalTransactionId: result.originalTransactionId,
+              purchaseToken: result.purchaseToken ?? "",
+              platform: Platform.OS === "ios" ? "ios" : "android",
+            });
+          } catch (err) {
+            if (__DEV__) console.warn("[iap] restore backend verify failed:", err);
+          }
+        }
         Alert.alert("Restored", "Your Pro subscription has been restored.");
       }
     } catch (err) {
@@ -219,52 +256,45 @@ export const SubscriptionProvider = ({
     } finally {
       if (mountedRef.current) setLoading(false);
     }
-  }, [applySubState, normalizeSubState, proUnlockedInDev]);
+  }, []);
 
   // ── Purchase event listeners ───────────────────────────────────────────
 
-  const handlePurchaseSuccess = useCallback(
-    async (purchase: Purchase) => {
-      const sku = purchase.productId;
-      const knownSku = (ALL_SKUS as string[]).includes(sku)
-        ? (sku as IapSku)
-        : null;
+  const handlePurchaseSuccess = useCallback(async (purchase: Purchase) => {
+    const sku = purchase.productId;
+    const knownSku = (ALL_SKUS as string[]).includes(sku)
+      ? (sku as IapSku)
+      : null;
 
-      // CRITICAL: Always finish the transaction. Unfinished transactions
-      // cause the store to refund after 3 days (iOS) or block future
-      // purchases (Android).
-      await finishPurchase(purchase);
+    // CRITICAL: Always finish the transaction. Unfinished transactions
+    // cause the store to refund after 3 days (iOS) or block future
+    // purchases (Android).
+    await finishPurchase(purchase);
 
-      const next = normalizeSubState(true, knownSku);
-      await persistSubscription(
-        next.isPro,
-        next.activeSku,
-        next.isPro ? purchase.transactionId ?? null : null,
-      );
+    await persistSubscription(true, knownSku, purchase.transactionId ?? null);
 
-      if (mountedRef.current) {
-        applySubState(next.isPro, next.activeSku);
-        setLoading(false);
-      }
+    if (mountedRef.current) {
+      setStorePro(true);
+      setActiveSku(knownSku);
+      setLoading(false);
+    }
 
-      // Verify with backend (fire-and-forget — don't block UI on this)
-      try {
-        await backendClient.verifySubscription({
-          productId: sku,
-          transactionId: purchase.transactionId ?? "",
-          originalTransactionId:
-            "originalTransactionIdentifierIOS" in purchase
-              ? purchase.originalTransactionIdentifierIOS ?? null
-              : null,
-          purchaseToken: purchase.purchaseToken ?? "",
-          platform: Platform.OS === "ios" ? "ios" : "android",
-        });
-      } catch (err) {
-        if (__DEV__) console.warn("[iap] backend verify failed:", err);
-      }
-    },
-    [applySubState, normalizeSubState],
-  );
+    // Verify with backend (fire-and-forget — don't block UI on this)
+    try {
+      await backendClient.verifySubscription({
+        productId: sku,
+        transactionId: purchase.transactionId ?? "",
+        originalTransactionId:
+          "originalTransactionIdentifierIOS" in purchase
+            ? purchase.originalTransactionIdentifierIOS ?? null
+            : null,
+        purchaseToken: purchase.purchaseToken ?? "",
+        platform: Platform.OS === "ios" ? "ios" : "android",
+      });
+    } catch (err) {
+      if (__DEV__) console.warn("[iap] backend verify failed:", err);
+    }
+  }, []);
 
   const handlePurchaseError = useCallback((error: PurchaseError) => {
     if (!mountedRef.current) return;
@@ -289,33 +319,38 @@ export const SubscriptionProvider = ({
     );
   }, []);
 
-  // ── Re-check subscription when app returns to foreground ───────────────
+  // ── Re-check state when app returns to foreground ──────────────────────
 
   useEffect(() => {
     const handleAppState = (nextState: AppStateStatus) => {
-      if (nextState === "active") {
-        Promise.all([
-          checkActiveSubscriptions(),
-          backendClient.getSubscriptionStatus().catch(() => null),
-        ]).then(([storeSub, serverStatus]) => {
+      if (nextState !== "active") return;
+
+      backendClient
+        .getSubscriptionStatus()
+        .then((status) => {
+          if (mountedRef.current) setProAccessFlag(status.proAccess);
+        })
+        .catch(() => {});
+
+      if (IAP_ENABLED) {
+        checkActiveSubscriptions().then((storeSub) => {
           if (!mountedRef.current) return;
-          const next = normalizeSubState(
-            storeSub.isPro && serverStatus?.isPro !== false,
-            storeSub.activeSku,
-          );
-          applySubState(next.isPro, next.activeSku);
+          setStorePro(storeSub.isPro);
+          setActiveSku(storeSub.activeSku);
         });
       }
     };
 
     const sub = AppState.addEventListener("change", handleAppState);
     return () => sub.remove();
-  }, [applySubState, normalizeSubState]);
+  }, []);
 
   // ── Lifecycle ──────────────────────────────────────────────────────────
 
   useEffect(() => {
     init();
+
+    if (!IAP_ENABLED) return;
 
     const unsubscribe = subscribeToPurchaseUpdates(
       handlePurchaseSuccess,
@@ -332,8 +367,11 @@ export const SubscriptionProvider = ({
 
   const clearSubscription = useCallback(async () => {
     await clearPersistedSubscription();
-    applySubState(false, null);
-  }, [applySubState]);
+    if (mountedRef.current) {
+      setStorePro(false);
+      setActiveSku(null);
+    }
+  }, []);
 
   // ── Context value ──────────────────────────────────────────────────────
 
@@ -347,6 +385,9 @@ export const SubscriptionProvider = ({
       purchase,
       restore,
       clearSubscription,
+      isAdmin,
+      adminProEnabled,
+      setAdminProEnabled,
     }),
     [
       isPro,
@@ -357,6 +398,9 @@ export const SubscriptionProvider = ({
       purchase,
       restore,
       clearSubscription,
+      isAdmin,
+      adminProEnabled,
+      setAdminProEnabled,
     ],
   );
 

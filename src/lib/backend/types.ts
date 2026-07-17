@@ -1,6 +1,6 @@
 import { Player } from "../../types/lineup";
 
-export type BackendProvider = "supabase" | "fastapi";
+export type BackendProvider = "fastapi";
 
 export type BackendAuthEvent =
   | "INITIAL_SESSION"
@@ -102,6 +102,10 @@ export type BackendSubscriptionStatus = {
   productId: string | null;
   status: "active" | "expired" | "cancelled" | "billing_retry" | "revoked" | null;
   expiresAt: string | null;
+  /** Admin Pro override flag on the user: true/false/null. */
+  proAccess: boolean | null;
+  /** Whether the signed-in user may set `proAccess` (admin allowlist). */
+  isAdmin: boolean;
 };
 
 export type BackendVerifySubscriptionRequest = {
@@ -139,9 +143,6 @@ export type BackendClient = {
     signUp: (input: {
       email: string;
       password: string;
-      options?: {
-        emailRedirectTo?: string;
-      };
     }) => Promise<BackendAuthResponse>;
     verifyEmail: (input: {
       email: string;
@@ -182,4 +183,8 @@ export type BackendClient = {
     payload: BackendVerifySubscriptionRequest,
   ) => Promise<BackendSubscriptionStatus>;
   getSubscriptionStatus: () => Promise<BackendSubscriptionStatus>;
+  /** Admin-only: set the caller's Pro override flag (true/false/null). */
+  setProAccess: (
+    enabled: boolean | null,
+  ) => Promise<BackendSubscriptionStatus>;
 };

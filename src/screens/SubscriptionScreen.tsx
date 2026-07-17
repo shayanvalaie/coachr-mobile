@@ -1,5 +1,5 @@
 import React from "react";
-import { StyleSheet, View } from "react-native";
+import { Linking, Pressable, StyleSheet, View } from "react-native";
 import { useSubscription, IAP_SKUS } from "../lib/iap";
 import {
   AppText,
@@ -23,6 +23,13 @@ const BENEFITS = [
   "Export lineups to Excel and PDF.",
   "Full access to the calendar workspace.",
 ];
+
+// Required on the paywall by App Store Review Guideline 3.1.2. Point these at
+// your hosted, publicly reachable pages (and match the URLs in App Store
+// Connect metadata). The Terms URL may be your own EULA or Apple's standard
+// EULA: https://www.apple.com/legal/internet-services/itunes/dev/stdeula/
+const TERMS_URL = "https://coachrapp.io/terms";
+const PRIVACY_URL = "https://coachrapp.io/privacy";
 
 const SubscriptionScreen = ({ onBack }: Props) => {
   const { isPro, activeSku, products, loading, purchase, restore } =
@@ -181,8 +188,35 @@ const SubscriptionScreen = ({ onBack }: Props) => {
           />
 
           <AppText variant="caption" color="muted" style={styles.note}>
-            You can cancel anytime in your app store settings.
+            Subscriptions are billed to your Apple ID and renew automatically at
+            the price shown for the selected plan unless auto-renew is turned off
+            at least 24 hours before the end of the current period. Manage or
+            cancel anytime in your App Store settings.
           </AppText>
+
+          <View style={styles.legalRow}>
+            <Pressable
+              onPress={() => Linking.openURL(TERMS_URL)}
+              accessibilityRole="link"
+              accessibilityLabel="Terms of Use"
+            >
+              <AppText variant="caption" color="secondary" style={styles.legalLink}>
+                Terms of Use
+              </AppText>
+            </Pressable>
+            <AppText variant="caption" color="muted">
+              ·
+            </AppText>
+            <Pressable
+              onPress={() => Linking.openURL(PRIVACY_URL)}
+              accessibilityRole="link"
+              accessibilityLabel="Privacy Policy"
+            >
+              <AppText variant="caption" color="secondary" style={styles.legalLink}>
+                Privacy Policy
+              </AppText>
+            </Pressable>
+          </View>
         </>
       )}
     </ScreenContainer>
@@ -230,5 +264,14 @@ const styles = StyleSheet.create({
   },
   note: {
     textAlign: "center",
+  },
+  legalRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: space.xs,
+  },
+  legalLink: {
+    textDecorationLine: "underline",
   },
 });

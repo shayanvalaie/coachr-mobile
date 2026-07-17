@@ -1,6 +1,7 @@
 import React from "react";
 import { SafeAreaView, StyleSheet } from "react-native";
 import ProfileItem from "../components/ProfileItem";
+import ProfileToggleItem from "../components/ProfileToggleItem";
 import {
   AppText,
   Card,
@@ -21,12 +22,23 @@ type Props = {
 
 const ProfileScreen = ({ session, onClose, onOpenSubscribe }: Props) => {
   const email = session.user.email;
-  const { isPro, activeSku, restore, loading, clearSubscription } =
-    useSubscription();
+  const {
+    isPro,
+    activeSku,
+    restore,
+    loading,
+    clearSubscription,
+    isAdmin,
+    adminProEnabled,
+    setAdminProEnabled,
+  } = useSubscription();
+  const isAdminUnlocked = isAdmin && adminProEnabled && isPro && !activeSku;
   const isDevUnlocked = __DEV__ && isPro && !activeSku;
 
   const planLabel = isPro
-    ? isDevUnlocked
+    ? isAdminUnlocked
+      ? "Pro (Admin)"
+      : isDevUnlocked
       ? "Pro (Dev unlock)"
       : activeSku === IAP_SKUS.ANNUAL
       ? "Pro Annual"
@@ -86,6 +98,19 @@ const ProfileScreen = ({ session, onClose, onOpenSubscribe }: Props) => {
             if (!loading) restore();
           }}
         />
+
+        {isAdmin && (
+          <ProfileToggleItem
+            title="Admin: Pro access"
+            subtitle="Toggle all Pro features on/off"
+            value={isPro}
+            onValueChange={(enabled) => {
+              setAdminProEnabled(enabled).catch((err) => {
+                if (__DEV__) console.log("[admin toggle error]", err);
+              });
+            }}
+          />
+        )}
 
         {__DEV__ && isPro && (
           <ProfileItem

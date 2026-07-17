@@ -38,6 +38,7 @@ type Props = {
   ) => void;
   playerGenderByName?: Record<string, Player["gender"]>;
   onLineupDragStateChange?: (isDragging: boolean) => void;
+  lineupAnchorRef?: React.RefObject<View | null>;
 };
 
 const GeneratingState = () => {
@@ -110,6 +111,7 @@ const GameSetup = ({
   onSetLineupCell,
   playerGenderByName,
   onLineupDragStateChange,
+  lineupAnchorRef,
 }: Props) => (
   <View style={styles.card}>
     <View style={styles.cardHeader}>
@@ -247,31 +249,23 @@ const GameSetup = ({
         ) : null}
 
         {isGenerating ? <GeneratingState /> : null}
-        {!isGenerating && status ? (
-          <AppText variant="body" color="success">
-            {status}
-          </AppText>
-        ) : null}
         {error ? (
           <AppText variant="body" color="danger">
             {error}
           </AppText>
         ) : null}
 
-        <AppText variant="body" color="secondary">
-          Engine honors locked/fixed players, minimum women requirements,
-          catcher rules, and fair bench rotation.
-        </AppText>
-
-        <LineUp
-          lineup={lineup}
-          expandedInnings={expandedInnings}
-          onToggleInning={onToggleInning}
-          editable={isInlineEditing}
-          onSetPlayerPosition={onSetLineupCell}
-          playerGenderByName={playerGenderByName}
-          onDragStateChange={onLineupDragStateChange}
-        />
+        <View ref={lineupAnchorRef} collapsable={false}>
+          <LineUp
+            lineup={lineup}
+            expandedInnings={expandedInnings}
+            onToggleInning={onToggleInning}
+            editable={isInlineEditing}
+            onSetPlayerPosition={onSetLineupCell}
+            playerGenderByName={playerGenderByName}
+            onDragStateChange={onLineupDragStateChange}
+          />
+        </View>
       </>
     )}
   </View>

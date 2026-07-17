@@ -7,14 +7,13 @@ import { InningAssignment, Player } from "../../../types/lineup";
 
 type Props = {
   title: string;
-  showingHistoryDetail: boolean;
+  isHistoryEdit: boolean;
   lineup: InningAssignment[] | null;
   expandedInnings: Set<number>;
   editable: boolean;
   isSaving: boolean;
   exportBusy: boolean;
   playerGenderByName?: Record<string, Player["gender"]>;
-  onStartEdit: () => void;
   onExport: (format: "xlsx" | "pdf") => void;
   onSavePress: () => void;
   onDone: () => void;
@@ -32,14 +31,13 @@ type Props = {
 // whole screen for the grid.
 const EditLineupOverlay = ({
   title,
-  showingHistoryDetail,
+  isHistoryEdit,
   lineup,
   expandedInnings,
   editable,
   isSaving,
   exportBusy,
   playerGenderByName,
-  onStartEdit,
   onExport,
   onSavePress,
   onDone,
@@ -53,56 +51,44 @@ const EditLineupOverlay = ({
         <AppText variant="display" family="display" numberOfLines={1} style={styles.title}>
           {title}
         </AppText>
-        {showingHistoryDetail ? (
-          <View style={styles.actions}>
-            <Button
-              label="Edit"
-              variant="secondary"
-              size="sm"
-              onPress={onStartEdit}
-              accessibilityLabel="Edit this lineup"
-            />
-            <Button
-              label="Excel"
-              variant="secondary"
-              size="sm"
-              onPress={() => onExport("xlsx")}
-              disabled={exportBusy}
-              accessibilityLabel="Export lineup to Excel"
-            />
-            <Button
-              label="PDF"
-              variant="secondary"
-              size="sm"
-              onPress={() => onExport("pdf")}
-              disabled={exportBusy}
-              accessibilityLabel="Export lineup to PDF"
-            />
-            <Button
-              label="Close"
-              size="sm"
-              onPress={onClose}
-              accessibilityLabel="Close lineup detail"
-            />
-          </View>
-        ) : (
-          <View style={styles.actions}>
-            <Button
-              label={isSaving ? "Saving..." : "Save"}
-              variant="secondary"
-              size="sm"
-              onPress={onSavePress}
-              disabled={isSaving}
-              accessibilityLabel="Save lineup"
-            />
-            <Button
-              label="Done"
-              size="sm"
-              onPress={onDone}
-              accessibilityLabel="Done editing lineup"
-            />
-          </View>
-        )}
+        <View style={styles.actions}>
+          <Button
+            label="Save"
+            variant="secondary"
+            size="sm"
+            onPress={onSavePress}
+            loading={isSaving}
+            accessibilityLabel="Save lineup"
+          />
+          {isHistoryEdit && (
+            <>
+              <Button
+                label="Excel"
+                variant="secondary"
+                size="sm"
+                onPress={() => onExport("xlsx")}
+                disabled={exportBusy}
+                accessibilityLabel="Export lineup to Excel"
+              />
+              <Button
+                label="PDF"
+                variant="secondary"
+                size="sm"
+                onPress={() => onExport("pdf")}
+                disabled={exportBusy}
+                accessibilityLabel="Export lineup to PDF"
+              />
+            </>
+          )}
+          <Button
+            label={isHistoryEdit ? "Cancel" : "Done"}
+            size="sm"
+            onPress={isHistoryEdit ? onClose : onDone}
+            accessibilityLabel={
+              isHistoryEdit ? "Cancel editing lineup" : "Done editing lineup"
+            }
+          />
+        </View>
       </View>
 
       <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>

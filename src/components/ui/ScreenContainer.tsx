@@ -84,7 +84,7 @@ const ScreenContainer = ({
 
   return (
     <View
-      style={[styles.root, { paddingTop: insets.top > 0 ? 0 : space.xs }, style]}
+      style={[styles.root, { paddingTop: Math.max(insets.top, space.xs) }, style]}
     >
       {content}
     </View>

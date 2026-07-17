@@ -46,6 +46,7 @@ type Props = {
   session: BackendSession;
   onBack: () => void;
   onOpenProfile: () => void;
+  onGenerateLineup: () => void;
   hasProSubscription: boolean;
   onRequirePro: (featureLabel: string) => void;
 };
@@ -113,6 +114,7 @@ const AllLineupsScreen = ({
   session,
   onBack,
   onOpenProfile,
+  onGenerateLineup,
   hasProSubscription,
   onRequirePro,
 }: Props) => {
@@ -418,6 +420,13 @@ const AllLineupsScreen = ({
                 </AppText>
               </View>
             </Card>
+
+            <Button
+              label="Generate"
+              icon="zap"
+              onPress={onGenerateLineup}
+              accessibilityLabel="Generate a new lineup"
+            />
 
             <Input
               label="Find lineup"
