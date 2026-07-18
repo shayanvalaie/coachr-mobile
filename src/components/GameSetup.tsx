@@ -6,6 +6,8 @@ import {
   StyleSheet,
   View,
 } from "react-native";
+import type Reanimated from "react-native-reanimated";
+import type { AnimatedRef } from "react-native-reanimated";
 import { Feather } from "../icons";
 import { theme, withAlpha } from "../theme/colors";
 import { radius, space } from "../theme/tokens";
@@ -27,7 +29,6 @@ type Props = {
   onToggleCollapse: () => void;
   onEditSelection: () => void;
   onEditLineup: () => void;
-  onSelectAll: () => void;
   onGenerate: () => void;
   onSaveLineup: () => void;
   onToggleInning: (inning: number) => void;
@@ -37,7 +38,7 @@ type Props = {
     targetPosition: string,
   ) => void;
   playerGenderByName?: Record<string, Player["gender"]>;
-  onLineupDragStateChange?: (isDragging: boolean) => void;
+  lineupScrollableRef?: AnimatedRef<Reanimated.ScrollView>;
   lineupAnchorRef?: React.RefObject<View | null>;
 };
 
@@ -104,13 +105,12 @@ const GameSetup = ({
   onToggleCollapse,
   onEditSelection,
   onEditLineup,
-  onSelectAll,
   onGenerate,
   onSaveLineup,
   onToggleInning,
   onSetLineupCell,
   playerGenderByName,
-  onLineupDragStateChange,
+  lineupScrollableRef,
   lineupAnchorRef,
 }: Props) => (
   <View style={styles.card}>
@@ -169,21 +169,14 @@ const GameSetup = ({
             accessibilityRole="button"
             accessibilityLabel="Edit player selection"
           >
+            <Feather
+              name="users"
+              size={16}
+              color={theme.text.primary}
+              style={styles.quickActionIcon}
+            />
             <AppText variant="body" family="heading">
               Edit selection
-            </AppText>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [
-              styles.quickActionButton,
-              pressed && { opacity: 0.9 },
-            ]}
-            onPress={onSelectAll}
-            accessibilityRole="button"
-            accessibilityLabel="Select all players"
-          >
-            <AppText variant="body" family="heading">
-              Select all
             </AppText>
           </Pressable>
         </View>
@@ -263,7 +256,7 @@ const GameSetup = ({
             editable={isInlineEditing}
             onSetPlayerPosition={onSetLineupCell}
             playerGenderByName={playerGenderByName}
-            onDragStateChange={onLineupDragStateChange}
+            scrollableRef={lineupScrollableRef}
           />
         </View>
       </>
@@ -353,14 +346,19 @@ const styles = StyleSheet.create({
   quickActionButton: {
     flex: 1,
     minHeight: 46,
+    flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
+    gap: space.xs,
     borderRadius: radius.md,
     borderWidth: 1,
     borderColor: theme.border.base,
     backgroundColor: theme.bg.elevated,
     paddingVertical: 10,
     paddingHorizontal: space.sm,
+  },
+  quickActionIcon: {
+    marginTop: 1,
   },
   generateWrap: {
     marginTop: 2,

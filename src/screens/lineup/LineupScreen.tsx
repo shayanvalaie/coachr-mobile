@@ -2,11 +2,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   LayoutAnimation,
   Platform,
-  ScrollView,
   StyleSheet,
   UIManager,
   View,
 } from "react-native";
+import Animated, { useAnimatedRef } from "react-native-reanimated";
 import {
   AppPressable,
   AppText,
@@ -74,14 +74,15 @@ const LineupScreen = ({
   >(null);
   const [showPlayerPicker, setShowPlayerPicker] = useState(false);
   const [gameSetupCollapsed, setGameSetupCollapsed] = useState(false);
-  const [isDraggingLineupRow, setIsDraggingLineupRow] = useState(false);
   const [status, setStatus] = useState("");
   const [error, setError] = useState<string | null>(null);
   const handledLaunchRequestIdsRef = useRef<Set<number>>(new Set());
   // Refs used to auto-scroll the freshly generated lineup into view: the build
   // ScrollView, a wrapper for measuring the viewport top, an anchor wrapping the
-  // lineup grid deep inside GameSetup, and the live scroll offset.
-  const buildScrollRef = useRef<ScrollView>(null);
+  // lineup grid deep inside GameSetup, and the live scroll offset. The scroll
+  // ref is an animated ref because the sortable lineup grid also drives it for
+  // edge auto-scroll while dragging rows.
+  const buildScrollRef = useAnimatedRef<Animated.ScrollView>();
   const buildScrollWrapRef = useRef<View>(null);
   const lineupAnchorRef = useRef<View>(null);
   const buildScrollOffsetRef = useRef(0);
@@ -418,11 +419,10 @@ const LineupScreen = ({
       <ScreenContainer padded={false}>
         {activeTab === "build" ? (
           <View ref={buildScrollWrapRef} collapsable={false} style={styles.flex}>
-          <ScrollView
+          <Animated.ScrollView
             ref={buildScrollRef}
             style={styles.flex}
             contentContainerStyle={styles.buildContent}
-            scrollEnabled={!isDraggingLineupRow}
             scrollEventThrottle={16}
             onScroll={(e) => {
               buildScrollOffsetRef.current = e.nativeEvent.contentOffset.y;
@@ -453,9 +453,6 @@ const LineupScreen = ({
               }}
               onEditSelection={() => setShowPlayerPicker(true)}
               onEditLineup={toggleInlineEditMode}
-              onSelectAll={() =>
-                setActiveIds(new Set(roster.map((player) => player.id)))
-              }
               onGenerate={runLineupGeneration}
               onSaveLineup={() => setSaveModalVisible(true)}
               onToggleInning={(inning) => {
@@ -471,10 +468,10 @@ const LineupScreen = ({
               }}
               onSetLineupCell={applyInlinePositionSwap}
               playerGenderByName={playerGenderByName}
-              onLineupDragStateChange={setIsDraggingLineupRow}
+              lineupScrollableRef={buildScrollRef}
               lineupAnchorRef={lineupAnchorRef}
             />
-          </ScrollView>
+          </Animated.ScrollView>
           </View>
         ) : (
           <HistoryTab
@@ -540,7 +537,6 @@ const LineupScreen = ({
           onDone={finishInlineEdit}
           onClose={dismissEditModal}
           onSetPlayerPosition={applyInlinePositionSwap}
-          onDragStateChange={setIsDraggingLineupRow}
         />
       )}
 

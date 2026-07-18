@@ -6,8 +6,10 @@ import {
   AppText,
   Button,
   Card,
+  LoadTransition,
   ScreenContainer,
   ScreenHeader,
+  Skeleton,
 } from "../../components/ui";
 import { Feather } from "../../icons";
 import { theme } from "../../theme/colors";
@@ -179,9 +181,14 @@ const CalendarScreen = ({
           <AppText variant="title" family="display">
             Plan games and track outcomes
           </AppText>
-          <AppText variant="caption" color="secondary">
-            Total games: {games.length} | Upcoming: {upcomingCount}
-          </AppText>
+          <LoadTransition
+            loading={isLoading}
+            skeleton={<Skeleton width={180} height={15} />}
+          >
+            <AppText variant="caption" color="secondary">
+              Total games: {games.length} | Upcoming: {upcomingCount}
+            </AppText>
+          </LoadTransition>
         </View>
       </Card>
 

@@ -134,7 +134,6 @@ const listeners = new Set<
   (event: BackendAuthEvent, session: BackendSession | null) => void
 >();
 
-let loaded = false;
 let cachedSession: BackendSession | null = null;
 // Single-flight guard: dedupes concurrent /auth/refresh calls. Because the
 // backend rotates (revokes) the refresh token on every refresh, two concurrent
@@ -143,16 +142,24 @@ let cachedSession: BackendSession | null = null;
 // All concurrent callers await the same in-flight promise instead.
 let inFlightRefresh: Promise<BackendAuthResponse> | null = null;
 
-const ensureLoaded = async () => {
-  if (loaded) return;
+// Single shared load promise: every caller awaits the same storage read.
+// A plain boolean flag raced here — a second caller returned immediately
+// while the read was still in flight, observing cachedSession === null and
+// emitting INITIAL_SESSION with no session for a signed-in user.
+let loadPromise: Promise<void> | null = null;
 
-  loaded = true;
-  try {
-    const raw = await secureStorage.getItem(SESSION_STORAGE_KEY);
-    cachedSession = raw ? (JSON.parse(raw) as BackendSession) : null;
-  } catch (_err) {
-    cachedSession = null;
+const ensureLoaded = (): Promise<void> => {
+  if (!loadPromise) {
+    loadPromise = (async () => {
+      try {
+        const raw = await secureStorage.getItem(SESSION_STORAGE_KEY);
+        cachedSession = raw ? (JSON.parse(raw) as BackendSession) : null;
+      } catch (_err) {
+        cachedSession = null;
+      }
+    })();
   }
+  return loadPromise;
 };
 
 const emit = (event: BackendAuthEvent, session: BackendSession | null) => {
@@ -505,7 +512,11 @@ export const fastApiBackendClient: BackendClient = {
           await persistSession(session, "TOKEN_REFRESHED");
           return buildAuthResponse(session);
         } catch (err) {
-          await persistSession(null, "SIGNED_OUT");
+          // Only a rejected token means the session is truly dead. A network
+          // failure (backend unreachable) must not wipe a valid session.
+          if (hasHttpStatus(err, 401)) {
+            await persistSession(null, "SIGNED_OUT");
+          }
           return buildAuthResponse(null, err);
         } finally {
           inFlightRefresh = null;

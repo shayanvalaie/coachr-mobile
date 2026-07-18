@@ -16,9 +16,12 @@ import {
   Card,
   Chip,
   Input,
+  LoadTransition,
   MetricTile,
   ScreenContainer,
   ScreenHeader,
+  Skeleton,
+  SkeletonMetricRow,
   useToast,
 } from "../components/ui";
 import { theme } from "../theme/colors";
@@ -51,6 +54,7 @@ const RulesScreen = ({ session, onBack, onOpenProfile }: Props) => {
   const [error, setError] = useState<string | null>(null);
   const [isSavingRules, setIsSavingRules] = useState(false);
   const [showAdvancedRules, setShowAdvancedRules] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   const ensureTeam = useCallback(async () => {
     if (teamId) return teamId;
@@ -72,12 +76,15 @@ const RulesScreen = ({ session, onBack, onOpenProfile }: Props) => {
       setRulesConfig(parseTeamRulesConfig(teamRules));
     } catch (_err) {
       setError("Unable to load rules.");
+    } finally {
+      setIsLoading(false);
     }
   }, [ensureTeam]);
 
   useEffect(() => {
     loadRules().catch(() => {
       setError("Unable to load rules.");
+      setIsLoading(false);
     });
   }, [loadRules]);
 
@@ -197,6 +204,18 @@ const RulesScreen = ({ session, onBack, onOpenProfile }: Props) => {
         }
       />
 
+      <LoadTransition
+        loading={isLoading}
+        style={styles.loadedStack}
+        skeleton={
+          <>
+            <SkeletonMetricRow count={3} height={67} />
+            <Skeleton height={120} radius={radius.lg} />
+            <Skeleton height={330} radius={radius.lg} />
+            <Skeleton height={110} radius={radius.lg} />
+          </>
+        }
+      >
       <View style={styles.metricsRow}>
         <MetricTile small label="Sport" value={capitalize(rulesConfig.sport)} />
         <MetricTile
@@ -425,12 +444,18 @@ const RulesScreen = ({ session, onBack, onOpenProfile }: Props) => {
           />
         </View>
       </View>
+      </LoadTransition>
     </ScreenContainer>
   );
 };
 
 const styles = StyleSheet.create({
   content: {
+    gap: space.sm,
+  },
+  // Mirrors the screen's content gap so wrapping the loaded region in the
+  // transition view doesn't change spacing.
+  loadedStack: {
     gap: space.sm,
   },
   iconButton: {

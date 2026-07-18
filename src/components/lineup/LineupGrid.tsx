@@ -1,23 +1,12 @@
-import React, {
-  memo,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import {
-  Animated,
-  LayoutAnimation,
-  PanResponder,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  UIManager,
-  View,
-} from "react-native";
+import React, { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import * as Haptics from "expo-haptics";
+import type Animated from "react-native-reanimated";
+import type { AnimatedRef } from "react-native-reanimated";
+import Sortable, {
+  type SortableGridDragEndParams,
+  type SortableGridRenderItem,
+} from "react-native-sortables";
 import { theme, withAlpha } from "../../theme/colors";
 import { radius } from "../../theme/tokens";
 import { typeface } from "../../theme/typography";
@@ -37,12 +26,17 @@ type Props = {
     targetPosition: string,
   ) => void;
   playerGenderByName?: Record<string, "male" | "female">;
-  onDragStateChange?: (isDragging: boolean) => void;
+  // Vertical scroller hosting this grid; when provided, Sortable auto-scrolls
+  // it as a dragged row nears the viewport edge.
+  scrollableRef?: AnimatedRef<Animated.ScrollView>;
 };
 
 const BENCH_MARKER = "X";
 const EMPTY_MARKER = "-";
 const DEFAULT_ROW_HEIGHT = 44;
+// Vertical offset from a cell's row top to where its dropdown opens —
+// just under the cell, mirroring the old inline `top: 36` placement.
+const DROPDOWN_ROW_OFFSET = 36;
 
 // Off-palette rose used to tint grid rows for female players. Kept as a local
 // constant (not a semantic token): the tint is unique to the lineup grid
@@ -57,27 +51,17 @@ const LineupGrid = ({
   presentation = "inline",
   onSetPlayerPosition,
   playerGenderByName,
-  onDragStateChange,
+  scrollableRef,
 }: Props) => {
   const [openCell, setOpenCell] = useState<{
     inningNumber: number;
     playerName: string;
   } | null>(null);
   const [containerWidth, setContainerWidth] = useState(0);
-
-  const [draggingName, setDraggingName] = useState<string | null>(null);
-  const draggingTranslateY = useRef(new Animated.Value(0)).current;
-  const rowHeightsRef = useRef(new Map<string, number>());
-  const playerOrderRef = useRef<string[]>([]);
-  const draggingNameRef = useRef<string | null>(null);
-  const activeIndexRef = useRef<number>(-1);
-  const consumedDyRef = useRef<number>(0);
-
-  useEffect(() => {
-    if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
-      UIManager.setLayoutAnimationEnabledExperimental(true);
-    }
-  }, []);
+  // Measured table metrics that anchor the dropdown overlay. Rows are
+  // uniform height, so one row's measurement covers all of them.
+  const [headerHeight, setHeaderHeight] = useState(DEFAULT_ROW_HEIGHT);
+  const [rowHeight, setRowHeight] = useState(DEFAULT_ROW_HEIGHT);
 
   const femalePlayerNames = useMemo(() => {
     const names = new Set<string>();
@@ -146,125 +130,37 @@ const LineupGrid = ({
     });
   }, [discoveredPlayers]);
 
-  useEffect(() => {
-    playerOrderRef.current = playerOrder;
-  }, [playerOrder]);
+  const players = useMemo(
+    () => (playerOrder.length > 0 ? playerOrder : discoveredPlayers),
+    [playerOrder, discoveredPlayers],
+  );
 
-  const movePlayer = useCallback((fromIndex: number, toIndex: number) => {
-    const current = playerOrderRef.current;
-    if (
-      fromIndex < 0 ||
-      toIndex < 0 ||
-      fromIndex >= current.length ||
-      toIndex >= current.length ||
-      fromIndex === toIndex
-    ) {
-      return;
-    }
-    const next = [...current];
-    const [moved] = next.splice(fromIndex, 1);
-    next.splice(toIndex, 0, moved);
-    playerOrderRef.current = next;
-    LayoutAnimation.configureNext({
-      duration: 150,
-      update: { type: LayoutAnimation.Types.easeInEaseOut },
-    });
-    setPlayerOrder(next);
+  const handleDragStart = useCallback(() => {
+    // A row picked up under an open dropdown would leave the dropdown
+    // anchored to a stale position — close it.
+    setOpenCell(null);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
   }, []);
 
-  const stopDrag = useCallback(() => {
-    Animated.spring(draggingTranslateY, {
-      toValue: 0,
-      useNativeDriver: true,
-      damping: 16,
-      stiffness: 220,
-    }).start(() => {
-      setDraggingName(null);
-      draggingNameRef.current = null;
-      activeIndexRef.current = -1;
-      consumedDyRef.current = 0;
-      onDragStateChange?.(false);
-    });
-  }, [draggingTranslateY, onDragStateChange]);
+  const handleOrderChange = useCallback(() => {
+    Haptics.selectionAsync().catch(() => {});
+  }, []);
 
-  const maybeSwapRows = useCallback(
-    (gestureDy: number) => {
-      if (!draggingNameRef.current) return;
-      const activeIndex = activeIndexRef.current;
-      if (activeIndex < 0) return;
-
-      let currentIndex = activeIndex;
-      let localOffset = gestureDy - consumedDyRef.current;
-      const current = playerOrderRef.current;
-
-      while (localOffset > 0 && currentIndex < current.length - 1) {
-        const nextName = current[currentIndex + 1];
-        const nextHeight = rowHeightsRef.current.get(nextName) ?? DEFAULT_ROW_HEIGHT;
-        if (localOffset < nextHeight * 0.5) break;
-        movePlayer(currentIndex, currentIndex + 1);
-        consumedDyRef.current += nextHeight;
-        currentIndex += 1;
-        activeIndexRef.current = currentIndex;
-        localOffset = gestureDy - consumedDyRef.current;
-      }
-
-      while (localOffset < 0 && currentIndex > 0) {
-        const prevName = current[currentIndex - 1];
-        const prevHeight = rowHeightsRef.current.get(prevName) ?? DEFAULT_ROW_HEIGHT;
-        if (Math.abs(localOffset) < prevHeight * 0.5) break;
-        movePlayer(currentIndex, currentIndex - 1);
-        consumedDyRef.current -= prevHeight;
-        currentIndex -= 1;
-        activeIndexRef.current = currentIndex;
-        localOffset = gestureDy - consumedDyRef.current;
-      }
-
-      draggingTranslateY.setValue(localOffset);
+  const handleDragEnd = useCallback(
+    ({ data }: SortableGridDragEndParams<string>) => {
+      setPlayerOrder(data);
     },
-    [draggingTranslateY, movePlayer],
+    [],
   );
 
-  // Mirrors DraggablePlayerList exactly — panHandlers applied to the row
-  // only while that row is being dragged.
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onMoveShouldSetPanResponder: () => draggingNameRef.current !== null,
-        onMoveShouldSetPanResponderCapture: () => draggingNameRef.current !== null,
-        onPanResponderTerminationRequest: () => false,
-        onPanResponderMove: (_event, gestureState) => {
-          maybeSwapRows(gestureState.dy);
-        },
-        onPanResponderRelease: stopDrag,
-        onPanResponderTerminate: stopDrag,
-      }),
-    [maybeSwapRows, stopDrag],
-  );
+  const handleHeaderLayout = useCallback((height: number) => {
+    setHeaderHeight((prev) => (Math.abs(prev - height) > 0.5 ? height : prev));
+  }, []);
 
-  const beginDrag = useCallback(
-    (playerName: string) => {
-      const index = playerOrderRef.current.indexOf(playerName);
-      if (index < 0) return;
-      draggingNameRef.current = playerName;
-      activeIndexRef.current = index;
-      consumedDyRef.current = 0;
-      draggingTranslateY.setValue(0);
-      setDraggingName(playerName);
-      onDragStateChange?.(true);
-    },
-    [draggingTranslateY, onDragStateChange],
-  );
+  const handleRowLayout = useCallback((height: number) => {
+    setRowHeight((prev) => (Math.abs(prev - height) > 0.5 ? height : prev));
+  }, []);
 
-  if (!lineup) {
-    return (
-      <AppText variant="body" color="secondary">
-        Generate a lineup to see inning assignments.
-      </AppText>
-    );
-  }
-
-  const players = playerOrder.length > 0 ? playerOrder : discoveredPlayers;
-  const isDragging = draggingName !== null;
   const isEditModal = presentation === "editModal";
   const inningCount = innings.length;
 
@@ -277,6 +173,166 @@ const LineupGrid = ({
     playerCellWidth = 118;
     inningCellWidth = editable ? 36 : 32;
   }
+
+  const renderItem = useCallback<SortableGridRenderItem<string>>(
+    ({ item: playerName, index }) => {
+      const isFemale = femalePlayerNames.has(normalizePlayerName(playerName));
+      const playerNumber = index + 1;
+
+      return (
+        <View
+          style={[styles.row, isFemale && styles.femaleRow]}
+          onLayout={(e) => handleRowLayout(e.nativeEvent.layout.height)}
+        >
+          {/* Drag handle: press and hold the player name to reorder rows.
+              Scoped to the name cell so inning cells stay free for taps. */}
+          <Sortable.Handle
+            style={[
+              styles.playerCell,
+              {
+                width: playerCellWidth,
+                paddingLeft: isEditModal ? 8 : 4,
+                paddingRight: isEditModal ? 4 : 0,
+              },
+            ]}
+          >
+            <View
+              style={styles.playerCellInner}
+              accessibilityRole="button"
+              accessibilityLabel={`${playerName}, batting position ${playerNumber}. Press and hold to reorder.`}
+            >
+              <View
+                style={[
+                  styles.playerNumberBadge,
+                  isEditModal && styles.playerNumberBadgeModal,
+                ]}
+              >
+                <Text style={styles.playerNumberText}>{playerNumber}</Text>
+              </View>
+              <Text style={styles.playerNameText} numberOfLines={1}>
+                {playerName}
+              </Text>
+            </View>
+          </Sortable.Handle>
+
+          {innings.map(({ inningNumber, cells }) => {
+            const value = cells.get(playerName) ?? EMPTY_MARKER;
+            const cellKey = `${playerName}:${inningNumber}`;
+            const isOpen =
+              !!openCell &&
+              openCell.playerName === playerName &&
+              openCell.inningNumber === inningNumber;
+
+            if (editable) {
+              return (
+                <View
+                  key={`cell-${cellKey}`}
+                  style={[
+                    styles.editableCellWrap,
+                    {
+                      width: inningCellWidth,
+                      minHeight: isEditModal ? 38 : 34,
+                    },
+                  ]}
+                >
+                  <Pressable
+                    style={[
+                      styles.editableCell,
+                      isOpen && styles.editableCellOpen,
+                      value === BENCH_MARKER && styles.editableBenchCell,
+                      {
+                        minHeight: isEditModal ? 38 : 34,
+                      },
+                    ]}
+                    onPress={() => {
+                      setOpenCell((prev) =>
+                        prev?.playerName === playerName &&
+                        prev?.inningNumber === inningNumber
+                          ? null
+                          : { playerName, inningNumber },
+                      );
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Inning ${inningNumber}, ${playerName}, ${value === EMPTY_MARKER ? "unassigned" : value === BENCH_MARKER ? "bench" : value}`}
+                    accessibilityState={{ expanded: isOpen }}
+                  >
+                    <Text
+                      style={[
+                        styles.editableCellText,
+                        value === BENCH_MARKER
+                          ? styles.benchCellText
+                          : value === EMPTY_MARKER
+                            ? styles.emptyCellText
+                            : styles.positionCellText,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {value}
+                    </Text>
+                  </Pressable>
+                </View>
+              );
+            }
+
+            return (
+              <Text
+                key={`cell-${cellKey}`}
+                style={[
+                  styles.inningCell,
+                  { width: inningCellWidth },
+                  value === BENCH_MARKER
+                    ? styles.benchCellText
+                    : value === EMPTY_MARKER
+                      ? styles.emptyCellText
+                      : styles.positionCellText,
+                ]}
+              >
+                {value}
+              </Text>
+            );
+          })}
+        </View>
+      );
+    },
+    [
+      femalePlayerNames,
+      innings,
+      openCell,
+      editable,
+      isEditModal,
+      playerCellWidth,
+      inningCellWidth,
+      handleRowLayout,
+    ],
+  );
+
+  if (!lineup) {
+    return (
+      <AppText variant="body" color="secondary">
+        Generate a lineup to see inning assignments.
+      </AppText>
+    );
+  }
+
+  // Dropdown overlay anchor. The dropdown must live OUTSIDE the sortable rows:
+  // sortable items are absolutely-positioned siblings, so a dropdown inside a
+  // row would paint underneath the rows after it. Rendered as the last child
+  // of the table content instead, its position derived from the fixed cell
+  // widths and measured row height.
+  const openInningIndex = openCell
+    ? innings.findIndex((i) => i.inningNumber === openCell.inningNumber)
+    : -1;
+  const openRowIndex = openCell ? players.indexOf(openCell.playerName) : -1;
+  const openInning = openInningIndex >= 0 ? innings[openInningIndex] : null;
+  const dropdownVisible =
+    !!openCell && !!openInning && openRowIndex >= 0 && editable;
+  const dropdownOptions = openInning
+    ? [...openInning.slotOrder, BENCH_MARKER]
+    : [];
+  const openValue =
+    openCell && openInning
+      ? (openInning.cells.get(openCell.playerName) ?? EMPTY_MARKER)
+      : EMPTY_MARKER;
 
   return (
     <View
@@ -291,10 +347,13 @@ const LineupGrid = ({
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        scrollEnabled={!isDragging && !isEditModal}
+        scrollEnabled={!isEditModal}
       >
         <View>
-          <View style={[styles.row, styles.headerRow]}>
+          <View
+            style={[styles.row, styles.headerRow]}
+            onLayout={(e) => handleHeaderLayout(e.nativeEvent.layout.height)}
+          >
             <Text
               style={[
                 styles.headerCell,
@@ -322,175 +381,76 @@ const LineupGrid = ({
             ))}
           </View>
 
-          {players.map((playerName, index) => {
-            const isFemale = femalePlayerNames.has(normalizePlayerName(playerName));
-            const isRowDragging = draggingName === playerName;
-            const playerNumber = index + 1;
-            const rowHasOpenCell = openCell?.playerName === playerName;
+          <Sortable.Grid
+            data={players}
+            renderItem={renderItem}
+            keyExtractor={(name) => name}
+            columns={1}
+            customHandle
+            activeItemScale={1.02}
+            activeItemShadowOpacity={0.15}
+            inactiveItemOpacity={1}
+            onDragStart={handleDragStart}
+            onOrderChange={handleOrderChange}
+            onDragEnd={handleDragEnd}
+            {...(scrollableRef ? { scrollableRef } : {})}
+          />
 
-            return (
-              <Animated.View
-                key={`row-${playerName}`}
-                style={[
-                  styles.row,
-                  isFemale && styles.femaleRow,
-                  isRowDragging && styles.draggingRow,
-                  rowHasOpenCell && { zIndex: 70 },
-                  isRowDragging
-                    ? { transform: [{ translateY: draggingTranslateY }] }
-                    : null,
-                ]}
-                onLayout={(e) => {
-                  rowHeightsRef.current.set(playerName, e.nativeEvent.layout.height);
-                }}
-                {...(isRowDragging ? panResponder.panHandlers : {})}
+          {dropdownVisible ? (
+            <View
+              style={[
+                styles.cellDropdown,
+                {
+                  left: playerCellWidth + openInningIndex * inningCellWidth,
+                  top:
+                    headerHeight +
+                    openRowIndex * rowHeight +
+                    DROPDOWN_ROW_OFFSET,
+                },
+              ]}
+            >
+              <ScrollView
+                nestedScrollEnabled
+                style={styles.cellDropdownScroll}
+                showsVerticalScrollIndicator={dropdownOptions.length > 5}
               >
-                <Pressable
-                  style={[
-                    styles.playerCell,
-                    {
-                      width: playerCellWidth,
-                      paddingLeft: isEditModal ? 8 : 4,
-                      paddingRight: isEditModal ? 4 : 0,
-                    },
-                  ]}
-                  onLongPress={() => beginDrag(playerName)}
-                  delayLongPress={120}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${playerName}, batting position ${playerNumber}. Long press to reorder.`}
-                >
-                  <View
-                    style={[
-                      styles.playerNumberBadge,
-                      isEditModal && styles.playerNumberBadgeModal,
-                    ]}
-                  >
-                    <Text style={styles.playerNumberText}>{playerNumber}</Text>
-                  </View>
-                  <Text style={styles.playerNameText} numberOfLines={1}>
-                    {playerName}
-                  </Text>
-                </Pressable>
-
-                {innings.map(({ inningNumber, cells, slotOrder }) => {
-                  const value = cells.get(playerName) ?? EMPTY_MARKER;
-                  const cellKey = `${playerName}:${inningNumber}`;
-                  const isOpen =
-                    !!openCell &&
-                    openCell.playerName === playerName &&
-                    openCell.inningNumber === inningNumber;
-                  const options = [...slotOrder, BENCH_MARKER];
-
-                  if (editable) {
-                    return (
-                      <View
-                        key={`cell-${cellKey}`}
+                {dropdownOptions.map((option) => {
+                  const active = option === openValue;
+                  return (
+                    <Pressable
+                      key={`option-${option}`}
+                      style={[
+                        styles.cellDropdownOption,
+                        active && styles.cellDropdownOptionActive,
+                      ]}
+                      onPress={() => {
+                        if (openCell) {
+                          onSetPlayerPosition?.(
+                            openCell.inningNumber,
+                            openCell.playerName,
+                            option,
+                          );
+                        }
+                        setOpenCell(null);
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel={option === BENCH_MARKER ? "Bench" : option}
+                      accessibilityState={{ selected: active }}
+                    >
+                      <Text
                         style={[
-                          styles.editableCellWrap,
-                          isOpen && styles.editableCellWrapOpen,
-                          {
-                            width: inningCellWidth,
-                            minHeight: isEditModal ? 38 : 34,
-                          },
+                          styles.cellDropdownOptionText,
+                          active && styles.cellDropdownOptionTextActive,
                         ]}
                       >
-                        <Pressable
-                          style={[
-                            styles.editableCell,
-                            isOpen && styles.editableCellOpen,
-                            value === BENCH_MARKER && styles.editableBenchCell,
-                            {
-                              minHeight: isEditModal ? 38 : 34,
-                            },
-                          ]}
-                          onPress={() => {
-                            setOpenCell((prev) =>
-                              prev?.playerName === playerName &&
-                              prev?.inningNumber === inningNumber
-                                ? null
-                                : { playerName, inningNumber },
-                            );
-                          }}
-                          accessibilityRole="button"
-                          accessibilityLabel={`Inning ${inningNumber}, ${playerName}, ${value === EMPTY_MARKER ? "unassigned" : value === BENCH_MARKER ? "bench" : value}`}
-                          accessibilityState={{ expanded: isOpen }}
-                        >
-                          <Text
-                            style={[
-                              styles.editableCellText,
-                              value === BENCH_MARKER
-                                ? styles.benchCellText
-                                : value === EMPTY_MARKER
-                                  ? styles.emptyCellText
-                                  : styles.positionCellText,
-                            ]}
-                            numberOfLines={1}
-                          >
-                            {value}
-                          </Text>
-                        </Pressable>
-                        {isOpen ? (
-                          <View style={styles.cellDropdown}>
-                            <ScrollView
-                              nestedScrollEnabled
-                              style={styles.cellDropdownScroll}
-                              showsVerticalScrollIndicator={options.length > 5}
-                            >
-                              {options.map((option) => {
-                                const active = option === value;
-                                return (
-                                  <Pressable
-                                    key={`option-${cellKey}-${option}`}
-                                    style={[
-                                      styles.cellDropdownOption,
-                                      active && styles.cellDropdownOptionActive,
-                                    ]}
-                                    onPress={() => {
-                                      onSetPlayerPosition?.(inningNumber, playerName, option);
-                                      setOpenCell(null);
-                                    }}
-                                    accessibilityRole="button"
-                                    accessibilityLabel={option === BENCH_MARKER ? "Bench" : option}
-                                    accessibilityState={{ selected: active }}
-                                  >
-                                    <Text
-                                      style={[
-                                        styles.cellDropdownOptionText,
-                                        active && styles.cellDropdownOptionTextActive,
-                                      ]}
-                                    >
-                                      {option}
-                                    </Text>
-                                  </Pressable>
-                                );
-                              })}
-                            </ScrollView>
-                          </View>
-                        ) : null}
-                      </View>
-                    );
-                  }
-
-                  return (
-                    <Text
-                      key={`cell-${cellKey}`}
-                      style={[
-                        styles.inningCell,
-                        { width: inningCellWidth },
-                        value === BENCH_MARKER
-                          ? styles.benchCellText
-                          : value === EMPTY_MARKER
-                            ? styles.emptyCellText
-                            : styles.positionCellText,
-                      ]}
-                    >
-                      {value}
-                    </Text>
+                        {option}
+                      </Text>
+                    </Pressable>
                   );
                 })}
-              </Animated.View>
-            );
-          })}
+              </ScrollView>
+            </View>
+          ) : null}
         </View>
       </ScrollView>
       {!isEditModal ? (
@@ -528,20 +488,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: theme.border.subtle,
     minHeight: 44,
-    zIndex: 1,
     overflow: "visible",
   },
   femaleRow: {
     backgroundColor: FEMALE_ROW_TINT,
-  },
-  draggingRow: {
-    zIndex: 50,
-    shadowColor: "#000",
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 10,
-    backgroundColor: theme.bg.elevated,
   },
   headerRow: {
     backgroundColor: withAlpha(theme.text.primary, 0.04),
@@ -552,10 +502,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   playerCell: {
+    minHeight: 44,
+    justifyContent: "center",
+  },
+  playerCellInner: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    minHeight: 44,
   },
   playerHeaderCell: {
   },
@@ -601,10 +554,6 @@ const styles = StyleSheet.create({
   },
   editableCellWrap: {
     position: "relative",
-    zIndex: 2,
-  },
-  editableCellWrapOpen: {
-    zIndex: 60,
   },
   editableCellOpen: {
     borderColor: withAlpha(theme.success.base, 0.58),
@@ -620,8 +569,6 @@ const styles = StyleSheet.create({
   },
   cellDropdown: {
     position: "absolute",
-    top: 36,
-    left: 0,
     minWidth: 74,
     borderRadius: 10,
     borderWidth: 1,

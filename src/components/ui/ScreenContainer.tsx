@@ -9,7 +9,6 @@ import {
   View,
   ViewStyle,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { theme } from "../../theme/colors";
 import { space } from "../../theme/tokens";
 
@@ -37,8 +36,6 @@ const ScreenContainer = ({
   style,
   contentStyle,
 }: Props) => {
-  const insets = useSafeAreaInsets();
-
   let content: ReactNode;
   if (scroll) {
     content = (
@@ -83,11 +80,7 @@ const ScreenContainer = ({
   }
 
   return (
-    <View
-      style={[styles.root, { paddingTop: Math.max(insets.top, space.xs) }, style]}
-    >
-      {content}
-    </View>
+    <View style={[styles.root, styles.topGap, style]}>{content}</View>
   );
 };
 
@@ -95,6 +88,11 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: theme.bg.base,
+  },
+  // The app-level SafeAreaView already consumes the top inset, so this is just
+  // a small breathing gap below the header — not a second safe-area offset.
+  topGap: {
+    paddingTop: space.xs,
   },
   flex: {
     flex: 1,

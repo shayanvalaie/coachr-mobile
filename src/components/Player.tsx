@@ -1,5 +1,6 @@
 import React, { memo, useCallback, useMemo } from "react";
 import { StyleSheet, Switch, View } from "react-native";
+import Sortable from "react-native-sortables";
 import { Feather } from "../icons";
 import { theme } from "../theme/colors";
 import { radius, space } from "../theme/tokens";
@@ -14,7 +15,6 @@ type Props = {
   isDragging?: boolean;
   isSaving: boolean;
   lineupSlots: string[];
-  onDragLongPress?: () => void;
   onToggleExpand: () => void;
   onToggleActive: (active: boolean) => void;
   onUpdate: (patch: Partial<Player>) => void;
@@ -29,7 +29,6 @@ const PlayerCard = ({
   isDragging,
   isSaving,
   lineupSlots,
-  onDragLongPress,
   onToggleExpand,
   onToggleActive,
   onUpdate,
@@ -86,21 +85,17 @@ const PlayerCard = ({
     .toUpperCase();
 
   return (
-    // Root stays pressable so the long-press drag handle keeps working;
-    // pressScale is disabled so it does not fight the drag lift animation.
-    <AppPressable
-      pressScale={1}
-      onLongPress={onDragLongPress}
-      delayLongPress={500}
-      style={!isActive && styles.inactive}
-    >
+    <View style={!isActive ? styles.inactive : undefined}>
       <Card
         variant="raised"
         padding="sm"
         style={[styles.card, isDragging && styles.cardDragging]}
       >
         <View style={styles.rowHeader}>
-          <View style={styles.identityWrap}>
+          {/* Drag handle: press and hold the avatar/name area to reorder.
+              Scoped to the identity block so the expanded card's inputs,
+              switch and buttons never conflict with the drag gesture. */}
+          <Sortable.Handle style={styles.identityWrap}>
             <View style={styles.avatar}>
               <AppText variant="body" family="heading" color="accent">
                 {initials}
@@ -138,7 +133,7 @@ const PlayerCard = ({
                   : "No preferred positions"}
               </AppText>
             </View>
-          </View>
+          </Sortable.Handle>
 
           <View style={styles.rowHeaderActions}>
             <Chip
@@ -258,7 +253,7 @@ const PlayerCard = ({
           </>
         )}
       </Card>
-    </AppPressable>
+    </View>
   );
 };
 

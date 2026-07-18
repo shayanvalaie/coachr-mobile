@@ -1,7 +1,16 @@
 import { RefObject } from "react";
 import { StyleSheet, View } from "react-native";
+import type Reanimated from "react-native-reanimated";
+import type { AnimatedRef } from "react-native-reanimated";
 import GameSetup from "../../../components/GameSetup";
-import { AppText, Card, MetricTile } from "../../../components/ui";
+import {
+  AppText,
+  Card,
+  LoadTransition,
+  MetricTile,
+  Skeleton,
+  SkeletonMetricRow,
+} from "../../../components/ui";
 import { BackendGame } from "../../../lib/backend/types";
 import { space } from "../../../theme/tokens";
 import { InningAssignment, Player } from "../../../types/lineup";
@@ -27,7 +36,6 @@ type Props = {
   onToggleCollapse: () => void;
   onEditSelection: () => void;
   onEditLineup: () => void;
-  onSelectAll: () => void;
   onGenerate: () => void;
   onSaveLineup: () => void;
   onToggleInning: (inning: number) => void;
@@ -37,7 +45,7 @@ type Props = {
     targetPosition: string,
   ) => void;
   playerGenderByName?: Record<string, Player["gender"]>;
-  onLineupDragStateChange?: (isDragging: boolean) => void;
+  lineupScrollableRef?: AnimatedRef<Reanimated.ScrollView>;
   lineupAnchorRef?: RefObject<View | null>;
 };
 
@@ -61,18 +69,26 @@ const BuildTab = ({
   onToggleCollapse,
   onEditSelection,
   onEditLineup,
-  onSelectAll,
   onGenerate,
   onSaveLineup,
   onToggleInning,
   onSetLineupCell,
   playerGenderByName,
-  onLineupDragStateChange,
+  lineupScrollableRef,
   lineupAnchorRef,
 }: Props) => (
   <>
     <Card variant="elevated" padding="sm">
-      <View style={styles.heroInner}>
+      <LoadTransition
+        loading={!rulesConfig}
+        style={styles.heroInner}
+        skeleton={
+          <>
+            <Skeleton width={150} height={15} />
+            <SkeletonMetricRow count={3} height={67} />
+          </>
+        }
+      >
         <AppText variant="caption" color="secondary">
           Active {activeCount} / {rosterCount} players
         </AppText>
@@ -93,7 +109,7 @@ const BuildTab = ({
             value={rulesConfig ? String(rulesConfig.playersOnField) : "-"}
           />
         </View>
-      </View>
+      </LoadTransition>
     </Card>
 
     {hasProSubscription && (
@@ -119,13 +135,12 @@ const BuildTab = ({
       onToggleCollapse={onToggleCollapse}
       onEditSelection={onEditSelection}
       onEditLineup={onEditLineup}
-      onSelectAll={onSelectAll}
       onGenerate={onGenerate}
       onSaveLineup={onSaveLineup}
       onToggleInning={onToggleInning}
       onSetLineupCell={onSetLineupCell}
       playerGenderByName={playerGenderByName}
-      onLineupDragStateChange={onLineupDragStateChange}
+      lineupScrollableRef={lineupScrollableRef}
       lineupAnchorRef={lineupAnchorRef}
     />
   </>

@@ -4,6 +4,7 @@ import { theme } from "../../theme/colors";
 import { radius, space } from "../../theme/tokens";
 import AppText from "./AppText";
 import Button from "./Button";
+import { Reveal } from "./Reveal";
 
 type Props = {
   icon: IconName;
@@ -12,8 +13,10 @@ type Props = {
   action?: { label: string; onPress: () => void };
 };
 
+// Empty states mount after a load resolves empty, so they fade in instead of
+// popping over the skeleton they replace.
 const EmptyState = ({ icon, title, body, action }: Props) => (
-  <View style={styles.container}>
+  <Reveal style={styles.container}>
     <View style={styles.iconWrap}>
       <Feather name={icon} size={22} color={theme.text.secondary} />
     </View>
@@ -30,7 +33,7 @@ const EmptyState = ({ icon, title, body, action }: Props) => (
         <Button label={action.label} onPress={action.onPress} size="sm" variant="secondary" />
       </View>
     ) : null}
-  </View>
+  </Reveal>
 );
 
 const styles = StyleSheet.create({

@@ -59,11 +59,19 @@ export const Skeleton = ({
   );
 };
 
-// Preset: a row of metric tiles (Home, Roster, Rules heroes).
-export const SkeletonMetricRow = ({ count = 3 }: { count?: number }) => (
+// Preset: a row of metric tiles (Home, Roster, Rules heroes). Match `height`
+// to the tiles the row stands in for (72 regular, 67 small) so the swap to
+// real content never shifts layout.
+export const SkeletonMetricRow = ({
+  count = 3,
+  height = 72,
+}: {
+  count?: number;
+  height?: number;
+}) => (
   <View style={styles.row}>
     {Array.from({ length: count }, (_, i) => (
-      <Skeleton key={i} height={72} radius={radiusScale.lg} style={styles.flex} />
+      <Skeleton key={i} height={height} radius={radiusScale.lg} style={styles.flex} />
     ))}
   </View>
 );

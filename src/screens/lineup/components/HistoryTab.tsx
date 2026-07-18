@@ -4,6 +4,8 @@ import {
   AppText,
   Button,
   EmptyState,
+  LoadTransition,
+  Reveal,
   SkeletonListRows,
 } from "../../../components/ui";
 import {
@@ -11,7 +13,7 @@ import {
   BackendLineupVersionSummary,
 } from "../../../lib/backend/types";
 import { theme } from "../../../theme/colors";
-import { space } from "../../../theme/tokens";
+import { motion, space } from "../../../theme/tokens";
 import GameContextCard from "./GameContextCard";
 
 type Props = {
@@ -45,16 +47,25 @@ const HistoryTab = ({
   onGenerate,
   renderVersion,
 }: Props) => {
+  // Opacity-only fade per row mount. On load, all rows mount in one commit and
+  // fade in as a group; during scroll, FlatList's window mounts rows well
+  // off-screen, so the (cheap, UI-thread) fade has finished before they're
+  // visible.
   const renderItem = useCallback(
     ({ item }: { item: BackendLineupVersionSummary }) => (
-      <>{renderVersion(item)}</>
+      <Reveal rise={0} duration={motion.base}>
+        {renderVersion(item)}
+      </Reveal>
     ),
     [renderVersion],
   );
 
   return (
     <FlatList
-      data={historyLoading ? [] : lineupHistory}
+      // Keep the previous rows on screen while a reload is in flight (the
+      // header spinner signals activity); emptying the data here would blank
+      // the list on every game-context switch.
+      data={lineupHistory}
       keyExtractor={(item) => item.id}
       renderItem={renderItem}
       keyboardShouldPersistTaps="handled"
@@ -91,7 +102,7 @@ const HistoryTab = ({
               {historyError}
             </AppText>
           ) : null}
-          {!historyLoading && lineupHistory.length > 0 ? (
+          {lineupHistory.length > 0 ? (
             <AppText variant="caption" color="secondary">
               Tap to open • Long-press to delete
             </AppText>
@@ -99,14 +110,17 @@ const HistoryTab = ({
         </View>
       }
       ListEmptyComponent={
-        historyLoading ? (
-          <SkeletonListRows count={5} />
-        ) : historyError ? null : (
-          <EmptyState
-            icon="layers"
-            title="No saved lineups yet"
-            body="No saved versions yet for this context."
-          />
+        historyError ? null : (
+          <LoadTransition
+            loading={historyLoading}
+            skeleton={<SkeletonListRows count={5} />}
+          >
+            <EmptyState
+              icon="layers"
+              title="No saved lineups yet"
+              body="No saved versions yet for this context."
+            />
+          </LoadTransition>
         )
       }
     />

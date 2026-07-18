@@ -4,6 +4,7 @@ import {
 } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import BottomTabBar, { MainTabKey } from "../components/BottomTabBar";
+import { useReducedMotion } from "../hooks/useReducedMotion";
 import { useProGate } from "../lib/proGate";
 import { BackendSession } from "../lib/backend/types";
 import AllLineupsScreen from "../screens/AllLineupsScreen";
@@ -14,6 +15,7 @@ import ProfileScreen from "../screens/ProfileScreen";
 import RosterScreen from "../screens/RosterScreen";
 import RulesScreen from "../screens/RulesScreen";
 import { LineupLaunchRequestInput } from "../types/lineupLaunch";
+import { stackTransitionOptions, tabTransitionOptions } from "./transitions";
 import { HomeStackParamList, MainTabParamList } from "./types";
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -74,9 +76,15 @@ const TabBarAdapter = ({ state, descriptors, navigation }: BottomTabBarProps) =>
 
 const HomeStackNavigator = ({ session }: SessionProps) => {
   const proGate = useProGate();
+  const reducedMotion = useReducedMotion();
 
   return (
-    <HomeStack.Navigator screenOptions={{ headerShown: false }}>
+    <HomeStack.Navigator
+      screenOptions={{
+        headerShown: false,
+        ...stackTransitionOptions(reducedMotion),
+      }}
+    >
       <HomeStack.Screen name="Home">
         {({ navigation }) => (
           <HomeScreen
@@ -84,7 +92,14 @@ const HomeStackNavigator = ({ session }: SessionProps) => {
             onOpenProfile={() => navigation.navigate("ProfileTab")}
             onOpenRulesPage={() => navigation.navigate("Rules")}
             onOpenRosterPage={() => navigation.navigate("RosterTab")}
-            onOpenLineupPage={() => navigation.navigate("LineupTab")}
+            onOpenLineupPage={() =>
+              navigation.navigate("LineupTab", {
+                launch: buildLaunchRequest({
+                  gameId: null,
+                  autoGenerate: true,
+                }),
+              })
+            }
             onOpenCalendarPage={() => {
               if (!proGate.isPro) {
                 proGate.open("Calendar");
@@ -130,10 +145,14 @@ const HomeStackNavigator = ({ session }: SessionProps) => {
 
 const MainTabs = ({ session }: SessionProps) => {
   const proGate = useProGate();
+  const reducedMotion = useReducedMotion();
 
   return (
     <Tab.Navigator
-      screenOptions={{ headerShown: false }}
+      screenOptions={{
+        headerShown: false,
+        ...tabTransitionOptions(reducedMotion),
+      }}
       tabBar={(props) => <TabBarAdapter {...props} />}
     >
       <Tab.Screen name="HomeTab">
@@ -145,7 +164,14 @@ const MainTabs = ({ session }: SessionProps) => {
             session={session}
             onBack={() => navigation.navigate("HomeTab")}
             onOpenProfile={() => navigation.navigate("ProfileTab")}
-            onOpenLineupPage={() => navigation.navigate("LineupTab")}
+            onOpenLineupPage={() =>
+              navigation.navigate("LineupTab", {
+                launch: buildLaunchRequest({
+                  gameId: null,
+                  autoGenerate: true,
+                }),
+              })
+            }
             hasProSubscription={proGate.isPro}
             onRequirePro={proGate.open}
           />

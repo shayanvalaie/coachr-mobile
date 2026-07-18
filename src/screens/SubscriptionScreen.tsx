@@ -6,12 +6,14 @@ import {
   Button,
   Card,
   Chip,
+  LoadTransition,
   ScreenContainer,
   ScreenHeader,
+  Skeleton,
 } from "../components/ui";
 import { Feather } from "../icons";
 import { theme } from "../theme/colors";
-import { space } from "../theme/tokens";
+import { radius, space } from "../theme/tokens";
 
 type Props = {
   onBack: () => void;
@@ -36,6 +38,10 @@ const SubscriptionScreen = ({ onBack }: Props) => {
     useSubscription();
   const isDevUnlocked = __DEV__ && isPro && !activeSku;
   const hasProducts = products.length > 0;
+  // True only while the store products are first being fetched. Once products
+  // exist, `loading` also flips during purchase/restore and must not swap the
+  // plan cards back to skeletons.
+  const isInitialLoading = loading && !hasProducts;
 
   const monthly = products.find((p) => p.sku === IAP_SKUS.MONTHLY);
   const annual = products.find((p) => p.sku === IAP_SKUS.ANNUAL);
@@ -98,6 +104,16 @@ const SubscriptionScreen = ({ onBack }: Props) => {
             </View>
           </Card>
 
+          <LoadTransition
+            loading={isInitialLoading}
+            style={styles.plansRegion}
+            skeleton={
+              <View style={styles.plans}>
+                <Skeleton height={230} radius={radius.lg} />
+                <Skeleton height={190} radius={radius.lg} />
+              </View>
+            }
+          >
           {!hasProducts ? (
             <Card>
               <View style={styles.cardInner}>
@@ -177,6 +193,7 @@ const SubscriptionScreen = ({ onBack }: Props) => {
               </Card>
             ) : null}
           </View>
+          </LoadTransition>
 
           <Button
             label="Restore purchases"
@@ -251,6 +268,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   plans: {
+    gap: space.sm,
+  },
+  // Mirrors the screen's content gap so the load-transition wrapper doesn't
+  // change spacing between the unavailable notice and the plan cards.
+  plansRegion: {
     gap: space.sm,
   },
   planSelected: {

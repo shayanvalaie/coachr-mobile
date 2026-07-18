@@ -7,6 +7,7 @@ import {
   StyleSheet,
   View,
 } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import Animated, {
   Easing,
   runOnJS,
@@ -79,6 +80,9 @@ const Sheet = ({ visible, onClose, title, keyboard = false, children }: Props) =
 
   return (
     <Modal transparent visible statusBarTranslucent onRequestClose={onClose}>
+      {/* Modals host a new native window on Android; gesture-handler based
+          interactions inside (e.g. lineup row dragging) need their own root. */}
+      <GestureHandlerRootView style={styles.gestureRoot}>
       <Wrapper
         style={styles.root}
         {...(keyboard
@@ -109,11 +113,15 @@ const Sheet = ({ visible, onClose, title, keyboard = false, children }: Props) =
           {children}
         </Animated.View>
       </Wrapper>
+      </GestureHandlerRootView>
     </Modal>
   );
 };
 
 const styles = StyleSheet.create({
+  gestureRoot: {
+    flex: 1,
+  },
   root: {
     flex: 1,
     justifyContent: "flex-end",

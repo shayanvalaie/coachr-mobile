@@ -67,7 +67,9 @@ export const useLineupHistory = ({
   const [lineupHistory, setLineupHistory] = useState<
     BackendLineupVersionSummary[]
   >([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
+  // Starts true: the History tab is the screen's default view, so the first
+  // paint must be the loading state, not a flash of "No saved lineups yet".
+  const [historyLoading, setHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [selectedHistoryDetail, setSelectedHistoryDetail] =
     useState<BackendLineupVersionDetail | null>(null);
@@ -100,11 +102,17 @@ export const useLineupHistory = ({
   useEffect(() => {
     ensureTeam()
       .then((team) => {
-        if (!team) return;
+        // `historyLoading` began true; every path out of this bootstrap must
+        // clear it or the skeleton never resolves.
+        if (!team) {
+          setHistoryLoading(false);
+          return;
+        }
         return loadLineupHistory(team, selectedGameId);
       })
       .catch(() => {
         setHistoryError("Unable to load lineup history.");
+        setHistoryLoading(false);
       });
   }, [ensureTeam, loadLineupHistory, selectedGameId]);
 

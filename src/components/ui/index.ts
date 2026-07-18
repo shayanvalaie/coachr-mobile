@@ -9,5 +9,6 @@ export { default as MetricTile } from "./MetricTile";
 export { default as ScreenContainer } from "./ScreenContainer";
 export { default as ScreenHeader } from "./ScreenHeader";
 export { default as Sheet } from "./Sheet";
+export { Reveal, LoadTransition } from "./Reveal";
 export { Skeleton, SkeletonMetricRow, SkeletonListRows } from "./Skeleton";
 export { ToastProvider, useToast } from "./Toast";

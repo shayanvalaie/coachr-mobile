@@ -11,7 +11,9 @@ import {
   Button,
   Card,
   EmptyState,
+  LoadTransition,
   MetricTile,
+  Reveal,
   ScreenContainer,
   SkeletonMetricRow,
 } from "../components/ui";
@@ -131,8 +133,12 @@ const HomeScreen = ({
     return nextTeamId;
   }, [session.user.id, teamId]);
 
+  const hasLoadedRef = useRef(false);
+
   const loadDashboard = useCallback(async () => {
-    setLoading(true);
+    // Skeletons are for the first paint only; refreshes keep the current
+    // values on screen instead of flashing placeholders over real data.
+    if (!hasLoadedRef.current) setLoading(true);
     setError(null);
 
     try {
@@ -160,6 +166,7 @@ const HomeScreen = ({
     } catch (_err) {
       setError("Unable to load home data.");
     } finally {
+      hasLoadedRef.current = true;
       setLoading(false);
     }
   }, [ensureTeam]);
@@ -234,36 +241,40 @@ const HomeScreen = ({
           </Card>
 
           {!loading && !error && summary.lineupsCount === 0 ? (
-            <Card variant="outline" padding="xxs">
-              <EmptyState
-                icon="clipboard"
-                title="No lineups yet"
-                body="You haven't created a lineup yet. Generate your first one to get ready for game day."
-                action={{
-                  label: "Create your first lineup",
-                  onPress: onOpenLineupPage,
-                }}
-              />
-            </Card>
+            <Reveal>
+              <Card variant="outline" padding="xxs">
+                <EmptyState
+                  icon="clipboard"
+                  title="No lineups yet"
+                  body="You haven't created a lineup yet. Generate your first one to get ready for game day."
+                  action={{
+                    label: "Create your first lineup",
+                    onPress: onOpenLineupPage,
+                  }}
+                />
+              </Card>
+            </Reveal>
           ) : null}
 
-          {loading ? (
-            <View style={styles.metricsGrid}>
-              <SkeletonMetricRow count={2} />
-              <SkeletonMetricRow count={2} />
+          <LoadTransition
+            loading={loading}
+            style={styles.metricsGrid}
+            skeleton={
+              <>
+                <SkeletonMetricRow count={2} />
+                <SkeletonMetricRow count={2} />
+              </>
+            }
+          >
+            <View style={styles.metricsRow}>
+              <MetricTile label="Roster" value={summary.rosterCount} />
+              <MetricTile label="Innings" value={summary.rules.segmentCount} />
             </View>
-          ) : (
-            <View style={styles.metricsGrid}>
-              <View style={styles.metricsRow}>
-                <MetricTile label="Roster" value={summary.rosterCount} />
-                <MetricTile label="Innings" value={summary.rules.segmentCount} />
-              </View>
-              <View style={styles.metricsRow}>
-                <MetricTile label="On Field" value={summary.rules.playersOnField} />
-                <MetricTile label="Next Game" value={summary.nextGameLabel} small />
-              </View>
+            <View style={styles.metricsRow}>
+              <MetricTile label="On Field" value={summary.rules.playersOnField} />
+              <MetricTile label="Next Game" value={summary.nextGameLabel} small />
             </View>
-          )}
+          </LoadTransition>
 
           <Card style={styles.quickActionsCard}>
             <AppText variant="bodyLg" family="heading">
@@ -338,13 +349,7 @@ const HomeScreen = ({
                 {error} Tap to retry.
               </AppText>
             </AppPressable>
-          ) : (
-            <View style={styles.footerMessage}>
-              <AppText variant="caption" color="muted">
-                Signed in as {session.user.email ?? "your account"}
-              </AppText>
-            </View>
-          )}
+          ) : null}
         </ScreenContainer>
       </View>
       <FirstTimeTour ref={tourRef} steps={tourSteps} onDone={() => {}} />

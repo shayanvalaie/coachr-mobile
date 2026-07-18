@@ -21,6 +21,7 @@ import {
   Card,
   EmptyState,
   Input,
+  Reveal,
   ScreenContainer,
   ScreenHeader,
   SkeletonListRows,
@@ -303,7 +304,10 @@ const AllLineupsScreen = ({
 
   if (selectedDetail) {
     return (
-      <ScreenContainer scroll contentStyle={styles.content}>
+      <ScreenContainer scroll>
+        {/* The list-to-detail switch happens in place (no navigator push), so
+            the detail fades in to keep the swap from reading as a flicker. */}
+        <Reveal style={styles.content}>
         <ScreenHeader
           title="Lineup Detail"
           subtitle="Saved Lineup"
@@ -389,6 +393,7 @@ const AllLineupsScreen = ({
             {status}
           </AppText>
         ) : null}
+        </Reveal>
       </ScreenContainer>
     );
   }

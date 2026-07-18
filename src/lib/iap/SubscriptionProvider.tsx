@@ -113,15 +113,15 @@ export const SubscriptionProvider = ({
       !!email && ADMIN_EMAILS.has(email.toLowerCase());
 
     backendClient.auth.getSession().then(({ data }) => {
-      if (mountedRef.current) {
-        setIsAdmin(isAdminEmail(data.session?.user.email));
-      }
+      const email = data.session?.user.email;
+      if (__DEV__) console.log("[iap] admin check (getSession):", email, isAdminEmail(email));
+      setIsAdmin(isAdminEmail(email));
     });
 
-    const { data } = backendClient.auth.onAuthStateChange((_event, session) => {
-      if (mountedRef.current) {
-        setIsAdmin(isAdminEmail(session?.user.email));
-      }
+    const { data } = backendClient.auth.onAuthStateChange((event, session) => {
+      const email = session?.user.email;
+      if (__DEV__) console.log(`[iap] admin check (${event}):`, email, isAdminEmail(email));
+      setIsAdmin(isAdminEmail(email));
     });
 
     return () => data.subscription.unsubscribe();
@@ -152,6 +152,9 @@ export const SubscriptionProvider = ({
     const status = await backendClient.getSubscriptionStatus().catch(() => null);
     if (mountedRef.current && status) {
       setProAccessFlag(status.proAccess);
+      // Server-confirmed admin beats the client email listener, which can
+      // miss events; only ever upgrades to true (sign-out clears it).
+      if (status.isAdmin) setIsAdmin(true);
     }
 
     // 2. Real store subscription (release builds only).

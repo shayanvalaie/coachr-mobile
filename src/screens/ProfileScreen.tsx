@@ -1,5 +1,5 @@
 import React from "react";
-import { SafeAreaView, StyleSheet } from "react-native";
+import { Alert, SafeAreaView, StyleSheet } from "react-native";
 import ProfileItem from "../components/ProfileItem";
 import ProfileToggleItem from "../components/ProfileToggleItem";
 import {
@@ -11,6 +11,7 @@ import {
 import { safeSignOut } from "../lib/auth";
 import { BackendSession } from "../lib/backend/types";
 import { IAP_SKUS, useSubscription } from "../lib/iap";
+import { ADMIN_EMAILS } from "../lib/proAccess";
 import { theme } from "../theme/colors";
 import { space } from "../theme/tokens";
 
@@ -28,10 +29,12 @@ const ProfileScreen = ({ session, onClose, onOpenSubscribe }: Props) => {
     restore,
     loading,
     clearSubscription,
-    isAdmin,
     adminProEnabled,
     setAdminProEnabled,
   } = useSubscription();
+  // Derived from the session prop, not the provider's async auth listener, so
+  // the toggle renders deterministically. The server enforces admin on write.
+  const isAdmin = !!email && ADMIN_EMAILS.has(email.toLowerCase());
   const isAdminUnlocked = isAdmin && adminProEnabled && isPro && !activeSku;
   const isDevUnlocked = __DEV__ && isPro && !activeSku;
 
@@ -106,7 +109,10 @@ const ProfileScreen = ({ session, onClose, onOpenSubscribe }: Props) => {
             value={isPro}
             onValueChange={(enabled) => {
               setAdminProEnabled(enabled).catch((err) => {
-                if (__DEV__) console.log("[admin toggle error]", err);
+                Alert.alert(
+                  "Couldn't update Pro access",
+                  err instanceof Error ? err.message : "Something went wrong.",
+                );
               });
             }}
           />

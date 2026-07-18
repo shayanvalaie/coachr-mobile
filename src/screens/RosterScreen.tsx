@@ -1,13 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   LayoutAnimation,
   Platform,
-  ScrollView,
   StyleSheet,
   UIManager,
   View,
 } from "react-native";
+import Animated, { useAnimatedRef } from "react-native-reanimated";
 import * as DocumentPicker from "expo-document-picker";
 import * as XLSX from "xlsx";
 import DraggablePlayerList from "../components/DraggablePlayerList";
@@ -17,9 +17,12 @@ import {
   Button,
   Card,
   EmptyState,
+  LoadTransition,
   MetricTile,
   ScreenContainer,
   ScreenHeader,
+  SkeletonListRows,
+  SkeletonMetricRow,
   useToast,
 } from "../components/ui";
 import { Feather } from "../icons";
@@ -71,10 +74,13 @@ const RosterScreen = ({
   const [expandedPlayers, setExpandedPlayers] = useState<Set<string>>(
     new Set(),
   );
-  const [isDraggingPlayers, setIsDraggingPlayers] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const hasLoadedRef = useRef(false);
   // Transient progress copy only (importing/saving); outcomes go to toasts.
   const [status, setStatus] = useState("");
+
+  const scrollRef = useAnimatedRef<Animated.ScrollView>();
 
   const showError = useCallback(
     (message: string) => toast.show({ message, type: "error" }),
@@ -92,6 +98,9 @@ const RosterScreen = ({
   }, [session.user.id, teamId]);
 
   const loadRoster = useCallback(async () => {
+    // Skeletons are for the first paint only; re-syncs after a failed delete
+    // keep the current list on screen instead of flashing placeholders.
+    if (!hasLoadedRef.current) setIsLoading(true);
     try {
       const team = await ensureTeam();
       if (!team) return;
@@ -106,6 +115,9 @@ const RosterScreen = ({
       setExpandedPlayers(new Set());
     } catch (_err) {
       showError("Unable to load roster from server.");
+    } finally {
+      hasLoadedRef.current = true;
+      setIsLoading(false);
     }
   }, [ensureTeam, showError]);
 
@@ -490,14 +502,13 @@ const RosterScreen = ({
 
   return (
     <ScreenContainer keyboard padded={false}>
-      {/* Single scroll container. DraggablePlayerList's PanResponder drag
-          measures rows against a plain sibling View and freezes scrolling
-          while dragging, so the list must NOT be virtualized (see that
-          component) and this ScrollView stays the only scroller. */}
-      <ScrollView
+      {/* Single scroll container. Must be a Reanimated ScrollView: the
+          sortable roster list holds its animated ref and auto-scrolls it
+          when a dragged card nears the viewport edge. */}
+      <Animated.ScrollView
+        ref={scrollRef}
         style={styles.flex}
         contentContainerStyle={styles.content}
-        scrollEnabled={!isDraggingPlayers}
         keyboardShouldPersistTaps="handled"
       >
         <ScreenHeader
@@ -517,10 +528,15 @@ const RosterScreen = ({
           }
         />
 
-        <View style={styles.metricsRow}>
-          <MetricTile label="Total players" value={roster.length} small />
-          <MetricTile label="Active" value={activeCount} small />
-        </View>
+        <LoadTransition
+          loading={isLoading}
+          skeleton={<SkeletonMetricRow count={2} height={67} />}
+        >
+          <View style={styles.metricsRow}>
+            <MetricTile label="Total players" value={roster.length} small />
+            <MetricTile label="Active" value={activeCount} small />
+          </View>
+        </LoadTransition>
 
         <Card padding="sm" style={styles.actionsCard}>
           <View style={styles.actionsRow}>
@@ -580,30 +596,35 @@ const RosterScreen = ({
           </AppText>
         ) : null}
 
-        {roster.length === 0 ? (
-          <EmptyState
-            icon="users"
-            title="No players yet"
-            body="Add players by hand or import an Excel roster."
-            action={{ label: "Add player", onPress: handleAddPlayer }}
-          />
-        ) : (
-          <DraggablePlayerList
-            players={roster}
-            expandedPlayers={expandedPlayers}
-            activeIds={activeIds}
-            isSaving={isSaving}
-            lineupSlots={lineupSlots}
-            onDragStateChange={setIsDraggingPlayers}
-            onReorderPlayers={handleReorderPlayers}
-            onToggleExpand={togglePlayer}
-            onToggleActive={handleToggleActive}
-            onUpdatePlayer={updatePlayer}
-            onRemovePlayer={removePlayer}
-            onSavePlayer={handleSavePlayer}
-          />
-        )}
-      </ScrollView>
+        <LoadTransition
+          loading={isLoading}
+          skeleton={<SkeletonListRows count={5} />}
+        >
+          {roster.length === 0 ? (
+            <EmptyState
+              icon="users"
+              title="No players yet"
+              body="Add players by hand or import an Excel roster."
+              action={{ label: "Add player", onPress: handleAddPlayer }}
+            />
+          ) : (
+            <DraggablePlayerList
+              players={roster}
+              expandedPlayers={expandedPlayers}
+              activeIds={activeIds}
+              isSaving={isSaving}
+              lineupSlots={lineupSlots}
+              scrollableRef={scrollRef}
+              onReorderPlayers={handleReorderPlayers}
+              onToggleExpand={togglePlayer}
+              onToggleActive={handleToggleActive}
+              onUpdatePlayer={updatePlayer}
+              onRemovePlayer={removePlayer}
+              onSavePlayer={handleSavePlayer}
+            />
+          )}
+        </LoadTransition>
+      </Animated.ScrollView>
     </ScreenContainer>
   );
 };
