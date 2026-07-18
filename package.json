@@ -10,7 +10,7 @@
     "web": "expo start --web",
     "build:ios": "eas build --platform ios --profile production --no-wait",
     "deploy:ios": "eas submit --platform ios --profile production",
-    "testflight": "./scripts/push-testflight.sh"
+    "testflight": "./scripts/deploy-testflight.sh"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",

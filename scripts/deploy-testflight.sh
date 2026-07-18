@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# push-testflight — build the iOS production app, ship it to TestFlight, and
+# deploy-testflight — build the iOS production app, ship it to TestFlight, and
 # keep your git repos in sync.
 #
 # Under the hood it:
@@ -11,8 +11,8 @@
 #   3. commits + pushes the buildNumber bump that step 2 wrote into app.json
 #
 # Usage:
-#   ./scripts/push-testflight.sh                    # default commit message
-#   ./scripts/push-testflight.sh "fix lineup bug"   # custom commit message
+#   ./scripts/deploy-testflight.sh                    # default commit message
+#   ./scripts/deploy-testflight.sh "fix lineup bug"   # custom commit message
 #
 set -euo pipefail
 
