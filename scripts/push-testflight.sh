@@ -1,37 +1,56 @@
 #!/usr/bin/env bash
 #
-# push-testflight — build the iOS production app and ship it to TestFlight.
+# push-testflight — build the iOS production app, ship it to TestFlight, and
+# keep your git repos in sync.
 #
 # Under the hood it:
-#   1. commits any uncommitted changes (so the build is reproducible)
-#   2. runs `eas build --profile production` which auto-increments the
-#      iOS buildNumber, then auto-submits the finished build to TestFlight
+#   1. commits + pushes any pending changes in the mobile AND backend repos
+#      (so your work is backed up to GitHub before the long build starts)
+#   2. runs `eas build --profile production` which auto-increments the iOS
+#      buildNumber, then auto-submits the finished build to TestFlight
+#   3. commits + pushes the buildNumber bump that step 2 wrote into app.json
 #
 # Usage:
-#   ./scripts/push-testflight.sh                 # commits with a default message
-#   ./scripts/push-testflight.sh "fix lineup bug"  # custom commit message
+#   ./scripts/push-testflight.sh                    # default commit message
+#   ./scripts/push-testflight.sh "fix lineup bug"   # custom commit message
 #
 set -euo pipefail
 
-# Always operate from the mobile app root (the dir that holds this script's ../).
+# Resolve repo locations relative to this script (mobile/scripts/..).
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-APP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-cd "$APP_DIR"
+APP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"          # mobile repo
+BACKEND_DIR="$(cd "$APP_DIR/../backend" && pwd)"  # backend repo
 
 COMMIT_MSG="${1:-TestFlight build}"
 
-# 1. Commit anything pending so EAS builds the exact state you see locally.
-if [[ -n "$(git status --porcelain)" ]]; then
-  echo "▸ Committing pending changes: \"$COMMIT_MSG\""
-  git add -A
-  git commit -m "$COMMIT_MSG" >/dev/null
-else
-  echo "▸ Working tree clean — nothing to commit."
-fi
+# Commit any changes in a repo and push it to its remote.
+# Skips the commit if the tree is clean, but still pushes any unpushed commits.
+sync_repo() {
+  local dir="$1" label="$2" msg="${3:-$COMMIT_MSG}"
+  ( cd "$dir"
+    if [[ -n "$(git status --porcelain)" ]]; then
+      echo "▸ [$label] committing changes: \"$msg\""
+      git add -A
+      git commit -m "$msg" >/dev/null
+    else
+      echo "▸ [$label] no changes to commit."
+    fi
+    local branch; branch="$(git branch --show-current)"
+    echo "▸ [$label] pushing $branch → origin"
+    git push origin "$branch"
+  )
+}
 
-# 2. Build + submit in one shot. autoIncrement (eas.json) bumps buildNumber;
-#    --auto-submit ships the finished binary to TestFlight (ascAppId is in eas.json).
-echo "▸ Building iOS production and submitting to TestFlight…"
-npx eas build --platform ios --profile production --auto-submit --non-interactive
+# 1. Back up current work to GitHub before the long build.
+sync_repo "$BACKEND_DIR" "backend"
+sync_repo "$APP_DIR"     "mobile"
 
-echo "✅ Done. Apple will process the binary (~5–10 min), then it appears in TestFlight."
+# 2. Build + submit. autoIncrement (eas.json) bumps app.json's buildNumber;
+#    --auto-submit ships the finished binary to TestFlight (ascAppId in eas.json).
+echo "▸ [mobile] building iOS production and submitting to TestFlight…"
+( cd "$APP_DIR" && npx eas build --platform ios --profile production --auto-submit --non-interactive )
+
+# 3. Commit + push the buildNumber bump that the build wrote into app.json.
+sync_repo "$APP_DIR" "mobile" "Bump iOS buildNumber for TestFlight"
+
+echo "✅ Done. Repos pushed, and Apple will process the binary (~5–10 min) before it appears in TestFlight."
