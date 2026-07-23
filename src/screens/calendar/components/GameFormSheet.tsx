@@ -24,8 +24,13 @@ import {
 } from "../../../utils/calendarDates";
 import { GameFormState } from "../hooks/useGameForm";
 
-const HOME_AWAY_OPTIONS = ["home", "away", "neutral"] as const;
+const HOME_AWAY_OPTIONS = ["home", "away"] as const;
 const STATUS_OPTIONS = ["scheduled", "completed", "postponed", "cancelled"] as const;
+
+// The option values are the lowercase backend enums; only the visible label is
+// capitalized.
+const capitalize = (value: string) =>
+  value.charAt(0).toUpperCase() + value.slice(1);
 
 type Props = {
   visible: boolean;
@@ -212,7 +217,7 @@ const GameFormSheet = ({
               {HOME_AWAY_OPTIONS.map((value) => (
                 <Chip
                   key={value}
-                  label={value}
+                  label={capitalize(value)}
                   selected={form.homeAway === value}
                   onPress={() =>
                     setForm((prev) => ({
@@ -233,7 +238,7 @@ const GameFormSheet = ({
               {STATUS_OPTIONS.map((value) => (
                 <Chip
                   key={value}
-                  label={value}
+                  label={capitalize(value)}
                   selected={form.status === value}
                   onPress={() =>
                     setForm((prev) => ({
@@ -275,7 +280,11 @@ const GameFormSheet = ({
               icon={form.isLeagueGame ? "check" : undefined}
               selected={form.isLeagueGame}
               onPress={() =>
-                setForm((prev) => ({ ...prev, isLeagueGame: !prev.isLeagueGame }))
+                setForm((prev) => ({
+                  ...prev,
+                  isLeagueGame: !prev.isLeagueGame,
+                  isPlayoff: false,
+                }))
               }
             />
             <Chip
@@ -283,7 +292,11 @@ const GameFormSheet = ({
               icon={form.isPlayoff ? "check" : undefined}
               selected={form.isPlayoff}
               onPress={() =>
-                setForm((prev) => ({ ...prev, isPlayoff: !prev.isPlayoff }))
+                setForm((prev) => ({
+                  ...prev,
+                  isPlayoff: !prev.isPlayoff,
+                  isLeagueGame: false,
+                }))
               }
             />
           </View>

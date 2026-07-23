@@ -36,14 +36,12 @@ import {
 
 type Props = {
   session: BackendSession;
-  onBack: () => void;
-  onOpenProfile: () => void;
 };
 
 const capitalize = (value: string) =>
   value.charAt(0).toUpperCase() + value.slice(1);
 
-const RulesScreen = ({ session, onBack, onOpenProfile }: Props) => {
+const RulesScreen = ({ session }: Props) => {
   const toast = useToast();
   const [teamId, setTeamId] = useState<string | null>(null);
   const [rulesConfig, setRulesConfig] = useState<TeamRulesConfig>(
@@ -190,18 +188,6 @@ const RulesScreen = ({ session, onBack, onOpenProfile }: Props) => {
       <ScreenHeader
         title="Lineup Rules"
         subtitle="Set defaults once. Use Advanced only when needed."
-        onBack={onBack}
-        right={
-          <AppPressable
-            onPress={onOpenProfile}
-            accessibilityRole="button"
-            accessibilityLabel="Open profile"
-            style={styles.iconButton}
-            hitSlop={8}
-          >
-            <Feather name="user" size={18} color={theme.text.primary} />
-          </AppPressable>
-        }
       />
 
       <LoadTransition
@@ -457,16 +443,6 @@ const styles = StyleSheet.create({
   // transition view doesn't change spacing.
   loadedStack: {
     gap: space.sm,
-  },
-  iconButton: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: theme.border.base,
-    backgroundColor: theme.bg.raised,
-    alignItems: "center",
-    justifyContent: "center",
   },
   metricsRow: {
     flexDirection: "row",

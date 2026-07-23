@@ -12,7 +12,6 @@ import * as DocumentPicker from "expo-document-picker";
 import * as XLSX from "xlsx";
 import DraggablePlayerList from "../components/DraggablePlayerList";
 import {
-  AppPressable,
   AppText,
   Button,
   Card,
@@ -25,11 +24,10 @@ import {
   SkeletonMetricRow,
   useToast,
 } from "../components/ui";
-import { Feather } from "../icons";
 import { backendClient } from "../lib/backend/client";
 import { BackendSession } from "../lib/backend/types";
 import { theme } from "../theme/colors";
-import { radius, space } from "../theme/tokens";
+import { space } from "../theme/tokens";
 import { Player } from "../types/lineup";
 import { defaultTeamRulesConfig, parseTeamRulesConfig } from "../types/rules";
 import { buildPlayersFromRows, createPlayer } from "../utils/lineupGenerator";
@@ -49,8 +47,6 @@ const FileSystem = require("expo-file-system/legacy") as {
 
 type Props = {
   session: BackendSession;
-  onBack: () => void;
-  onOpenProfile: () => void;
   onOpenLineupPage: () => void;
   hasProSubscription: boolean;
   onRequirePro: (featureLabel: string) => void;
@@ -58,8 +54,6 @@ type Props = {
 
 const RosterScreen = ({
   session,
-  onBack,
-  onOpenProfile,
   onOpenLineupPage,
   hasProSubscription,
   onRequirePro,
@@ -514,18 +508,6 @@ const RosterScreen = ({
         <ScreenHeader
           title="Roster Builder"
           subtitle="Manage players and keep your game-day list ready."
-          onBack={onBack}
-          right={
-            <AppPressable
-              onPress={onOpenProfile}
-              accessibilityRole="button"
-              accessibilityLabel="Open profile"
-              style={styles.iconButton}
-              hitSlop={8}
-            >
-              <Feather name="user" size={18} color={theme.text.primary} />
-            </AppPressable>
-          }
         />
 
         <LoadTransition
@@ -637,16 +619,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.md,
     paddingBottom: space.lg,
     gap: space.sm,
-  },
-  iconButton: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: theme.border.base,
-    backgroundColor: theme.bg.raised,
-    alignItems: "center",
-    justifyContent: "center",
   },
   metricsRow: {
     flexDirection: "row",

@@ -37,8 +37,6 @@ import { lockOrientation, ORIENTATION_LOCK_LANDSCAPE } from "./orientation";
 
 type Props = {
   session: BackendSession;
-  onBack: () => void;
-  onOpenProfile: () => void;
   onOpenRoster: () => void;
   hasProSubscription: boolean;
   onRequirePro: (featureLabel: string) => void;
@@ -49,8 +47,6 @@ type Props = {
 
 const LineupScreen = ({
   session,
-  onBack,
-  onOpenProfile,
   onOpenRoster,
   hasProSubscription,
   onRequirePro,
@@ -353,25 +349,11 @@ const LineupScreen = ({
       ? selectedHistoryRows
       : lineup;
 
-  const profileButton = (
-    <AppPressable
-      onPress={onOpenProfile}
-      accessibilityRole="button"
-      accessibilityLabel="Open profile"
-      style={styles.iconButton}
-      hitSlop={8}
-    >
-      <Feather name="user" size={18} color={theme.text.primary} />
-    </AppPressable>
-  );
-
   const header = (
     <View style={styles.headerBlock}>
       <ScreenHeader
         title="Line Ups"
         subtitle={activeTab === "build" ? "Generate Lineup" : "Lineup History"}
-        onBack={onBack}
-        right={profileButton}
       />
       <View style={styles.tabRow} accessibilityRole="tablist">
         <AppPressable
@@ -515,6 +497,7 @@ const LineupScreen = ({
           editable={lineupInlineEditMode}
           isSaving={isSavingVersion}
           exportBusy={isExporting}
+          error={error}
           playerGenderByName={playerGenderByName}
           onExport={(format) => {
             if (!hasProSubscription) {
@@ -653,16 +636,6 @@ const styles = StyleSheet.create({
   },
   headerBlock: {
     gap: space.sm,
-  },
-  iconButton: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: theme.border.base,
-    backgroundColor: theme.bg.raised,
-    alignItems: "center",
-    justifyContent: "center",
   },
   tabRow: {
     flexDirection: "row",

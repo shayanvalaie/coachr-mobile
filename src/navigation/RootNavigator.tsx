@@ -47,7 +47,7 @@ const RootNavigator = () => {
             }}
           >
             {({ navigation }) => (
-              <SubscriptionScreen onBack={() => navigation.goBack()} />
+              <SubscriptionScreen onClose={() => navigation.goBack()} />
             )}
           </RootStack.Screen>
         </>

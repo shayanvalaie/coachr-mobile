@@ -341,7 +341,8 @@ const mapGame = (raw: any): BackendGame => ({
   opponentName: raw.opponentName ?? "",
   scheduledAt: raw.scheduledAt ?? new Date().toISOString(),
   location: raw.location ?? "",
-  homeAway: raw.homeAway ?? "home",
+  // Legacy games may still hold "neutral"; fold anything non-away into home.
+  homeAway: raw.homeAway === "away" ? "away" : "home",
   status: raw.status ?? "scheduled",
   ourScore:
     typeof raw.ourScore === "number" && Number.isFinite(raw.ourScore)

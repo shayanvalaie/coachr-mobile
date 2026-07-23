@@ -6,27 +6,26 @@ import { radius, space } from "../theme/tokens";
 import { AppPressable, AppText } from "./ui";
 
 type Props = {
-  onUserPress?: () => void;
   onMenuPress?: () => void;
   onInfoPress?: () => void;
   showMenu?: boolean;
 };
 
-const Header = ({ onUserPress, onMenuPress, onInfoPress, showMenu = true }: Props) => (
+const Header = ({ onMenuPress, onInfoPress, showMenu = true }: Props) => (
   <View style={styles.container}>
-    {showMenu ? (
-      <AppPressable
-        style={styles.iconButton}
-        onPress={onMenuPress}
-        accessibilityRole="button"
-        accessibilityLabel="Open menu"
-        hitSlop={8}
-      >
-        <Feather name="menu" size={20} color={theme.text.primary} />
-      </AppPressable>
-    ) : (
-      <View style={styles.iconSpacer} />
-    )}
+    <View style={styles.sideGroup}>
+      {showMenu ? (
+        <AppPressable
+          style={styles.iconButton}
+          onPress={onMenuPress}
+          accessibilityRole="button"
+          accessibilityLabel="Open menu"
+          hitSlop={8}
+        >
+          <Feather name="menu" size={20} color={theme.text.primary} />
+        </AppPressable>
+      ) : null}
+    </View>
 
     <View style={styles.titleWrap}>
       <AppText variant="caption" color="secondary" style={styles.eyebrow}>
@@ -37,7 +36,7 @@ const Header = ({ onUserPress, onMenuPress, onInfoPress, showMenu = true }: Prop
       </AppText>
     </View>
 
-    <View style={styles.rightGroup}>
+    <View style={[styles.sideGroup, styles.rightGroup]}>
       {onInfoPress ? (
         <AppPressable
           style={styles.iconButton}
@@ -49,16 +48,6 @@ const Header = ({ onUserPress, onMenuPress, onInfoPress, showMenu = true }: Prop
           <Feather name="info" size={20} color={theme.text.primary} />
         </AppPressable>
       ) : null}
-
-      <AppPressable
-        style={styles.iconButton}
-        onPress={onUserPress}
-        accessibilityRole="button"
-        accessibilityLabel="User menu"
-        hitSlop={8}
-      >
-        <Feather name="user" size={20} color={theme.text.primary} />
-      </AppPressable>
     </View>
   </View>
 );
@@ -79,12 +68,17 @@ const styles = StyleSheet.create({
   titleWrap: {
     alignItems: "center",
     gap: 1,
-    flex: 1,
   },
-  rightGroup: {
+  // Both side slots share the leftover width equally so the title stays
+  // truly centered even when one side holds more buttons than the other.
+  sideGroup: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     gap: space.xs,
+  },
+  rightGroup: {
+    justifyContent: "flex-end",
   },
   eyebrow: {
     textTransform: "uppercase",
@@ -102,9 +96,5 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderWidth: 1,
     borderColor: theme.border.base,
-  },
-  iconSpacer: {
-    width: 42,
-    height: 42,
   },
 });

@@ -2,6 +2,7 @@ import React from "react";
 import { Linking, Pressable, StyleSheet, View } from "react-native";
 import { useSubscription, IAP_SKUS } from "../lib/iap";
 import {
+  AppPressable,
   AppText,
   Button,
   Card,
@@ -16,7 +17,7 @@ import { theme } from "../theme/colors";
 import { radius, space } from "../theme/tokens";
 
 type Props = {
-  onBack: () => void;
+  onClose: () => void;
 };
 
 const BENEFITS = [
@@ -33,7 +34,7 @@ const BENEFITS = [
 const TERMS_URL = "https://coachrapp.io/terms";
 const PRIVACY_URL = "https://coachrapp.io/privacy";
 
-const SubscriptionScreen = ({ onBack }: Props) => {
+const SubscriptionScreen = ({ onClose }: Props) => {
   const { isPro, activeSku, products, loading, purchase, restore } =
     useSubscription();
   const isDevUnlocked = __DEV__ && isPro && !activeSku;
@@ -48,7 +49,23 @@ const SubscriptionScreen = ({ onBack }: Props) => {
 
   return (
     <ScreenContainer scroll contentStyle={styles.content}>
-      <ScreenHeader title="Coachr Pro" subtitle="Upgrade" onBack={onBack} />
+      {/* The paywall is a full-screen modal with no swipe-to-dismiss, so the
+          close button is the only way out (required by App Store review). */}
+      <ScreenHeader
+        title="Coachr Pro"
+        subtitle="Upgrade"
+        right={
+          <AppPressable
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+            style={styles.closeButton}
+            hitSlop={8}
+          >
+            <Feather name="x" size={18} color={theme.text.primary} />
+          </AppPressable>
+        }
+      />
 
       {isPro ? (
         <Card style={styles.activeCard}>
@@ -245,6 +262,16 @@ export default SubscriptionScreen;
 const styles = StyleSheet.create({
   content: {
     gap: space.sm,
+  },
+  closeButton: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: theme.border.base,
+    backgroundColor: theme.bg.raised,
+    alignItems: "center",
+    justifyContent: "center",
   },
   cardInner: {
     gap: space.xs,

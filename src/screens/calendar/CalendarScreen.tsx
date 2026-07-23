@@ -32,8 +32,6 @@ import { useLineupCarousel } from "./hooks/useLineupCarousel";
 
 type Props = {
   session: BackendSession;
-  onBack: () => void;
-  onOpenProfile: () => void;
   onOpenLineupPage: (request: LineupLaunchRequestInput) => void;
   hasProSubscription: boolean;
   onRequirePro: (featureLabel: string) => void;
@@ -43,8 +41,6 @@ type Props = {
 // wires the data/form/carousel hooks into the grid, agenda, and sheets.
 const CalendarScreen = ({
   session,
-  onBack,
-  onOpenProfile,
   onOpenLineupPage,
   hasProSubscription,
   onRequirePro,
@@ -143,18 +139,6 @@ const CalendarScreen = ({
     [carousel, hasProSubscription, onRequirePro],
   );
 
-  const profileButton = (
-    <AppPressable
-      onPress={onOpenProfile}
-      accessibilityRole="button"
-      accessibilityLabel="Open profile"
-      style={styles.iconButton}
-      hitSlop={8}
-    >
-      <Feather name="user" size={18} color={theme.text.primary} />
-    </AppPressable>
-  );
-
   const addGameButton = (
     <AppPressable
       onPress={() => gameForm.openCreateForDate(selectedDateKey)}
@@ -169,12 +153,7 @@ const CalendarScreen = ({
 
   return (
     <ScreenContainer scroll contentStyle={styles.content}>
-      <ScreenHeader
-        title="Calendar"
-        subtitle="Calendar Workspace"
-        onBack={onBack}
-        right={profileButton}
-      />
+      <ScreenHeader title="Calendar" subtitle="Calendar Workspace" />
 
       <Card variant="elevated">
         <View style={styles.cardInner}>

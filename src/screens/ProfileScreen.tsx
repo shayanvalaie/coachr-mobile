@@ -17,11 +17,10 @@ import { space } from "../theme/tokens";
 
 type Props = {
   session: BackendSession;
-  onClose: () => void;
   onOpenSubscribe: () => void;
 };
 
-const ProfileScreen = ({ session, onClose, onOpenSubscribe }: Props) => {
+const ProfileScreen = ({ session, onOpenSubscribe }: Props) => {
   const email = session.user.email;
   const {
     isPro,
@@ -51,7 +50,7 @@ const ProfileScreen = ({ session, onClose, onOpenSubscribe }: Props) => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScreenContainer scroll contentStyle={styles.content}>
-        <ScreenHeader title="Profile" onBack={onClose} />
+        <ScreenHeader title="Profile" />
 
         <Card variant="elevated">
           <AppText

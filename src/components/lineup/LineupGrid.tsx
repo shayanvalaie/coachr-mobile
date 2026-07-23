@@ -37,6 +37,13 @@ const DEFAULT_ROW_HEIGHT = 44;
 // Vertical offset from a cell's row top to where its dropdown opens —
 // just under the cell, mirroring the old inline `top: 36` placement.
 const DROPDOWN_ROW_OFFSET = 36;
+// Metrics used to estimate the dropdown's rendered height so it can flip above
+// the cell when opening below would overflow the table. Keep these in sync with
+// the `cellDropdownOption` minHeight, `cellDropdownScroll` maxHeight, and
+// `cellDropdown` paddingVertical styles below.
+const DROPDOWN_OPTION_HEIGHT = 24;
+const DROPDOWN_MAX_SCROLL_HEIGHT = 130;
+const DROPDOWN_VERTICAL_PADDING = 8;
 
 // Off-palette rose used to tint grid rows for female players. Kept as a local
 // constant (not a semantic token): the tint is unique to the lineup grid
@@ -334,6 +341,23 @@ const LineupGrid = ({
       ? (openInning.cells.get(openCell.playerName) ?? EMPTY_MARKER)
       : EMPTY_MARKER;
 
+  // The dropdown opens below its cell by default, but for rows near the bottom
+  // of the grid that overflows past the table content (which the edit overlay
+  // clips and can't scroll to). Estimate the dropdown height and flip it above
+  // the cell whenever opening below would run past the content bottom.
+  const dropdownHeight =
+    Math.min(
+      dropdownOptions.length * DROPDOWN_OPTION_HEIGHT,
+      DROPDOWN_MAX_SCROLL_HEIGHT,
+    ) + DROPDOWN_VERTICAL_PADDING;
+  const cellRowTop = headerHeight + openRowIndex * rowHeight;
+  const contentHeight = headerHeight + players.length * rowHeight;
+  const dropdownBelowTop = cellRowTop + DROPDOWN_ROW_OFFSET;
+  const flipDropdownUp = dropdownBelowTop + dropdownHeight > contentHeight;
+  const dropdownTop = flipDropdownUp
+    ? Math.max(cellRowTop + rowHeight - DROPDOWN_ROW_OFFSET - dropdownHeight, 0)
+    : dropdownBelowTop;
+
   return (
     <View
       style={[styles.lineupContainer, isEditModal && styles.lineupContainerModal]}
@@ -402,10 +426,7 @@ const LineupGrid = ({
                 styles.cellDropdown,
                 {
                   left: playerCellWidth + openInningIndex * inningCellWidth,
-                  top:
-                    headerHeight +
-                    openRowIndex * rowHeight +
-                    DROPDOWN_ROW_OFFSET,
+                  top: dropdownTop,
                 },
               ]}
             >

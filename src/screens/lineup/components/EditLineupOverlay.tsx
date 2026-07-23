@@ -1,13 +1,10 @@
 import { useCallback, useRef, useState } from "react";
-import {
-  LayoutAnimation,
-  Pressable,
-  StyleSheet,
-  View,
-} from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import Animated, {
+  FadeIn,
   FadeInDown,
   FadeOut,
+  LinearTransition,
   useAnimatedRef,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -26,6 +23,7 @@ type Props = {
   editable: boolean;
   isSaving: boolean;
   exportBusy: boolean;
+  error: string | null;
   playerGenderByName?: Record<string, Player["gender"]>;
   onExport: (format: "xlsx" | "pdf") => void;
   onSavePress: () => void;
@@ -56,6 +54,7 @@ const EditLineupOverlay = ({
   editable,
   isSaving,
   exportBusy,
+  error,
   playerGenderByName,
   onExport,
   onSavePress,
@@ -90,10 +89,16 @@ const EditLineupOverlay = ({
   }, [exportMenuPos]);
 
   const toggleFullscreen = useCallback(() => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    // Resizing is animated by the reanimated `layout` transitions on the
+    // header/body below. LayoutAnimation is unreliable (flickers) on the New
+    // Architecture, so it is intentionally not used here.
     setExportMenuPos(null);
     setIsFullscreen((prev) => !prev);
   }, []);
+
+  // Shared timing so the fullscreen resize and the error banner reflow move
+  // together. Kept short so the editor feels responsive.
+  const layoutTransition = LinearTransition.duration(240);
 
   const handleExport = useCallback(
     (format: "xlsx" | "pdf") => {
@@ -123,24 +128,36 @@ const EditLineupOverlay = ({
         ]}
       >
         {!isFullscreen && (
-          <View style={styles.header}>
-            <AppText
-              variant="display"
-              family="display"
-              numberOfLines={1}
-              style={styles.title}
-            >
-              {title}
-            </AppText>
+          <Animated.View
+            entering={FadeIn.duration(180)}
+            exiting={FadeOut.duration(140)}
+            layout={layoutTransition}
+            style={styles.header}
+          >
+            <View style={styles.titleGroup}>
+              <AppPressable
+                style={styles.iconButton}
+                onPress={toggleFullscreen}
+                accessibilityRole="button"
+                accessibilityLabel="Expand lineup to full screen"
+                hitSlop={4}
+              >
+                <Feather
+                  name="maximize-2"
+                  size={16}
+                  color={theme.text.primary}
+                />
+              </AppPressable>
+              <AppText
+                variant="display"
+                family="display"
+                numberOfLines={1}
+                style={styles.title}
+              >
+                {title}
+              </AppText>
+            </View>
             <View style={styles.actions}>
-              <Button
-                label="Save"
-                variant="secondary"
-                size="sm"
-                onPress={onSavePress}
-                loading={isSaving}
-                accessibilityLabel="Save lineup"
-              />
               {isHistoryEdit && (
                 <View ref={exportButtonRef} collapsable={false}>
                   <Button
@@ -156,30 +173,42 @@ const EditLineupOverlay = ({
               )}
               <Button
                 label={isHistoryEdit ? "Cancel" : "Done"}
+                variant="secondary"
                 size="sm"
                 onPress={isHistoryEdit ? onClose : onDone}
                 accessibilityLabel={
                   isHistoryEdit ? "Cancel editing lineup" : "Done editing lineup"
                 }
               />
-              <AppPressable
-                style={styles.iconButton}
-                onPress={toggleFullscreen}
-                accessibilityRole="button"
-                accessibilityLabel="Expand lineup to full screen"
-                hitSlop={4}
-              >
-                <Feather
-                  name="maximize-2"
-                  size={16}
-                  color={theme.text.primary}
-                />
-              </AppPressable>
+              <Button
+                label="Save"
+                size="sm"
+                onPress={onSavePress}
+                loading={isSaving}
+                accessibilityLabel="Save lineup"
+              />
             </View>
-          </View>
+          </Animated.View>
         )}
 
-        <View style={styles.bodyWrap}>
+        {error ? (
+          <Animated.View
+            entering={FadeIn.duration(180)}
+            exiting={FadeOut.duration(140)}
+            style={styles.errorBanner}
+          >
+            <Feather
+              name="alert-triangle"
+              size={14}
+              color={theme.danger.base}
+            />
+            <AppText variant="caption" color="danger" style={styles.errorText}>
+              {error}
+            </AppText>
+          </Animated.View>
+        ) : null}
+
+        <Animated.View layout={layoutTransition} style={styles.bodyWrap}>
           <Animated.ScrollView
             ref={gridScrollRef}
             style={styles.body}
@@ -219,7 +248,7 @@ const EditLineupOverlay = ({
               <Feather name="minimize-2" size={16} color={theme.text.primary} />
             </AppPressable>
           )}
-        </View>
+        </Animated.View>
       </View>
 
       {exportMenuPos && (
@@ -293,16 +322,24 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     justifyContent: "space-between",
     gap: space.sm,
+  },
+  // Groups the view-mode toggle with the title, keeping it clear of the
+  // Save/Cancel actions so the expand button can't be mistapped for Cancel.
+  titleGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.sm,
+    flexShrink: 1,
   },
   title: {
     flexShrink: 1,
   },
   actions: {
     flexDirection: "row",
-    gap: space.xs,
+    gap: space.sm,
     alignItems: "center",
   },
   iconButton: {
@@ -314,6 +351,20 @@ const styles = StyleSheet.create({
     backgroundColor: theme.bg.raised,
     alignItems: "center",
     justifyContent: "center",
+  },
+  errorBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: space.xs,
+    paddingVertical: space.xs,
+    paddingHorizontal: space.sm,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: withAlpha(theme.danger.base, 0.4),
+    backgroundColor: withAlpha(theme.danger.base, 0.12),
+  },
+  errorText: {
+    flex: 1,
   },
   bodyWrap: {
     flex: 1,

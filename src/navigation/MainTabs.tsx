@@ -89,7 +89,6 @@ const HomeStackNavigator = ({ session }: SessionProps) => {
         {({ navigation }) => (
           <HomeScreen
             session={session}
-            onOpenProfile={() => navigation.navigate("ProfileTab")}
             onOpenRulesPage={() => navigation.navigate("Rules")}
             onOpenRosterPage={() => navigation.navigate("RosterTab")}
             onOpenLineupPage={() =>
@@ -115,8 +114,6 @@ const HomeStackNavigator = ({ session }: SessionProps) => {
         {({ navigation }) => (
           <RulesScreen
             session={session}
-            onBack={() => navigation.goBack()}
-            onOpenProfile={() => navigation.navigate("ProfileTab")}
           />
         )}
       </HomeStack.Screen>
@@ -124,8 +121,6 @@ const HomeStackNavigator = ({ session }: SessionProps) => {
         {({ navigation }) => (
           <AllLineupsScreen
             session={session}
-            onBack={() => navigation.goBack()}
-            onOpenProfile={() => navigation.navigate("ProfileTab")}
             onGenerateLineup={() =>
               navigation.navigate("LineupTab", {
                 launch: buildLaunchRequest({
@@ -162,8 +157,6 @@ const MainTabs = ({ session }: SessionProps) => {
         {({ navigation }) => (
           <RosterScreen
             session={session}
-            onBack={() => navigation.navigate("HomeTab")}
-            onOpenProfile={() => navigation.navigate("ProfileTab")}
             onOpenLineupPage={() =>
               navigation.navigate("LineupTab", {
                 launch: buildLaunchRequest({
@@ -181,8 +174,6 @@ const MainTabs = ({ session }: SessionProps) => {
         {({ navigation, route }) => (
           <LineupScreen
             session={session}
-            onBack={() => navigation.navigate("HomeTab")}
-            onOpenProfile={() => navigation.navigate("ProfileTab")}
             onOpenRoster={() => navigation.navigate("RosterTab")}
             launchRequest={route.params?.launch ?? null}
             hasProSubscription={proGate.isPro}
@@ -212,8 +203,6 @@ const MainTabs = ({ session }: SessionProps) => {
         {({ navigation }) => (
           <CalendarScreen
             session={session}
-            onBack={() => navigation.navigate("HomeTab")}
-            onOpenProfile={() => navigation.navigate("ProfileTab")}
             onOpenLineupPage={(request?: LineupLaunchRequestInput) => {
               navigation.navigate("LineupTab", {
                 launch: request ? buildLaunchRequest(request) : undefined,
@@ -228,7 +217,6 @@ const MainTabs = ({ session }: SessionProps) => {
         {({ navigation }) => (
           <ProfileScreen
             session={session}
-            onClose={() => navigation.navigate("HomeTab")}
             onOpenSubscribe={() => navigation.navigate("Subscribe")}
           />
         )}

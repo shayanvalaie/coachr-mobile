@@ -29,7 +29,6 @@ import {
 
 type Props = {
   session: BackendSession;
-  onOpenProfile: () => void;
   onOpenRulesPage: () => void;
   onOpenRosterPage: () => void;
   onOpenLineupPage: () => void;
@@ -70,7 +69,6 @@ const formatNextGameLabel = (games: BackendGame[]): string => {
 
 const HomeScreen = ({
   session,
-  onOpenProfile,
   onOpenRulesPage,
   onOpenRosterPage,
   onOpenLineupPage,
@@ -201,7 +199,6 @@ const HomeScreen = ({
     <>
       <View style={styles.screen}>
         <Header
-          onUserPress={onOpenProfile}
           onInfoPress={() => tourRef.current?.start()}
           showMenu={false}
         />

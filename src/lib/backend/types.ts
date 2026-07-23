@@ -122,7 +122,7 @@ export type BackendGame = {
   opponentName: string;
   scheduledAt: string;
   location: string;
-  homeAway: "home" | "away" | "neutral";
+  homeAway: "home" | "away";
   status: "scheduled" | "completed" | "cancelled" | "postponed";
   ourScore: number | null;
   opponentScore: number | null;

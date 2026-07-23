@@ -12,6 +12,7 @@ import {
   BackendGame,
   BackendLineupVersionDetail,
 } from "../../../lib/backend/types";
+import { hasHttpStatus, toError } from "../../../lib/backend/utils";
 import { InningAssignment } from "../../../types/lineup";
 import { parseTeamRulesConfig, TeamRulesConfig } from "../../../types/rules";
 import {
@@ -348,26 +349,55 @@ export const useLineupEditor = ({
 
         await loadLineupHistory(team, effectiveGameId);
         setLineupParentVersionId(saved.id);
-        if (selectedHistoryDetail) {
-          setSelectedHistoryDetail((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  ...saved,
-                  rows: toLineupRowsPayload(rowsToSave),
-                  output: prev.output ?? {},
-                }
-              : prev,
-          );
-        }
         setSaveLineupName("");
-        setSaveModalVisible(false);
-        if (selectedHistoryDetail) {
-          setHistoryEditRows(cloneLineupRows(rowsToSave));
-          setActiveTab("history");
+        if (editModalVisible) {
+          // Saving from the landscape editor is a completion point: close the
+          // full-screen overlay and return to portrait instead of leaving the
+          // coach in the wide editor.
+          dismissEditModal();
+          if (isHistoryEdit) {
+            setActiveTab("history");
+          }
+        } else {
+          setSaveModalVisible(false);
+          if (selectedHistoryDetail) {
+            setSelectedHistoryDetail((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    ...saved,
+                    rows: toLineupRowsPayload(rowsToSave),
+                    output: prev.output ?? {},
+                  }
+                : prev,
+            );
+            setHistoryEditRows(cloneLineupRows(rowsToSave));
+            setActiveTab("history");
+          }
         }
         setStatus(`Saved ${saved.lineupName || `v${saved.versionNumber}`}.`);
       } catch (err) {
+        // A 409 duplicate means an identical lineup is already in history for
+        // this game context — there's nothing more to save, so treat it as a
+        // completion: close the landscape editor (if open) and report it as
+        // already saved rather than surfacing a blocking error.
+        if (
+          hasHttpStatus(err, 409) &&
+          /already exists/i.test(toError(err).message)
+        ) {
+          setSaveLineupName("");
+          setError(null);
+          if (editModalVisible) {
+            dismissEditModal();
+            if (isHistoryEdit) {
+              setActiveTab("history");
+            }
+          } else {
+            setSaveModalVisible(false);
+          }
+          setStatus("This lineup is already saved in history.");
+          return;
+        }
         const message =
           err instanceof Error && err.message.trim().length > 0
             ? err.message
@@ -388,6 +418,8 @@ export const useLineupEditor = ({
       }
     },
     [
+      dismissEditModal,
+      editModalVisible,
       ensureTeam,
       games,
       historyEditRows,

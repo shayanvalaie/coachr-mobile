@@ -45,8 +45,6 @@ const FileSystem = require("expo-file-system/legacy") as {
 
 type Props = {
   session: BackendSession;
-  onBack: () => void;
-  onOpenProfile: () => void;
   onGenerateLineup: () => void;
   hasProSubscription: boolean;
   onRequirePro: (featureLabel: string) => void;
@@ -113,8 +111,6 @@ const normalizeLineupRows = (
 
 const AllLineupsScreen = ({
   session,
-  onBack,
-  onOpenProfile,
   onGenerateLineup,
   hasProSubscription,
   onRequirePro,
@@ -246,26 +242,10 @@ const AllLineupsScreen = ({
     [ensureTeam],
   );
 
-  const handleBack = useCallback(() => {
-    if (selectedDetail) {
-      setSelectedDetail(null);
-      setStatus("");
-      return;
-    }
-    onBack();
-  }, [onBack, selectedDetail]);
-
-  const profileButton = (
-    <AppPressable
-      onPress={onOpenProfile}
-      accessibilityRole="button"
-      accessibilityLabel="Open profile"
-      style={styles.iconButton}
-      hitSlop={8}
-    >
-      <Feather name="user" size={18} color={theme.text.primary} />
-    </AppPressable>
-  );
+  const closeDetail = useCallback(() => {
+    setSelectedDetail(null);
+    setStatus("");
+  }, []);
 
   const renderVersionRow = useCallback(
     ({ item: version }: { item: BackendLineupVersionSummary }) => {
@@ -311,8 +291,17 @@ const AllLineupsScreen = ({
         <ScreenHeader
           title="Lineup Detail"
           subtitle="Saved Lineup"
-          onBack={handleBack}
-          right={profileButton}
+          right={
+            <AppPressable
+              onPress={closeDetail}
+              accessibilityRole="button"
+              accessibilityLabel="Close lineup detail"
+              style={styles.iconButton}
+              hitSlop={8}
+            >
+              <Feather name="x" size={18} color={theme.text.primary} />
+            </AppPressable>
+          }
         />
 
         <Card variant="elevated">
@@ -408,12 +397,7 @@ const AllLineupsScreen = ({
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={
           <View style={styles.listHeader}>
-            <ScreenHeader
-              title="All Lineups"
-              subtitle="Lineup History"
-              onBack={handleBack}
-              right={profileButton}
-            />
+            <ScreenHeader title="All Lineups" subtitle="Lineup History" />
 
             <Card variant="elevated">
               <View style={styles.cardInner}>
