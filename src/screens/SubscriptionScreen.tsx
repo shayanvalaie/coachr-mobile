@@ -1,6 +1,11 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Linking, Pressable, StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSubscription, IAP_SKUS } from "../lib/iap";
+import {
+  lockOrientation,
+  ORIENTATION_LOCK_PORTRAIT_UP,
+} from "./lineup/orientation";
 import {
   AppPressable,
   AppText,
@@ -37,6 +42,16 @@ const PRIVACY_URL = "https://coachrapp.io/privacy";
 const SubscriptionScreen = ({ onClose }: Props) => {
   const { isPro, activeSku, products, loading, purchase, restore } =
     useSubscription();
+  // This paywall is presented as a native fullScreenModal, which escapes the
+  // app-level SafeAreaView that pads the rest of the app. Apply the top inset
+  // here so the header/close button clears the dynamic island and notch.
+  const insets = useSafeAreaInsets();
+  // The paywall can be opened from the landscape lineup editor, which holds a
+  // landscape orientation lock; force portrait so the modal isn't sideways.
+  useEffect(() => {
+    void lockOrientation(ORIENTATION_LOCK_PORTRAIT_UP);
+  }, []);
+
   const isDevUnlocked = __DEV__ && isPro && !activeSku;
   const hasProducts = products.length > 0;
   // True only while the store products are first being fetched. Once products
@@ -48,7 +63,10 @@ const SubscriptionScreen = ({ onClose }: Props) => {
   const annual = products.find((p) => p.sku === IAP_SKUS.ANNUAL);
 
   return (
-    <ScreenContainer scroll contentStyle={styles.content}>
+    <ScreenContainer
+      scroll
+      contentStyle={[styles.content, { paddingTop: insets.top }]}
+    >
       {/* The paywall is a full-screen modal with no swipe-to-dismiss, so the
           close button is the only way out (required by App Store review). */}
       <ScreenHeader

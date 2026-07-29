@@ -21,12 +21,14 @@ type Props = {
   lineup: InningAssignment[] | null;
   expandedInnings: Set<number>;
   editable: boolean;
+  canUndo: boolean;
   isSaving: boolean;
   exportBusy: boolean;
   error: string | null;
   playerGenderByName?: Record<string, Player["gender"]>;
   onExport: (format: "xlsx" | "pdf") => void;
   onSavePress: () => void;
+  onUndo: () => void;
   onDone: () => void;
   onClose: () => void;
   onSetPlayerPosition: (
@@ -52,12 +54,14 @@ const EditLineupOverlay = ({
   lineup,
   expandedInnings,
   editable,
+  canUndo,
   isSaving,
   exportBusy,
   error,
   playerGenderByName,
   onExport,
   onSavePress,
+  onUndo,
   onDone,
   onClose,
   onSetPlayerPosition,
@@ -158,6 +162,23 @@ const EditLineupOverlay = ({
               </AppText>
             </View>
             <View style={styles.actions}>
+              {editable && (
+                <AppPressable
+                  style={[styles.iconButton, !canUndo && styles.iconButtonDisabled]}
+                  onPress={onUndo}
+                  disabled={!canUndo}
+                  accessibilityRole="button"
+                  accessibilityLabel="Undo last change"
+                  accessibilityState={{ disabled: !canUndo }}
+                  hitSlop={4}
+                >
+                  <Feather
+                    name="rotate-ccw"
+                    size={16}
+                    color={canUndo ? theme.text.primary : theme.text.muted}
+                  />
+                </AppPressable>
+              )}
               {isHistoryEdit && (
                 <View ref={exportButtonRef} collapsable={false}>
                   <Button
@@ -238,15 +259,42 @@ const EditLineupOverlay = ({
           </Animated.ScrollView>
 
           {isFullscreen && (
-            <AppPressable
-              style={[styles.iconButton, styles.floatingRestore]}
-              onPress={toggleFullscreen}
-              accessibilityRole="button"
-              accessibilityLabel="Exit full screen"
-              hitSlop={4}
-            >
-              <Feather name="minimize-2" size={16} color={theme.text.primary} />
-            </AppPressable>
+            <View style={styles.floatingControls}>
+              {editable && (
+                <AppPressable
+                  style={[
+                    styles.iconButton,
+                    styles.floatingControl,
+                    !canUndo && styles.iconButtonDisabled,
+                  ]}
+                  onPress={onUndo}
+                  disabled={!canUndo}
+                  accessibilityRole="button"
+                  accessibilityLabel="Undo last change"
+                  accessibilityState={{ disabled: !canUndo }}
+                  hitSlop={4}
+                >
+                  <Feather
+                    name="rotate-ccw"
+                    size={16}
+                    color={canUndo ? theme.text.primary : theme.text.muted}
+                  />
+                </AppPressable>
+              )}
+              <AppPressable
+                style={[styles.iconButton, styles.floatingControl]}
+                onPress={toggleFullscreen}
+                accessibilityRole="button"
+                accessibilityLabel="Exit full screen"
+                hitSlop={4}
+              >
+                <Feather
+                  name="minimize-2"
+                  size={16}
+                  color={theme.text.primary}
+                />
+              </AppPressable>
+            </View>
           )}
         </Animated.View>
       </View>
@@ -352,6 +400,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  iconButtonDisabled: {
+    opacity: 0.4,
+  },
   errorBanner: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -380,12 +431,16 @@ const styles = StyleSheet.create({
   bodyContent: {
     padding: space.sm,
   },
-  floatingRestore: {
+  floatingControls: {
     position: "absolute",
     top: space.xs,
     right: space.xs,
-    backgroundColor: withAlpha(theme.bg.raised, 0.92),
+    flexDirection: "row",
+    gap: space.xs,
     zIndex: 20,
+  },
+  floatingControl: {
+    backgroundColor: withAlpha(theme.bg.raised, 0.92),
   },
   exportMenu: {
     position: "absolute",

@@ -10,9 +10,13 @@
 #      buildNumber, then auto-submits the finished build to TestFlight
 #   3. commits + pushes the buildNumber bump that step 2 wrote into app.json
 #
+# Note: pushing the backend repo is what deploys the backend — Railway is
+# wired to the backend's GitHub repo and auto-deploys every push to main.
+#
 # Usage:
-#   ./scripts/deploy-testflight.sh                    # default commit message
-#   ./scripts/deploy-testflight.sh "fix lineup bug"   # custom commit message
+#   ./scripts/deploy-testflight.sh                                 # default messages
+#   ./scripts/deploy-testflight.sh "fix lineup bug"                # mobile commit message
+#   ./scripts/deploy-testflight.sh "fix lineup bug" "harden IAP"   # mobile + backend messages
 #
 set -euo pipefail
 
@@ -22,6 +26,17 @@ APP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"          # mobile repo
 BACKEND_DIR="$(cd "$APP_DIR/../backend" && pwd)"  # backend repo
 
 COMMIT_MSG="${1:-TestFlight build}"
+# Backend changes are unrelated to the mobile build, so give them their own
+# message. Falls back to the mobile message if a second argument isn't given.
+BACKEND_MSG="${2:-$COMMIT_MSG}"
+
+# Preflight: fail fast if EAS isn't authenticated, BEFORE we commit/push
+# anything — otherwise we'd back up work to git and then die at the build.
+echo "▸ checking EAS authentication…"
+( cd "$APP_DIR" && npx eas whoami >/dev/null 2>&1 ) || {
+  echo "✗ Not logged into EAS. Run 'npx eas login' in the mobile repo and retry." >&2
+  exit 1
+}
 
 # Commit any changes in a repo and push it to its remote.
 # Skips the commit if the tree is clean, but still pushes any unpushed commits.
@@ -42,7 +57,9 @@ sync_repo() {
 }
 
 # 1. Back up current work to GitHub before the long build.
-sync_repo "$BACKEND_DIR" "backend"
+#    Pushing the backend repo triggers Railway's auto-deploy of the backend.
+sync_repo "$BACKEND_DIR" "backend" "$BACKEND_MSG"
+echo "▸ [backend] pushed → Railway will auto-deploy the backend from this commit."
 sync_repo "$APP_DIR"     "mobile"
 
 # 2. Build + submit. autoIncrement (eas.json) bumps app.json's buildNumber;
@@ -53,4 +70,6 @@ echo "▸ [mobile] building iOS production and submitting to TestFlight…"
 # 3. Commit + push the buildNumber bump that the build wrote into app.json.
 sync_repo "$APP_DIR" "mobile" "Bump iOS buildNumber for TestFlight"
 
-echo "✅ Done. Repos pushed, and Apple will process the binary (~5–10 min) before it appears in TestFlight."
+echo "✅ Done."
+echo "   • Backend  → pushed; check Railway for the deploy: https://railway.app"
+echo "   • Mobile   → binary submitted; Apple processes it (~5–10 min) before it appears in TestFlight."

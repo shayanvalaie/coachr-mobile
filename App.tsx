@@ -10,6 +10,10 @@ import { SubscriptionProvider, useSubscription } from "./src/lib/iap";
 import { ProGateProvider } from "./src/lib/proGate";
 import { navigationRef } from "./src/navigation/navigationRef";
 import RootNavigator from "./src/navigation/RootNavigator";
+import {
+  lockOrientation,
+  ORIENTATION_LOCK_PORTRAIT_UP,
+} from "./src/screens/lineup/orientation";
 import { theme } from "./src/theme/colors";
 
 let mobileAds: null | (() => { initialize: () => Promise<unknown> }) = null;
@@ -55,6 +59,13 @@ const AdsInitializer = () => {
 };
 
 export default function App() {
+  // The app is portrait-first; only the lineup editor goes landscape (and
+  // restores portrait on exit). Lock portrait at launch so a stale landscape
+  // lock from a previous session doesn't leave the whole app sideways.
+  useEffect(() => {
+    void lockOrientation(ORIENTATION_LOCK_PORTRAIT_UP);
+  }, []);
+
   return (
     <ErrorBoundary>
       <GestureHandlerRootView style={styles.flex}>

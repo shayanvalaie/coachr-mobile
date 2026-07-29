@@ -3,8 +3,8 @@
  * subscription product IDs once they're created.
  */
 export const IAP_SKUS = {
-  MONTHLY: "coachr_pro_monthly",
-  ANNUAL: "coachr_pro_annual",
+  MONTHLY: "subscription.monthly",
+  ANNUAL: "subscription.yearly",
 } as const;
 
 export const ALL_SKUS: string[] = Object.values(IAP_SKUS);

@@ -32,8 +32,11 @@ import { ALL_SKUS } from "./types";
 
 // In dev (simulator/Expo) StoreKit/Billing isn't available, so we don't
 // simulate the store at all — Pro comes from the server `has_pro_access`
-// override or the dev unlock. Real store flows only run in release builds.
-const IAP_ENABLED = !__DEV__;
+// override or the dev unlock. Real store flows only run in release builds,
+// unless EXPO_PUBLIC_IAP_IN_DEV=true opts a dev build in (requires launching
+// from Xcode so the scheme's StoreKit configuration file is applied).
+const IAP_TEST_IN_DEV = process.env.EXPO_PUBLIC_IAP_IN_DEV === "true";
+const IAP_ENABLED = !__DEV__ || IAP_TEST_IN_DEV;
 
 // ─── Context type ──────────────────────────────────────────────────────────
 
@@ -82,7 +85,9 @@ export const SubscriptionProvider = ({
 }: {
   children: React.ReactNode;
 }) => {
-  const proUnlockedInDev = __DEV__;
+  // Disabled when store testing is opted in, so the free/paywall path is
+  // actually exercisable in dev.
+  const proUnlockedInDev = __DEV__ && !IAP_TEST_IN_DEV;
   const [isAdmin, setIsAdmin] = useState(false);
   // Server-side admin override: true = force Pro on, false = force off,
   // null = no override (fall back to store subscription / dev unlock).

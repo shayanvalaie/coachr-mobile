@@ -25,6 +25,7 @@ const ProfileScreen = ({ session, onOpenSubscribe }: Props) => {
   const {
     isPro,
     activeSku,
+    products,
     restore,
     loading,
     clearSubscription,
@@ -46,6 +47,18 @@ const ProfileScreen = ({ session, onOpenSubscribe }: Props) => {
       ? "Pro Annual"
       : "Pro Monthly"
     : "Free";
+
+  // Store-provided pricing; falls back to generic copy until products load.
+  const monthly = products.find((p) => p.sku === IAP_SKUS.MONTHLY);
+  const annual = products.find((p) => p.sku === IAP_SKUS.ANNUAL);
+  const upgradeSubtitle =
+    monthly && annual
+      ? `${monthly.localizedPrice}/mo or ${annual.localizedPrice}/yr`
+      : monthly
+      ? `${monthly.localizedPrice}/mo`
+      : annual
+      ? `${annual.localizedPrice}/yr`
+      : "Unlock all Pro features";
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -88,7 +101,7 @@ const ProfileScreen = ({ session, onOpenSubscribe }: Props) => {
         ) : (
           <ProfileItem
             title="Upgrade to Pro"
-            subtitle="$4.99/mo or $49.99/yr"
+            subtitle={upgradeSubtitle}
             onPress={onOpenSubscribe}
           />
         )}

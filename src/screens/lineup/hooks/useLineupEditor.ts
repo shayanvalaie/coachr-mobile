@@ -83,6 +83,18 @@ export const useLineupEditor = ({
   const [isSavingVersion, setIsSavingVersion] = useState(false);
   const saveLineupNameInputRef = useRef<TextInput | null>(null);
 
+  // Undo history for inline edits. Each snapshot is a full clone of the rows
+  // captured immediately before a swap is applied; the ref holds the stack
+  // (mutating it must not re-render) while `undoDepth` mirrors its length so
+  // the back button can flip between enabled/disabled.
+  const undoStackRef = useRef<InningAssignment[][]>([]);
+  const [undoDepth, setUndoDepth] = useState(0);
+
+  const resetUndoHistory = useCallback(() => {
+    undoStackRef.current = [];
+    setUndoDepth(0);
+  }, []);
+
   useEffect(() => {
     if (!saveModalVisible) return;
     const timer = setTimeout(() => {
@@ -105,10 +117,12 @@ export const useLineupEditor = ({
     setHistoryEditRows(null);
     setSelectedHistoryDetail(null);
     setError(null);
+    resetUndoHistory();
     lockOrientation(ORIENTATION_LOCK_PORTRAIT_UP);
     onEditModeChange?.(false);
   }, [
     onEditModeChange,
+    resetUndoHistory,
     setEditModalVisible,
     setError,
     setHistoryEditRows,
@@ -123,6 +137,7 @@ export const useLineupEditor = ({
       setHistoryEditRows(null);
       setActiveTab("history");
       setError(null);
+      resetUndoHistory();
       onEditModeChange?.(false);
       setStatus(`Returned to lineup v${selectedHistoryDetail.versionNumber}.`);
       return;
@@ -132,6 +147,7 @@ export const useLineupEditor = ({
   }, [
     dismissEditModal,
     onEditModeChange,
+    resetUndoHistory,
     selectedHistoryDetail,
     setActiveTab,
     setError,
@@ -150,6 +166,7 @@ export const useLineupEditor = ({
       return;
     }
     await lockOrientation(ORIENTATION_LOCK_LANDSCAPE);
+    resetUndoHistory();
     setLineupInlineEditMode(true);
     setEditModalVisible(true);
     onEditModeChange?.(true);
@@ -160,6 +177,7 @@ export const useLineupEditor = ({
     editModalVisible,
     lineup,
     onEditModeChange,
+    resetUndoHistory,
     setEditModalVisible,
     setError,
     setLineupInlineEditMode,
@@ -240,19 +258,68 @@ export const useLineupEditor = ({
           };
         }) ?? null;
 
+      // Compute the result up front so the swap can be skipped (and no undo
+      // snapshot recorded) when the tap doesn't actually change the lineup —
+      // e.g. dropping a player back onto the slot they already occupy.
+      const currentRows = selectedHistoryDetail ? historyEditRows : lineup;
+      const nextRows = applySwap(currentRows);
+      const changed =
+        !!currentRows &&
+        !!nextRows &&
+        JSON.stringify(currentRows) !== JSON.stringify(nextRows);
+      if (!changed) return;
+
+      // Push the pre-edit state so the back button can revert exactly this swap.
+      undoStackRef.current.push(cloneLineupRows(currentRows));
+      setUndoDepth(undoStackRef.current.length);
+
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       if (selectedHistoryDetail) {
-        setHistoryEditRows((prev) => applySwap(prev));
+        setHistoryEditRows(nextRows);
       } else {
-        setLineup((prev) => applySwap(prev));
+        setLineup(nextRows);
       }
       setStatus(
         "Manual edits applied inline. Save lineup if you want to keep this version.",
       );
       setError(null);
     },
-    [selectedHistoryDetail, setError, setHistoryEditRows, setLineup, setStatus],
+    [
+      historyEditRows,
+      lineup,
+      selectedHistoryDetail,
+      setError,
+      setHistoryEditRows,
+      setLineup,
+      setStatus,
+    ],
   );
+
+  // Revert the most recent inline swap, restoring the snapshot captured just
+  // before it. Routes the restore to whichever buffer is being edited (a fresh
+  // lineup vs. a saved history version).
+  const undoLastEdit = useCallback(() => {
+    const stack = undoStackRef.current;
+    if (stack.length === 0) return;
+
+    const previous = stack.pop()!;
+    setUndoDepth(stack.length);
+
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    if (selectedHistoryDetail) {
+      setHistoryEditRows(cloneLineupRows(previous));
+    } else {
+      setLineup(cloneLineupRows(previous));
+    }
+    setStatus("Reverted the last change.");
+    setError(null);
+  }, [
+    selectedHistoryDetail,
+    setError,
+    setHistoryEditRows,
+    setLineup,
+    setStatus,
+  ]);
 
   const saveCurrentLineupVersion = useCallback(
     async (overrideName?: string) => {
@@ -450,6 +517,8 @@ export const useLineupEditor = ({
     finishInlineEdit,
     toggleInlineEditMode,
     applyInlinePositionSwap,
+    undoLastEdit,
+    canUndo: undoDepth > 0,
     saveCurrentLineupVersion,
   };
 };

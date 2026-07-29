@@ -17,7 +17,6 @@ import { AppText } from "./ui";
 
 type Props = {
   activePlayersCount: number;
-  segmentCount: number;
   lineup: InningAssignment[] | null;
   canEditLineup: boolean;
   isInlineEditing: boolean;
@@ -93,7 +92,6 @@ const GeneratingState = () => {
 
 const GameSetup = ({
   activePlayersCount,
-  segmentCount,
   lineup,
   canEditLineup,
   isInlineEditing,
@@ -132,11 +130,6 @@ const GameSetup = ({
         </AppText>
       </View>
       <View style={styles.cardHeaderActions}>
-        <View style={styles.badge}>
-          <AppText variant="caption" family="mono" color="success">
-            {lineup?.length ?? 0}/{segmentCount}
-          </AppText>
-        </View>
         <Pressable
           style={({ pressed }) => [
             styles.iconButton,
@@ -315,14 +308,6 @@ const styles = StyleSheet.create({
     paddingVertical: space.xs,
     paddingHorizontal: 10,
     backgroundColor: theme.bg.elevated,
-  },
-  badge: {
-    borderWidth: 1,
-    borderColor: withAlpha(theme.success.base, 0.45),
-    borderRadius: radius.sm,
-    backgroundColor: theme.success.subtle,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
   },
   editLineupButton: {
     borderRadius: radius.sm,

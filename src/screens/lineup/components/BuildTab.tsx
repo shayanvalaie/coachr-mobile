@@ -123,7 +123,6 @@ const BuildTab = ({
 
     <GameSetup
       activePlayersCount={activeCount}
-      segmentCount={rulesConfig?.segmentCount ?? 7}
       lineup={lineup}
       canEditLineup={!!lineup}
       isInlineEditing={lineupInlineEditMode}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   LayoutAnimation,
   Platform,
@@ -33,7 +33,11 @@ import { useLineupData } from "./hooks/useLineupData";
 import { useLineupEditor } from "./hooks/useLineupEditor";
 import { useLineupGeneration } from "./hooks/useLineupGeneration";
 import { useLineupHistory } from "./hooks/useLineupHistory";
-import { lockOrientation, ORIENTATION_LOCK_LANDSCAPE } from "./orientation";
+import {
+  lockOrientation,
+  ORIENTATION_LOCK_LANDSCAPE,
+  ORIENTATION_LOCK_PORTRAIT_UP,
+} from "./orientation";
 
 type Props = {
   session: BackendSession;
@@ -150,6 +154,8 @@ const LineupScreen = ({
     finishInlineEdit,
     toggleInlineEditMode,
     applyInlinePositionSwap,
+    undoLastEdit,
+    canUndo,
     saveCurrentLineupVersion,
   } = useLineupEditor({
     lineup,
@@ -349,6 +355,36 @@ const LineupScreen = ({
       ? selectedHistoryRows
       : lineup;
 
+  // Save from the landscape editor. A saved (history) lineup already has a
+  // name, so it persists directly. A freshly generated lineup needs a name,
+  // which means opening the SaveLineupSheet — but that sheet is a native
+  // Modal, and presenting a Modal while the editor still holds the landscape
+  // orientation lock crashes on iOS (the same constraint that makes this
+  // editor a plain overlay instead of a Sheet). So for a fresh lineup we tear
+  // down the landscape overlay and wait for the return to portrait before
+  // presenting the naming sheet, matching the build tab's "Save lineup" flow.
+  const handleOverlaySavePress = useCallback(() => {
+    if (selectedHistoryDetail) {
+      void saveCurrentLineupVersion(
+        saveLineupName ||
+          selectedHistoryDetail.lineupName ||
+          `Lineup v${selectedHistoryDetail.versionNumber}`,
+      );
+      return;
+    }
+    void (async () => {
+      dismissEditModal();
+      await lockOrientation(ORIENTATION_LOCK_PORTRAIT_UP);
+      setSaveModalVisible(true);
+    })();
+  }, [
+    dismissEditModal,
+    saveCurrentLineupVersion,
+    saveLineupName,
+    selectedHistoryDetail,
+    setSaveModalVisible,
+  ]);
+
   const header = (
     <View style={styles.headerBlock}>
       <ScreenHeader
@@ -495,6 +531,7 @@ const LineupScreen = ({
           lineup={editModalLineup}
           expandedInnings={expandedInnings}
           editable={lineupInlineEditMode}
+          canUndo={canUndo}
           isSaving={isSavingVersion}
           exportBusy={isExporting}
           error={error}
@@ -506,17 +543,8 @@ const LineupScreen = ({
             }
             void exportLineupVersion(selectedHistoryDetail!.id, format);
           }}
-          onSavePress={() => {
-            if (selectedHistoryDetail) {
-              void saveCurrentLineupVersion(
-                saveLineupName ||
-                  selectedHistoryDetail.lineupName ||
-                  `Lineup v${selectedHistoryDetail.versionNumber}`,
-              );
-              return;
-            }
-            setSaveModalVisible(true);
-          }}
+          onSavePress={handleOverlaySavePress}
+          onUndo={undoLastEdit}
           onDone={finishInlineEdit}
           onClose={dismissEditModal}
           onSetPlayerPosition={applyInlinePositionSwap}
