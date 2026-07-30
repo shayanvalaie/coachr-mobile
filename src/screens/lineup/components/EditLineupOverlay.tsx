@@ -107,7 +107,11 @@ const EditLineupOverlay = ({
   const handleExport = useCallback(
     (format: "xlsx" | "pdf") => {
       setExportMenuPos(null);
-      onExport(format);
+      // Deferred past the menu's exiting fade (100ms): starting the export
+      // re-render in the same frame as the unmount animation makes Reanimated's
+      // UI-thread flush race the React commit, which hard-crashes iOS
+      // (software-mansion/react-native-reanimated#9293).
+      setTimeout(() => onExport(format), 150);
     },
     [onExport],
   );

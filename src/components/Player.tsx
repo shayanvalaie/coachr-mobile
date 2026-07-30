@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useMemo } from "react";
+import React, { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { StyleSheet, Switch, View } from "react-native";
 import Sortable from "react-native-sortables";
 import { Feather } from "../icons";
@@ -67,8 +67,22 @@ const PlayerCard = ({
     [onUpdate],
   );
 
+  // Sortable's item store re-renders cards one commit after roster state
+  // changes, but RN's controlled Switch force-resets the native thumb
+  // whenever its `value` prop disagrees with the native value — so a stale
+  // `player` for even one commit makes the switch snap back on every press.
+  // Mirror the value locally so the Switch updates in the same commit as
+  // the gesture, then re-sync when the roster value lands.
+  const [lockValue, setLockValue] = useState(player.lockInPosition);
+  useEffect(() => {
+    setLockValue(player.lockInPosition);
+  }, [player.lockInPosition]);
+
   const handleLockChange = useCallback(
-    (checked: boolean) => onUpdate({ lockInPosition: checked }),
+    (checked: boolean) => {
+      setLockValue(checked);
+      onUpdate({ lockInPosition: checked });
+    },
     [onUpdate],
   );
   const handleToggleActive = useCallback(
@@ -210,13 +224,13 @@ const PlayerCard = ({
                 Lock position
               </AppText>
               <Switch
-                value={player.lockInPosition}
+                value={lockValue}
                 disabled={normalizedDesiredPositions.length !== 1}
                 onValueChange={handleLockChange}
                 accessibilityRole="switch"
                 accessibilityLabel="Lock position"
                 accessibilityState={{
-                  checked: player.lockInPosition,
+                  checked: lockValue,
                   disabled: normalizedDesiredPositions.length !== 1,
                 }}
                 trackColor={{
@@ -224,9 +238,7 @@ const PlayerCard = ({
                   false: theme.border.strong,
                 }}
                 thumbColor={
-                  player.lockInPosition
-                    ? theme.text.onAccent
-                    : theme.text.primary
+                  lockValue ? theme.text.onAccent : theme.text.primary
                 }
               />
             </View>

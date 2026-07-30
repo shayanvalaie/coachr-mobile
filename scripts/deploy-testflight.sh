@@ -13,10 +13,14 @@
 # Note: pushing the backend repo is what deploys the backend — Railway is
 # wired to the backend's GitHub repo and auto-deploys every push to main.
 #
+# Commit messages: just run the script and it asks for them interactively.
+# Press Enter at either prompt to accept the default. You can also skip the
+# prompts entirely by passing the messages as arguments.
+#
 # Usage:
-#   ./scripts/deploy-testflight.sh                                 # default messages
-#   ./scripts/deploy-testflight.sh "fix lineup bug"                # mobile commit message
-#   ./scripts/deploy-testflight.sh "fix lineup bug" "harden IAP"   # mobile + backend messages
+#   ./scripts/deploy-testflight.sh                                 # prompts for messages
+#   ./scripts/deploy-testflight.sh "fix lineup bug"                # mobile message, no prompts
+#   ./scripts/deploy-testflight.sh "fix lineup bug" "harden IAP"   # mobile + backend, no prompts
 #
 set -euo pipefail
 
@@ -25,18 +29,28 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"          # mobile repo
 BACKEND_DIR="$(cd "$APP_DIR/../backend" && pwd)"  # backend repo
 
-COMMIT_MSG="${1:-TestFlight build}"
-# Backend changes are unrelated to the mobile build, so give them their own
-# message. Falls back to the mobile message if a second argument isn't given.
-BACKEND_MSG="${2:-$COMMIT_MSG}"
+DEFAULT_MSG="TestFlight build"
 
-# Preflight: fail fast if EAS isn't authenticated, BEFORE we commit/push
-# anything — otherwise we'd back up work to git and then die at the build.
+# Preflight: fail fast if EAS isn't authenticated, BEFORE we prompt or commit
+# anything — otherwise we'd type messages / back up work and then die at the build.
 echo "▸ checking EAS authentication…"
 ( cd "$APP_DIR" && npx eas whoami >/dev/null 2>&1 ) || {
   echo "✗ Not logged into EAS. Run 'npx eas login' in the mobile repo and retry." >&2
   exit 1
 }
+
+# Resolve the two commit messages. Command-line arguments win; otherwise, when
+# running in an interactive terminal, ask for them. A blank answer (just Enter)
+# falls back to the default — the frontend to "TestFlight build", the backend
+# to whatever the frontend ended up being.
+COMMIT_MSG="${1-}"
+BACKEND_MSG="${2-}"
+if [[ $# -eq 0 && -t 0 ]]; then
+  read -r -p "Frontend (mobile) commit message [${DEFAULT_MSG}]: " COMMIT_MSG
+  read -r -p "Backend commit message [same as frontend]: " BACKEND_MSG
+fi
+COMMIT_MSG="${COMMIT_MSG:-$DEFAULT_MSG}"    # blank frontend → default
+BACKEND_MSG="${BACKEND_MSG:-$COMMIT_MSG}"   # blank backend  → reuse frontend message
 
 # Commit any changes in a repo and push it to its remote.
 # Skips the commit if the tree is clean, but still pushes any unpushed commits.

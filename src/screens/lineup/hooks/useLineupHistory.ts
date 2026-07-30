@@ -278,20 +278,26 @@ export const useLineupHistory = ({
         // time it is open (and can hang if the sheet fails to present under the
         // landscape orientation lock). Fire-and-forget instead.
         setIsExporting(false);
-        Share.share({
-          title: exported.fileName,
-          message: `Lineup export: ${exported.fileName}`,
-          url: uri,
-        })
-          .then(() => {
-            toast.show({
-              message: `${format.toUpperCase()} exported.`,
-              type: "success",
-            });
+        // Presented on a later tick, clear of the busy-state commit above:
+        // presenting UIKit's activity controller while React/Reanimated are
+        // mid-commit crashes the Reanimated UI-thread flush
+        // (software-mansion/react-native-reanimated#9293).
+        setTimeout(() => {
+          Share.share({
+            title: exported.fileName,
+            message: `Lineup export: ${exported.fileName}`,
+            url: uri,
           })
-          .catch(() => {
-            // Share dismissed or cancelled — nothing to report.
-          });
+            .then(() => {
+              toast.show({
+                message: `${format.toUpperCase()} exported.`,
+                type: "success",
+              });
+            })
+            .catch(() => {
+              // Share dismissed or cancelled — nothing to report.
+            });
+        }, 300);
       } catch (_err) {
         toast.show({
           message: `Unable to export ${format.toUpperCase()}.`,
