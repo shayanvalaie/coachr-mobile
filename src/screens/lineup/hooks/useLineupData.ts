@@ -1,4 +1,5 @@
-import { Dispatch, SetStateAction, useCallback, useEffect, useMemo, useState } from "react";
+import { Dispatch, SetStateAction, useCallback, useMemo, useState } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import { backendClient } from "../../../lib/backend/client";
 import { BackendGame, BackendSession } from "../../../lib/backend/types";
 import { Player } from "../../../types/lineup";
@@ -42,7 +43,15 @@ export const useLineupData = ({ session, setError }: Params) => {
         backendClient.getTeamGames(team),
       ]);
       setRoster(loadedRoster);
-      setActiveIds(new Set(loadedRoster.map((player) => player.id)));
+      // Honor the roster's persisted bench choices: benched players start
+      // inactive so lineup generation excludes them by default.
+      setActiveIds(
+        new Set(
+          loadedRoster
+            .filter((player) => !player.benched)
+            .map((player) => player.id),
+        ),
+      );
       setRulesConfig(parseTeamRulesConfig(loadedRules));
       setGames(loadedGames);
       setSelectedGameId((prev) => {
@@ -63,11 +72,16 @@ export const useLineupData = ({ session, setError }: Params) => {
     }
   }, [ensureTeam, setError]);
 
-  useEffect(() => {
-    loadTeamContext().catch(() => {
-      setError("Unable to load lineup context.");
-    });
-  }, [loadTeamContext, setError]);
+  // Reload every time the lineup screen gains focus so bench changes made on
+  // the Roster tab are picked up before the coach generates a lineup. Tab
+  // screens stay mounted, so a plain mount effect would keep a stale roster.
+  useFocusEffect(
+    useCallback(() => {
+      loadTeamContext().catch(() => {
+        setError("Unable to load lineup context.");
+      });
+    }, [loadTeamContext, setError]),
+  );
 
   const activePlayers = useMemo(
     () => roster.filter((player) => activeIds.has(player.id)),
@@ -101,6 +115,7 @@ export const useLineupData = ({ session, setError }: Params) => {
     setActiveIds,
     rulesConfig,
     ensureTeam,
+    loadTeamContext,
     activePlayers,
     playerGenderByName,
     handleToggleActive,

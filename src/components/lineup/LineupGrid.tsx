@@ -12,7 +12,7 @@ import { radius } from "../../theme/tokens";
 import { typeface } from "../../theme/typography";
 import { InningAssignment } from "../../types/lineup";
 import { normalizePlayerName } from "../../utils/playerNames";
-import { AppText } from "../ui";
+import { AppText, Skeleton } from "../ui";
 
 type Props = {
   lineup: InningAssignment[] | null;
@@ -69,6 +69,14 @@ const LineupGrid = ({
   // uniform height, so one row's measurement covers all of them.
   const [headerHeight, setHeaderHeight] = useState(DEFAULT_ROW_HEIGHT);
   const [rowHeight, setRowHeight] = useState(DEFAULT_ROW_HEIGHT);
+  // In the landscape editor the cell widths are derived from the measured
+  // container width, so the real grid can't be laid out until that first
+  // layout pass lands. Show a full-width skeleton until then (and briefly
+  // after, so it reads as an intentional load rather than a flash). This keeps
+  // the card the same size the whole time instead of rendering the narrow
+  // fallback grid first and expanding to full width once measured.
+  const isEditModal = presentation === "editModal";
+  const [gridReady, setGridReady] = useState(!isEditModal);
 
   const femalePlayerNames = useMemo(() => {
     const names = new Set<string>();
@@ -89,6 +97,15 @@ const LineupGrid = ({
   useEffect(() => {
     setOpenCell(null);
   }, [lineup]);
+
+  // Reveal the real grid once the container has been measured, holding the
+  // skeleton a beat longer so it doesn't flash and the sortable grid has a
+  // moment to lay out at the final width before it swaps in.
+  useEffect(() => {
+    if (!isEditModal || gridReady || containerWidth <= 0) return;
+    const timer = setTimeout(() => setGridReady(true), 150);
+    return () => clearTimeout(timer);
+  }, [isEditModal, gridReady, containerWidth]);
 
   const { innings, players: discoveredPlayers } = useMemo(() => {
     const sorted = [...(lineup ?? [])].sort((a, b) => a.inning - b.inning);
@@ -168,7 +185,6 @@ const LineupGrid = ({
     setRowHeight((prev) => (Math.abs(prev - height) > 0.5 ? height : prev));
   }, []);
 
-  const isEditModal = presentation === "editModal";
   const inningCount = innings.length;
 
   let playerCellWidth: number;
@@ -368,6 +384,12 @@ const LineupGrid = ({
           Active players ({players.length})
         </AppText>
       ) : null}
+      {isEditModal && !gridReady ? (
+        <EditGridSkeleton
+          rowCount={players.length}
+          inningCount={inningCount}
+        />
+      ) : (
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -474,11 +496,58 @@ const LineupGrid = ({
           ) : null}
         </View>
       </ScrollView>
+      )}
       {!isEditModal ? (
         <AppText variant="body" color="secondary">
           X = benched during that inning.
         </AppText>
       ) : null}
+    </View>
+  );
+};
+
+// Full-width placeholder table shown while the landscape editor measures its
+// container and the sortable grid settles. Mirrors the real grid's row count,
+// heights, and column proportions (22% player column, evenly-split innings) so
+// the swap to real content happens at exactly the same size.
+const EditGridSkeleton = ({
+  rowCount,
+  inningCount,
+}: {
+  rowCount: number;
+  inningCount: number;
+}) => {
+  const rows = Math.max(rowCount, 1);
+  const columns = Math.max(inningCount, 1);
+  return (
+    <View style={styles.skeletonRoot}>
+      <View style={[styles.row, styles.headerRow]}>
+        <View style={styles.skeletonPlayerCell}>
+          <Skeleton width={52} height={12} />
+        </View>
+        <View style={styles.skeletonInnings}>
+          {Array.from({ length: columns }, (_, i) => (
+            <View key={`sk-h-${i}`} style={styles.skeletonInningCell}>
+              <Skeleton width={14} height={12} />
+            </View>
+          ))}
+        </View>
+      </View>
+      {Array.from({ length: rows }, (_, r) => (
+        <View key={`sk-r-${r}`} style={styles.row}>
+          <View style={styles.skeletonPlayerCell}>
+            <Skeleton width={24} height={24} radius={radius.pill} />
+            <Skeleton width="58%" height={12} style={styles.skeletonName} />
+          </View>
+          <View style={styles.skeletonInnings}>
+            {Array.from({ length: columns }, (_, i) => (
+              <View key={`sk-c-${r}-${i}`} style={styles.skeletonInningCell}>
+                <Skeleton width={28} height={30} radius={radius.sm} />
+              </View>
+            ))}
+          </View>
+        </View>
+      ))}
     </View>
   );
 };
@@ -502,6 +571,28 @@ const styles = StyleSheet.create({
   },
   title: {
     marginBottom: 2,
+  },
+  skeletonRoot: {
+    alignSelf: "stretch",
+  },
+  skeletonPlayerCell: {
+    width: "22%",
+    flexDirection: "row",
+    alignItems: "center",
+    paddingLeft: 8,
+    paddingRight: 4,
+  },
+  skeletonName: {
+    marginLeft: 6,
+  },
+  skeletonInnings: {
+    flex: 1,
+    flexDirection: "row",
+  },
+  skeletonInningCell: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
   row: {
     flexDirection: "row",

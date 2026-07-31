@@ -105,7 +105,9 @@ const RosterScreen = ({
       ]);
       setRoster(nextRoster);
       setLineupSlots(parseTeamRulesConfig(rawRules).lineupSlots);
-      setActiveIds(new Set(nextRoster.map((p) => p.id)));
+      setActiveIds(
+        new Set(nextRoster.filter((p) => !p.benched).map((p) => p.id)),
+      );
       setExpandedPlayers(new Set());
     } catch (_err) {
       showError("Unable to load roster from server.");
@@ -201,14 +203,33 @@ const RosterScreen = ({
     });
   }, []);
 
-  const handleToggleActive = useCallback((id: string, checked: boolean) => {
-    setActiveIds((prev) => {
-      const next = new Set(prev);
-      if (checked) next.add(id);
-      else next.delete(id);
-      return next;
-    });
-  }, []);
+  const handleToggleActive = useCallback(
+    async (id: string, checked: boolean) => {
+      const target = roster.find((p) => p.id === id);
+      if (!target) return;
+      const updated: Player = { ...target, benched: !checked };
+
+      // Optimistic local update for a responsive UI.
+      setActiveIds((prev) => {
+        const next = new Set(prev);
+        if (checked) next.add(id);
+        else next.delete(id);
+        return next;
+      });
+      setRoster((prev) => prev.map((p) => (p.id === id ? updated : p)));
+
+      // Persist so the bench choice survives reloads and is honored by
+      // lineup generation (the Lineup screen loads its active set from here).
+      try {
+        const team = await ensureTeam();
+        if (!team) return;
+        await backendClient.saveTeamPlayer(team, updated);
+      } catch (_err) {
+        showError("Failed to update bench status.");
+      }
+    },
+    [roster, ensureTeam, showError],
+  );
 
   const handleReorderPlayers = useCallback((nextPlayers: Player[]) => {
     setRoster(nextPlayers);
@@ -433,7 +454,9 @@ const RosterScreen = ({
     if (playersToCreate.length === 0) {
       const nextRoster = await backendClient.getTeamRoster(team);
       setRoster(nextRoster);
-      setActiveIds(new Set(nextRoster.map((p) => p.id)));
+      setActiveIds(
+        new Set(nextRoster.filter((p) => !p.benched).map((p) => p.id)),
+      );
       setExpandedPlayers(new Set());
       const summary = `No new players imported. ${duplicateExistingNames.length} already exist for this team.`;
       setStatus("");
@@ -456,7 +479,9 @@ const RosterScreen = ({
 
     const nextRoster = await backendClient.getTeamRoster(team);
     setRoster(nextRoster);
-    setActiveIds(new Set(nextRoster.map((p) => p.id)));
+    setActiveIds(
+      new Set(nextRoster.filter((p) => !p.benched).map((p) => p.id)),
+    );
     // Only expand the newly saved players so users can review them.
     // Pre-existing players stay collapsed and the "Save player" buttons
     // on new cards are not shown until the user explicitly expands them.

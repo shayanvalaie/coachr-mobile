@@ -9,6 +9,7 @@ export type Player = {
   desiredPositions: Position[]
   fixedAllGame: boolean
   lockInPosition: boolean
+  benched: boolean
 }
 
 export type InningAssignment = {

@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Coachr",
+    "name": "CoachR",
     "slug": "coachr",
     "version": "1.0.0",
     "scheme": "coachr",
@@ -11,7 +11,7 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0f1f18"
+      "backgroundColor": "#0C271C"
     },
     "ios": {
       "supportsTablet": true,
@@ -24,7 +24,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#0C271C"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,

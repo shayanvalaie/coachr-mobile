@@ -1,10 +1,11 @@
-import { RefObject } from "react";
+import type { RefObject } from "react";
 import { StyleSheet, View } from "react-native";
 import type Reanimated from "react-native-reanimated";
 import type { AnimatedRef } from "react-native-reanimated";
 import GameSetup from "../../../components/GameSetup";
 import {
   AppText,
+  Button,
   Card,
   LoadTransition,
   MetricTile,
@@ -12,6 +13,7 @@ import {
   SkeletonMetricRow,
 } from "../../../components/ui";
 import { BackendGame } from "../../../lib/backend/types";
+import { theme } from "../../../theme/colors";
 import { space } from "../../../theme/tokens";
 import { InningAssignment, Player } from "../../../types/lineup";
 import { TeamRulesConfig } from "../../../types/rules";
@@ -38,6 +40,7 @@ type Props = {
   onEditLineup: () => void;
   onGenerate: () => void;
   onSaveLineup: () => void;
+  onOpenRules: () => void;
   onToggleInning: (inning: number) => void;
   onSetLineupCell: (
     inning: number,
@@ -71,6 +74,7 @@ const BuildTab = ({
   onEditLineup,
   onGenerate,
   onSaveLineup,
+  onOpenRules,
   onToggleInning,
   onSetLineupCell,
   playerGenderByName,
@@ -86,6 +90,7 @@ const BuildTab = ({
           <>
             <Skeleton width={150} height={15} />
             <SkeletonMetricRow count={3} height={67} />
+            <Skeleton height={52} />
           </>
         }
       >
@@ -109,6 +114,16 @@ const BuildTab = ({
             value={rulesConfig ? String(rulesConfig.playersOnField) : "-"}
           />
         </View>
+        <Button
+          label="Lineup Rules"
+          variant="secondary"
+          size="lg"
+          icon="sliders"
+          fullWidth
+          onPress={onOpenRules}
+          accessibilityLabel="Open lineup rules"
+          style={styles.rulesButton}
+        />
       </LoadTransition>
     </Card>
 
@@ -148,6 +163,10 @@ const BuildTab = ({
 const styles = StyleSheet.create({
   heroInner: {
     gap: space.xs,
+  },
+  rulesButton: {
+    borderWidth: 1.5,
+    borderColor: theme.accent.base,
   },
   metricsRow: {
     flexDirection: "row",

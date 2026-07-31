@@ -27,6 +27,24 @@ const LINEUP_GENERATOR_MODE = (
   .toLowerCase();
 const USE_LOCAL_LINEUP_GENERATOR = LINEUP_GENERATOR_MODE !== "openai";
 
+// Minimum time the generating state (skeleton loaders) stays on screen. The
+// local generator is effectively instant, so without this floor the skeletons
+// would flash for a frame and the lineup would snap in. Holding for a beat
+// makes generation read as deliberate work and keeps the swap smooth.
+const MIN_GENERATING_MS = 2000;
+
+const wait = (ms: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+// Pad out the remaining time so the generating state lasts at least
+// MIN_GENERATING_MS from when generation started.
+const holdMinGeneratingDuration = async (startedAt: number) => {
+  const elapsed = Date.now() - startedAt;
+  if (elapsed < MIN_GENERATING_MS) {
+    await wait(MIN_GENERATING_MS - elapsed);
+  }
+};
+
 export type RosterRequirement = {
   required: number;
   have: number;
@@ -90,6 +108,8 @@ export const useLineupGeneration = ({
       setStatus("Generating...");
       setError(null);
 
+      const startedAt = Date.now();
+
       try {
         const team = await ensureTeam();
         if (!team) {
@@ -138,6 +158,9 @@ export const useLineupGeneration = ({
           }
 
           const fallback = generateLineup(activePlayers);
+          // Keep the skeletons up for a beat before revealing the result so the
+          // swap feels smooth rather than instantaneous.
+          await holdMinGeneratingDuration(startedAt);
           if (fallback.error) {
             setError(fallback.error);
             setLineup(null);
@@ -272,6 +295,9 @@ export const useLineupGeneration = ({
           notifySuccess();
         }
       } finally {
+        // The skeleton -> grid cross-fade is handled in GameSetup via
+        // reanimated; no classic LayoutAnimation here (it fought the sortable
+        // grid's own row animations and caused a staggered, one-by-one reveal).
         setIsGenerating(false);
       }
     },

@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, View } from "react-native";
+import { ScrollView, StyleSheet, View } from "react-native";
 import LineUp from "../../../components/lineup/LineupGrid";
+import LineupGridSkeleton from "../../../components/lineup/LineupGridSkeleton";
 import {
   BackendLineupVersionDetail,
   BackendLineupVersionSummary,
@@ -207,15 +208,16 @@ const LineupsSheet = ({
                           No player assignments found for this lineup.
                         </AppText>
                       )
+                    ) : isDetailsLoading ? (
+                      // Table-shaped placeholder so the sheet holds the grid's
+                      // footprint while details load, instead of a bare spinner.
+                      <LineupGridSkeleton
+                        rows={Object.keys(playerGenderByName).length}
+                      />
                     ) : (
-                      <View style={styles.loadingRow}>
-                        <ActivityIndicator color={theme.accent.base} size="small" />
-                        <AppText variant="caption" color="secondary">
-                          {isDetailsLoading
-                            ? "Loading lineup players..."
-                            : "Lineup details not loaded."}
-                        </AppText>
-                      </View>
+                      <AppText variant="caption" color="secondary">
+                        Lineup details not loaded.
+                      </AppText>
                     )}
                     {isEditing ? (
                       <AppText variant="caption" color="accent">
@@ -275,12 +277,6 @@ const styles = StyleSheet.create({
   },
   tableContent: {
     paddingBottom: space.xxs,
-  },
-  loadingRow: {
-    marginTop: space.xs,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: space.xs,
   },
   carouselFooter: {
     alignItems: "center",

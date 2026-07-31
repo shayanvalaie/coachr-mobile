@@ -11,17 +11,20 @@ import {
   AppPressable,
   AppText,
   Button,
+  Reveal,
   ScreenContainer,
   ScreenHeader,
   Sheet,
+  useToast,
 } from "../../components/ui";
 import { Feather } from "../../icons";
 import { backendClient } from "../../lib/backend/client";
 import { BackendSession } from "../../lib/backend/types";
 import { theme } from "../../theme/colors";
-import { radius, space } from "../../theme/tokens";
+import { motion, radius, space } from "../../theme/tokens";
 import { InningAssignment } from "../../types/lineup";
 import { LineupLaunchRequest } from "../../types/lineupLaunch";
+import { navigateFromRef } from "../../navigation/navigationRef";
 import { normalizeLineupRows } from "../../utils/lineupTransforms";
 import BuildTab from "./components/BuildTab";
 import EditLineupOverlay from "./components/EditLineupOverlay";
@@ -42,6 +45,7 @@ import {
 type Props = {
   session: BackendSession;
   onOpenRoster: () => void;
+  onOpenRules: () => void;
   hasProSubscription: boolean;
   onRequirePro: (featureLabel: string) => void;
   launchRequest?: LineupLaunchRequest | null;
@@ -52,6 +56,7 @@ type Props = {
 const LineupScreen = ({
   session,
   onOpenRoster,
+  onOpenRules,
   hasProSubscription,
   onRequirePro,
   launchRequest = null,
@@ -77,16 +82,43 @@ const LineupScreen = ({
   const [status, setStatus] = useState("");
   const [error, setError] = useState<string | null>(null);
   const handledLaunchRequestIdsRef = useRef<Set<number>>(new Set());
-  // Refs used to auto-scroll the freshly generated lineup into view: the build
-  // ScrollView, a wrapper for measuring the viewport top, an anchor wrapping the
-  // lineup grid deep inside GameSetup, and the live scroll offset. The scroll
-  // ref is an animated ref because the sortable lineup grid also drives it for
-  // edge auto-scroll while dragging rows.
+  // Animated ref for the build tab's ScrollView. It's animated because the
+  // sortable lineup grid drives it for edge auto-scroll while dragging rows.
   const buildScrollRef = useAnimatedRef<Animated.ScrollView>();
+  // Refs backing the "jump to lineup" toast action: a wrapper for the
+  // ScrollView's window position, an anchor around the finished lineup, and the
+  // live scroll offset. Together they translate the anchor's window position
+  // into a scroll target (measureInWindow works on both RN architectures).
   const buildScrollWrapRef = useRef<View>(null);
   const lineupAnchorRef = useRef<View>(null);
   const buildScrollOffsetRef = useRef(0);
   const wasGeneratingRef = useRef(false);
+  const toast = useToast();
+
+  // Bring the freshly generated lineup into view. Used by the generation toast
+  // so a user who scrolled away — or is on another tab entirely — can tap to
+  // jump to it. The toast lives at the app root, so it survives navigation; we
+  // first route back to the Lineup tab, then scroll once it's on screen.
+  const scrollToLineup = useCallback(() => {
+    navigateFromRef("Main", { screen: "LineupTab" });
+    setActiveTab("build");
+    // Give the tab a beat to re-attach (react-native-screens detaches inactive
+    // tabs) and the switch to build to commit before we measure. The offset is
+    // derived from the anchor's position relative to the scroll wrapper, so
+    // both moving together during the tab transition doesn't skew it.
+    setTimeout(() => {
+      const scroll = buildScrollRef.current;
+      const anchor = lineupAnchorRef.current;
+      const wrap = buildScrollWrapRef.current;
+      if (!scroll || !anchor || !wrap) return;
+      wrap.measureInWindow((_wx, wy) => {
+        anchor.measureInWindow((_ax, ay) => {
+          const target = buildScrollOffsetRef.current + (ay - wy) - space.md;
+          scroll.scrollTo({ y: Math.max(target, 0), animated: true });
+        });
+      });
+    }, 300);
+  }, [buildScrollRef]);
 
   useEffect(() => {
     if (
@@ -106,6 +138,7 @@ const LineupScreen = ({
     setActiveIds,
     rulesConfig,
     ensureTeam,
+    loadTeamContext,
     activePlayers,
     playerGenderByName,
     handleToggleActive,
@@ -143,6 +176,24 @@ const LineupScreen = ({
     onEditModeChange,
   });
 
+  // Duplicate rejection on a direct save from the landscape editor: the
+  // overlay is already torn down by then, so the notice is a tappable toast
+  // that routes to the existing saved lineup.
+  const handleDuplicateLineup = useCallback(
+    (duplicateLineupId: string | null) => {
+      toast.show({
+        message: "This lineup has already been saved.",
+        type: "info",
+        durationMs: 6000,
+        actionLabel: duplicateLineupId ? "Tap to view the saved lineup" : undefined,
+        onPress: duplicateLineupId
+          ? () => void openLineupHistoryDetail(duplicateLineupId)
+          : undefined,
+      });
+    },
+    [openLineupHistoryDetail, toast],
+  );
+
   const {
     saveModalVisible,
     setSaveModalVisible,
@@ -157,6 +208,8 @@ const LineupScreen = ({
     undoLastEdit,
     canUndo,
     saveCurrentLineupVersion,
+    duplicateSave,
+    clearDuplicateSave,
   } = useLineupEditor({
     lineup,
     setLineup,
@@ -178,6 +231,7 @@ const LineupScreen = ({
     rulesConfig,
     loadLineupHistory,
     onEditModeChange,
+    onDuplicateLineup: handleDuplicateLineup,
   });
 
   const {
@@ -205,37 +259,21 @@ const LineupScreen = ({
     setSaveLineupName,
   });
 
-  // When a generation run finishes with a lineup, scroll the grid to the top of
-  // the viewport so the user sees the result without hunting for it. Only fires
-  // on the generating -> idle transition, so inline edits don't yank the scroll.
+  // Confirm a finished generation with a toast. Only fires on the generating ->
+  // idle transition (with a real lineup), so inline edits stay quiet.
   useEffect(() => {
     const justFinished = wasGeneratingRef.current && !isGenerating;
     wasGeneratingRef.current = isGenerating;
     if (!justFinished) return;
-    if (activeTab !== "build") return;
     if (!lineup || lineup.length === 0) return;
-
-    // Wait for the post-generation LayoutAnimation to settle before measuring.
-    // measureInWindow works on both RN architectures (New Arch rejects the
-    // numeric node handle that measureLayout would need). We translate the
-    // anchor's window position into a scroll offset via the live scroll offset
-    // and the viewport's own window position.
-    const timer = setTimeout(() => {
-      const scroll = buildScrollRef.current;
-      const anchor = lineupAnchorRef.current;
-      const wrap = buildScrollWrapRef.current;
-      if (!scroll || !anchor || !wrap) return;
-      wrap.measureInWindow((_wx, wy) => {
-        anchor.measureInWindow((_ax, ay) => {
-          const target =
-            buildScrollOffsetRef.current + (ay - wy) - space.md;
-          scroll.scrollTo({ y: Math.max(target, 0), animated: true });
-        });
-      });
-    }, 350);
-
-    return () => clearTimeout(timer);
-  }, [activeTab, isGenerating, lineup]);
+    toast.show({
+      message: "Lineup generated",
+      type: "success",
+      actionLabel: "Tap to jump to your lineup",
+      durationMs: 6000,
+      onPress: scrollToLineup,
+    });
+  }, [isGenerating, lineup, scrollToLineup, toast]);
 
   useEffect(() => {
     if (!launchRequest) return;
@@ -297,6 +335,11 @@ const LineupScreen = ({
         }
 
         if (launchRequest.autoGenerate) {
+          // Pull the latest roster (with the newest bench choices) before
+          // generating. The focus reload also does this, but auto-generate
+          // must not race it — await here so generation sees fresh data.
+          await loadTeamContext();
+          if (cancelled) return;
           setPendingAutoGenerate({
             requestId: launchRequest.id,
             gameId: launchRequest.gameId,
@@ -325,6 +368,7 @@ const LineupScreen = ({
   }, [
     ensureTeam,
     launchRequest,
+    loadTeamContext,
     onEditModeChange,
     onLaunchRequestHandled,
     setActiveHistoryId,
@@ -435,6 +479,12 @@ const LineupScreen = ({
   return (
     <View style={styles.root}>
       <ScreenContainer padded={false}>
+        {/* Sticky header + tab switcher: stays pinned while either tab scrolls. */}
+        <View style={styles.stickyHeader}>{header}</View>
+        {/* Keyed on the active tab so switching cross-fades the pane in,
+            matching the navigator's fade language. Opacity-only and quick —
+            a rise would fight the sticky header above. */}
+        <Reveal key={activeTab} rise={0} duration={motion.fast} style={styles.flex}>
         {activeTab === "build" ? (
           <View ref={buildScrollWrapRef} collapsable={false} style={styles.flex}>
           <Animated.ScrollView
@@ -446,7 +496,6 @@ const LineupScreen = ({
               buildScrollOffsetRef.current = e.nativeEvent.contentOffset.y;
             }}
           >
-            {header}
             <BuildTab
               activeCount={activeCount}
               rosterCount={roster.length}
@@ -473,6 +522,7 @@ const LineupScreen = ({
               onEditLineup={toggleInlineEditMode}
               onGenerate={runLineupGeneration}
               onSaveLineup={() => setSaveModalVisible(true)}
+              onOpenRules={onOpenRules}
               onToggleInning={(inning) => {
                 LayoutAnimation.configureNext(
                   LayoutAnimation.Presets.easeInEaseOut,
@@ -493,7 +543,6 @@ const LineupScreen = ({
           </View>
         ) : (
           <HistoryTab
-            header={header}
             hasProSubscription={hasProSubscription}
             games={games}
             selectedGame={selectedGame}
@@ -517,6 +566,7 @@ const LineupScreen = ({
             )}
           />
         )}
+        </Reveal>
       </ScreenContainer>
 
       {editModalVisible && (
@@ -559,6 +609,18 @@ const LineupScreen = ({
         isSaving={isSavingVersion}
         isManualEditSave={isManualEditSave}
         error={error}
+        duplicateNotice={duplicateSave !== null}
+        onViewDuplicate={() => {
+          const duplicateId = duplicateSave?.lineupId ?? null;
+          clearDuplicateSave();
+          setSaveModalVisible(false);
+          setSaveLineupName("");
+          if (duplicateId) {
+            void openLineupHistoryDetail(duplicateId);
+          } else {
+            setActiveTab("history");
+          }
+        }}
         inputRef={saveLineupNameInputRef}
         onSave={() => {
           void saveCurrentLineupVersion();
@@ -661,6 +723,11 @@ const styles = StyleSheet.create({
     padding: space.md,
     paddingBottom: space.lg,
     gap: space.sm,
+  },
+  stickyHeader: {
+    paddingHorizontal: space.md,
+    paddingBottom: space.sm,
+    backgroundColor: theme.bg.base,
   },
   headerBlock: {
     gap: space.sm,

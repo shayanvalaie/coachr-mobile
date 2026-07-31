@@ -34,7 +34,6 @@ const HistoryCard = ({ version, busy, onPress, onLongPress }: Props) => {
           {title}
         </AppText>
         <AppText variant="caption" color="secondary">
-          v{version.versionNumber} • {version.gameTitle || "General"} •{" "}
           {formatDateTime(version.createdAt)}
         </AppText>
       </View>

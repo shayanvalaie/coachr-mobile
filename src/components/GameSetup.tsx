@@ -1,18 +1,13 @@
-import React, { memo, useEffect, useRef } from "react";
-import {
-  ActivityIndicator,
-  Animated,
-  Pressable,
-  StyleSheet,
-  View,
-} from "react-native";
-import type Reanimated from "react-native-reanimated";
+import React, { memo, useEffect, useRef, useState } from "react";
+import { Pressable, StyleSheet, View } from "react-native";
+import Animated, { FadeOut } from "react-native-reanimated";
 import type { AnimatedRef } from "react-native-reanimated";
 import { Feather } from "../icons";
 import { theme, withAlpha } from "../theme/colors";
 import { radius, space } from "../theme/tokens";
 import { InningAssignment, Player } from "../types/lineup";
 import LineUp from "./lineup/LineupGrid";
+import LineupGridSkeleton from "./lineup/LineupGridSkeleton";
 import { AppText } from "./ui";
 
 type Props = {
@@ -37,57 +32,10 @@ type Props = {
     targetPosition: string,
   ) => void;
   playerGenderByName?: Record<string, Player["gender"]>;
-  lineupScrollableRef?: AnimatedRef<Reanimated.ScrollView>;
+  lineupScrollableRef?: AnimatedRef<Animated.ScrollView>;
+  // Wraps the finished lineup so the screen can measure it and scroll it into
+  // view (e.g. from the "jump to lineup" toast after a generation).
   lineupAnchorRef?: React.RefObject<View | null>;
-};
-
-const GeneratingState = () => {
-  const progress = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    const animation = Animated.loop(
-      Animated.sequence([
-        Animated.timing(progress, {
-          toValue: 1,
-          duration: 850,
-          useNativeDriver: false,
-        }),
-        Animated.timing(progress, {
-          toValue: 0,
-          duration: 850,
-          useNativeDriver: false,
-        }),
-      ]),
-    );
-
-    animation.start();
-
-    return () => {
-      animation.stop();
-    };
-  }, [progress]);
-
-  const width = progress.interpolate({
-    inputRange: [0, 1],
-    outputRange: ["22%", "92%"],
-  });
-
-  return (
-    <View style={styles.loaderCard}>
-      <View style={styles.loaderHeaderRow}>
-        <ActivityIndicator color={theme.accent.base} />
-        <AppText variant="body" family="heading">
-          Generating lineup...
-        </AppText>
-      </View>
-      <AppText variant="caption" color="secondary">
-        Balancing positions, bench rotation, and your custom rules.
-      </AppText>
-      <View style={styles.loaderTrack}>
-        <Animated.View style={[styles.loaderFill, { width }]} />
-      </View>
-    </View>
-  );
 };
 
 const GameSetup = ({
@@ -110,7 +58,33 @@ const GameSetup = ({
   playerGenderByName,
   lineupScrollableRef,
   lineupAnchorRef,
-}: Props) => (
+}: Props) => {
+  // Reveal state machine for the skeleton -> grid hand-off. The grid mounts
+  // hidden under an opaque skeleton and settles; the skeleton then fades out to
+  // reveal a fully-formed grid, instead of the sortable rows popping in one by
+  // one on a fresh mount.
+  const [revealPhase, setRevealPhase] = useState<
+    "generating" | "revealing" | "idle"
+  >(isGenerating ? "generating" : "idle");
+  const wasGenerating = useRef(isGenerating);
+
+  useEffect(() => {
+    if (isGenerating) {
+      wasGenerating.current = true;
+      setRevealPhase("generating");
+      return;
+    }
+    if (wasGenerating.current) {
+      wasGenerating.current = false;
+      // Hold the skeleton over the freshly mounted grid for a beat so its rows
+      // settle, then drop it — its FadeOut reveals the grid all at once.
+      setRevealPhase("revealing");
+      const timer = setTimeout(() => setRevealPhase("idle"), 280);
+      return () => clearTimeout(timer);
+    }
+  }, [isGenerating]);
+
+  return (
   <View style={styles.card}>
     <View style={styles.cardHeader}>
       <View style={styles.headerInfo}>
@@ -234,28 +208,45 @@ const GameSetup = ({
           </View>
         ) : null}
 
-        {isGenerating ? <GeneratingState /> : null}
         {error ? (
           <AppText variant="body" color="danger">
             {error}
           </AppText>
         ) : null}
 
-        <View ref={lineupAnchorRef} collapsable={false}>
-          <LineUp
-            lineup={lineup}
-            expandedInnings={expandedInnings}
-            onToggleInning={onToggleInning}
-            editable={isInlineEditing}
-            onSetPlayerPosition={onSetLineupCell}
-            playerGenderByName={playerGenderByName}
-            scrollableRef={lineupScrollableRef}
-          />
+        {/* Skeleton -> grid cross-fade. During generation the skeleton holds
+            the slot. On completion the grid mounts underneath and the skeleton
+            overlays it opaquely for a beat, then fades out — so the finished
+            lineup appears all at once rather than row-by-row. */}
+        <View ref={lineupAnchorRef} collapsable={false} style={styles.gridSlot}>
+          {revealPhase !== "generating" ? (
+            <LineUp
+              lineup={lineup}
+              expandedInnings={expandedInnings}
+              onToggleInning={onToggleInning}
+              editable={isInlineEditing}
+              onSetPlayerPosition={onSetLineupCell}
+              playerGenderByName={playerGenderByName}
+              scrollableRef={lineupScrollableRef}
+            />
+          ) : null}
+          {revealPhase !== "idle" ? (
+            <Animated.View
+              pointerEvents="none"
+              exiting={FadeOut.duration(300)}
+              style={
+                revealPhase === "revealing" ? styles.skeletonOverlay : undefined
+              }
+            >
+              <LineupGridSkeleton rows={activePlayersCount} />
+            </Animated.View>
+          ) : null}
         </View>
       </>
     )}
   </View>
-);
+  );
+};
 
 export default memo(GameSetup);
 
@@ -371,29 +362,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.sm,
     paddingVertical: 6,
   },
-  loaderCard: {
-    borderWidth: 1,
-    borderColor: theme.accent.subtleBorder,
-    borderRadius: radius.md,
-    backgroundColor: theme.accent.subtle,
-    paddingHorizontal: space.sm,
-    paddingVertical: space.sm,
-    gap: space.xs,
+  gridSlot: {
+    position: "relative",
   },
-  loaderHeaderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: space.xs,
-  },
-  loaderTrack: {
-    height: 6,
-    borderRadius: radius.pill,
-    backgroundColor: withAlpha(theme.text.primary, 0.12),
-    overflow: "hidden",
-  },
-  loaderFill: {
-    height: "100%",
-    borderRadius: radius.pill,
-    backgroundColor: theme.accent.base,
+  skeletonOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
   },
 });

@@ -60,14 +60,20 @@ export const toApiError = async (res: Response, fallbackMessage = "Request faile
     }
   }
 
-  const messageFromBody =
+  const detail =
     parsed && typeof parsed === "object"
-      ? ("error" in parsed
-          ? (parsed as { error?: unknown }).error
-          : "detail" in parsed
-            ? (parsed as { detail?: unknown }).detail
-            : null)
+      ? (parsed as { detail?: unknown }).detail
       : null;
+  // FastAPI errors carry either a plain-string detail or a structured object
+  // ({ code, message, ... }); surface the message in both shapes.
+  const detailMessage =
+    detail && typeof detail === "object" && !Array.isArray(detail)
+      ? (detail as { message?: unknown }).message
+      : detail;
+  const messageFromBody =
+    parsed && typeof parsed === "object" && "error" in parsed
+      ? (parsed as { error?: unknown }).error
+      : detailMessage;
 
   const validationMessage = extractValidationMessage(
     parsed && typeof parsed === "object" ? (parsed as { detail?: unknown }).detail : null,
@@ -86,6 +92,41 @@ export const toApiError = async (res: Response, fallbackMessage = "Request faile
   };
 
   return error;
+};
+
+// The backend rejects saving a lineup identical to one already in history for
+// the same game context with a 409 carrying a `duplicate_lineup` code and the
+// existing lineup's id, so callers can route the user to it. Older backends
+// send a plain-string detail; recognize those too, just without an id.
+export const getDuplicateLineupError = (
+  err: unknown,
+): { lineupId: string | null } | null => {
+  if (!hasHttpStatus(err, 409)) return null;
+
+  const context = (err as { context?: unknown }).context;
+  const body =
+    context && typeof context === "object"
+      ? (context as { body?: unknown }).body
+      : null;
+  const detail =
+    body && typeof body === "object"
+      ? (body as { detail?: unknown }).detail
+      : null;
+
+  if (
+    detail &&
+    typeof detail === "object" &&
+    (detail as { code?: unknown }).code === "duplicate_lineup"
+  ) {
+    const id = (detail as { duplicateLineupId?: unknown }).duplicateLineupId;
+    return { lineupId: typeof id === "string" && id ? id : null };
+  }
+
+  if (/already exists/i.test(toError(err).message)) {
+    return { lineupId: null };
+  }
+
+  return null;
 };
 
 export const parseJwtClaims = (

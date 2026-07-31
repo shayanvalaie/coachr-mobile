@@ -1,5 +1,10 @@
 import { useCallback, useRef, useState } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import {
+  Pressable,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import Animated, {
   FadeIn,
   FadeInDown,
@@ -67,6 +72,15 @@ const EditLineupOverlay = ({
   onSetPlayerPosition,
 }: Props) => {
   const insets = useSafeAreaInsets();
+  const { width, height } = useWindowDimensions();
+  // The overlay mounts while the device is still rotating to landscape:
+  // lockOrientation() resolves when the OS accepts the request, not when the
+  // rotation finishes. If we laid the card out now it would size to the narrow
+  // portrait width and then grow to the landscape width once rotation lands —
+  // reading as a jump/flicker. Hold the card back until the window is actually
+  // landscape so it appears once, already at its final size. The solid `screen`
+  // background covers the screen during the rotation, so there is no flash.
+  const isLandscape = width > height;
   const gridScrollRef = useAnimatedRef<Animated.ScrollView>();
   const exportButtonRef = useRef<View>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -135,6 +149,8 @@ const EditLineupOverlay = ({
               },
         ]}
       >
+        {isLandscape && (
+          <>
         {!isFullscreen && (
           <Animated.View
             entering={FadeIn.duration(180)}
@@ -301,6 +317,8 @@ const EditLineupOverlay = ({
             </View>
           )}
         </Animated.View>
+          </>
+        )}
       </View>
 
       {exportMenuPos && (

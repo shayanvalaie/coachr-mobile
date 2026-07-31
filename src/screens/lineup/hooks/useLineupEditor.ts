@@ -12,7 +12,7 @@ import {
   BackendGame,
   BackendLineupVersionDetail,
 } from "../../../lib/backend/types";
-import { hasHttpStatus, toError } from "../../../lib/backend/utils";
+import { getDuplicateLineupError } from "../../../lib/backend/utils";
 import { InningAssignment } from "../../../types/lineup";
 import { parseTeamRulesConfig, TeamRulesConfig } from "../../../types/rules";
 import {
@@ -52,6 +52,9 @@ type Params = {
   rulesConfig: TeamRulesConfig | null;
   loadLineupHistory: (team: string, gameId: string | null) => Promise<void>;
   onEditModeChange?: (editing: boolean) => void;
+  // Fired when a direct save from the landscape editor hits a duplicate (the
+  // overlay is torn down first, so the notice has to live outside this hook).
+  onDuplicateLineup?: (duplicateLineupId: string | null) => void;
 };
 
 // Inline lineup editing: the landscape edit overlay, cell swaps, and saving
@@ -77,10 +80,16 @@ export const useLineupEditor = ({
   rulesConfig,
   loadLineupHistory,
   onEditModeChange,
+  onDuplicateLineup,
 }: Params) => {
   const [saveModalVisible, setSaveModalVisible] = useState(false);
   const [saveLineupName, setSaveLineupName] = useState("");
   const [isSavingVersion, setIsSavingVersion] = useState(false);
+  // Set when a save was rejected because an identical lineup already exists;
+  // the save sheet shows it as inline validation with a route to the original.
+  const [duplicateSave, setDuplicateSave] = useState<{
+    lineupId: string | null;
+  } | null>(null);
   const saveLineupNameInputRef = useRef<TextInput | null>(null);
 
   // Undo history for inline edits. Each snapshot is a full clone of the rows
@@ -96,12 +105,19 @@ export const useLineupEditor = ({
   }, []);
 
   useEffect(() => {
-    if (!saveModalVisible) return;
+    if (!saveModalVisible) {
+      setDuplicateSave(null);
+      return;
+    }
     const timer = setTimeout(() => {
       saveLineupNameInputRef.current?.focus();
     }, 80);
     return () => clearTimeout(timer);
   }, [saveModalVisible]);
+
+  const clearDuplicateSave = useCallback(() => {
+    setDuplicateSave(null);
+  }, []);
 
   useEffect(
     () => () => {
@@ -355,6 +371,7 @@ export const useLineupEditor = ({
         spinnerStartedAt = Date.now();
         setIsSavingVersion(true);
         setError(null);
+        setDuplicateSave(null);
 
         const [rosterForSave, rawRules] = await Promise.all([
           backendClient.getTeamRoster(team),
@@ -445,24 +462,23 @@ export const useLineupEditor = ({
         setStatus(`Saved ${saved.lineupName || `v${saved.versionNumber}`}.`);
       } catch (err) {
         // A 409 duplicate means an identical lineup is already in history for
-        // this game context — there's nothing more to save, so treat it as a
-        // completion: close the landscape editor (if open) and report it as
-        // already saved rather than surfacing a blocking error.
-        if (
-          hasHttpStatus(err, 409) &&
-          /already exists/i.test(toError(err).message)
-        ) {
-          setSaveLineupName("");
+        // this game context. Surface it as validation instead of saving: the
+        // naming sheet stays open with an inline notice that can route to the
+        // existing lineup, while a direct save from the landscape editor
+        // (which is torn down first) reports through onDuplicateLineup.
+        const duplicate = getDuplicateLineupError(err);
+        if (duplicate) {
           setError(null);
           if (editModalVisible) {
+            setSaveLineupName("");
             dismissEditModal();
             if (isHistoryEdit) {
               setActiveTab("history");
             }
+            onDuplicateLineup?.(duplicate.lineupId);
           } else {
-            setSaveModalVisible(false);
+            setDuplicateSave(duplicate);
           }
-          setStatus("This lineup is already saved in history.");
           return;
         }
         const message =
@@ -493,6 +509,7 @@ export const useLineupEditor = ({
       lineup,
       lineupParentVersionId,
       loadLineupHistory,
+      onDuplicateLineup,
       rulesConfig,
       saveLineupName,
       selectedHistoryDetail,
@@ -520,5 +537,7 @@ export const useLineupEditor = ({
     undoLastEdit,
     canUndo: undoDepth > 0,
     saveCurrentLineupVersion,
+    duplicateSave,
+    clearDuplicateSave,
   };
 };

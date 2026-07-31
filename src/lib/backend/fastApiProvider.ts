@@ -333,6 +333,7 @@ const mapPlayer = (raw: any): Player => ({
   desiredPositions: parsePositions(raw.desiredPositions ?? []),
   fixedAllGame: false,
   lockInPosition: !!raw.lockInPosition,
+  benched: !!raw.benched,
 });
 
 const mapGame = (raw: any): BackendGame => ({

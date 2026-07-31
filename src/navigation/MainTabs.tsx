@@ -175,6 +175,9 @@ const MainTabs = ({ session }: SessionProps) => {
           <LineupScreen
             session={session}
             onOpenRoster={() => navigation.navigate("RosterTab")}
+            onOpenRules={() =>
+              navigation.navigate("HomeTab", { screen: "Rules" })
+            }
             launchRequest={route.params?.launch ?? null}
             hasProSubscription={proGate.isPro}
             onRequirePro={proGate.open}

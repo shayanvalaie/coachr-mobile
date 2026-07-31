@@ -10,7 +10,6 @@ import React, {
 import { Alert, AppState, Platform, type AppStateStatus } from "react-native";
 import type { Purchase, PurchaseError } from "react-native-iap";
 import { backendClient } from "../backend/client";
-import { ADMIN_EMAILS } from "../proAccess";
 import {
   readPersistedSubscription,
   persistSubscription,
@@ -57,7 +56,7 @@ type SubscriptionContextValue = {
   restore: () => Promise<void>;
   /** Clear subscription state (dev/testing only). */
   clearSubscription: () => Promise<void>;
-  /** Whether the signed-in user is an admin (ADMIN_EMAILS allowlist). */
+  /** Whether the signed-in user is an admin (server-authoritative). */
   isAdmin: boolean;
   /** Whether the admin Pro override is currently on (server flag === true). */
   adminProEnabled: boolean;
@@ -111,22 +110,31 @@ export const SubscriptionProvider = ({
     };
   }, []);
 
-  // ── Admin identity (email allowlist — instant, offline) ────────────────
+  // ── Admin identity (authoritative from server) ─────────────────────────
+  // The backend owns the admin decision (config allowlist + DB flag) and
+  // returns `isAdmin` on the subscription status. The client no longer keeps
+  // its own copy of the allowlist — that duplication drifted out of sync.
 
   useEffect(() => {
-    const isAdminEmail = (email: string | null | undefined) =>
-      !!email && ADMIN_EMAILS.has(email.toLowerCase());
+    const refreshAdmin = (email: string | null | undefined) => {
+      if (!email) {
+        setIsAdmin(false);
+        return;
+      }
+      backendClient
+        .getSubscriptionStatus()
+        .then((status) => {
+          if (mountedRef.current) setIsAdmin(!!status.isAdmin);
+        })
+        .catch(() => {});
+    };
 
     backendClient.auth.getSession().then(({ data }) => {
-      const email = data.session?.user.email;
-      if (__DEV__) console.log("[iap] admin check (getSession):", email, isAdminEmail(email));
-      setIsAdmin(isAdminEmail(email));
+      refreshAdmin(data.session?.user.email);
     });
 
-    const { data } = backendClient.auth.onAuthStateChange((event, session) => {
-      const email = session?.user.email;
-      if (__DEV__) console.log(`[iap] admin check (${event}):`, email, isAdminEmail(email));
-      setIsAdmin(isAdminEmail(email));
+    const { data } = backendClient.auth.onAuthStateChange((_event, session) => {
+      refreshAdmin(session?.user.email);
     });
 
     return () => data.subscription.unsubscribe();
@@ -157,9 +165,7 @@ export const SubscriptionProvider = ({
     const status = await backendClient.getSubscriptionStatus().catch(() => null);
     if (mountedRef.current && status) {
       setProAccessFlag(status.proAccess);
-      // Server-confirmed admin beats the client email listener, which can
-      // miss events; only ever upgrades to true (sign-out clears it).
-      if (status.isAdmin) setIsAdmin(true);
+      setIsAdmin(!!status.isAdmin);
     }
 
     // 2. Real store subscription (release builds only).
@@ -336,7 +342,9 @@ export const SubscriptionProvider = ({
       backendClient
         .getSubscriptionStatus()
         .then((status) => {
-          if (mountedRef.current) setProAccessFlag(status.proAccess);
+          if (!mountedRef.current) return;
+          setProAccessFlag(status.proAccess);
+          setIsAdmin(!!status.isAdmin);
         })
         .catch(() => {});
 

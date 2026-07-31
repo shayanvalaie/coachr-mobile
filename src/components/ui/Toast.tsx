@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import Animated, {
   Easing,
   runOnJS,
@@ -20,7 +20,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather, IconName } from "../../icons";
 import { useReducedMotion } from "../../hooks/useReducedMotion";
 import { notifyError, notifySuccess } from "../../lib/haptics";
-import { theme } from "../../theme/colors";
+import { theme, withAlpha } from "../../theme/colors";
 import { motion, radius, shadow, space } from "../../theme/tokens";
 import AppText from "./AppText";
 
@@ -30,6 +30,10 @@ type ToastOptions = {
   message: string;
   type?: ToastType;
   durationMs?: number;
+  // When set, the toast becomes tappable: `actionLabel` shows as a hint under
+  // the message and `onPress` fires (then the toast dismisses) when tapped.
+  actionLabel?: string;
+  onPress?: () => void;
 };
 
 type ToastContextValue = {
@@ -55,9 +59,27 @@ const iconByType: Record<ToastType, IconName> = {
 };
 
 const colorByType: Record<ToastType, string> = {
-  info: theme.text.secondary,
+  info: theme.accent.base,
   success: theme.success.base,
   error: theme.danger.base,
+};
+
+// Tinted surface per type so the toast reads as a colored alert, not a neutral
+// pill. Each is a semi-transparent wash of the type color over the dark base
+// plus a brighter same-color border, so it stays legible while clearly popping.
+const surfaceByType: Record<ToastType, { bg: string; border: string }> = {
+  info: {
+    bg: withAlpha(theme.accent.base, 0.18),
+    border: withAlpha(theme.accent.base, 0.55),
+  },
+  success: {
+    bg: withAlpha(theme.success.base, 0.2),
+    border: withAlpha(theme.success.base, 0.6),
+  },
+  error: {
+    bg: withAlpha(theme.danger.base, 0.2),
+    border: withAlpha(theme.danger.base, 0.6),
+  },
 };
 
 type ActiveToast = ToastOptions & { id: number };
@@ -74,6 +96,13 @@ export const ToastProvider = ({ children }: { children: ReactNode }) => {
   const dismiss = useCallback(() => {
     setActive(null);
   }, []);
+
+  const handlePress = useCallback(() => {
+    if (!active?.onPress) return;
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    active.onPress();
+    dismiss();
+  }, [active, dismiss]);
 
   const runNext = useCallback(() => {
     const next = queue.current.shift();
@@ -139,18 +168,55 @@ export const ToastProvider = ({ children }: { children: ReactNode }) => {
       {children}
       {active ? (
         <View
-          pointerEvents="none"
+          pointerEvents="box-none"
           style={[styles.host, { top: insets.top + space.xs }]}
         >
-          <Animated.View style={[styles.toast, animatedStyle]}>
-            <Feather
-              name={iconByType[active.type ?? "info"]}
-              size={16}
-              color={colorByType[active.type ?? "info"]}
-            />
-            <AppText variant="body" family="heading" style={styles.message}>
-              {active.message}
-            </AppText>
+          <Animated.View
+            pointerEvents={active.onPress ? "auto" : "none"}
+            style={animatedStyle}
+          >
+            <Pressable
+              disabled={!active.onPress}
+              onPress={handlePress}
+              accessibilityRole={active.onPress ? "button" : undefined}
+              accessibilityLabel={
+                active.onPress
+                  ? `${active.message}. ${active.actionLabel ?? "Tap to open."}`
+                  : undefined
+              }
+              style={({ pressed }) => [
+                styles.toast,
+                {
+                  backgroundColor: surfaceByType[active.type ?? "info"].bg,
+                  borderColor: surfaceByType[active.type ?? "info"].border,
+                  borderRadius: active.actionLabel ? radius.lg : radius.pill,
+                },
+                pressed && active.onPress && styles.toastPressed,
+              ]}
+            >
+              <Feather
+                name={iconByType[active.type ?? "info"]}
+                size={18}
+                color={colorByType[active.type ?? "info"]}
+              />
+              <View style={styles.messageColumn}>
+                <AppText variant="body" family="heading" style={styles.message}>
+                  {active.message}
+                </AppText>
+                {active.actionLabel ? (
+                  <AppText variant="caption" color="secondary">
+                    {active.actionLabel}
+                  </AppText>
+                ) : null}
+              </View>
+              {active.onPress ? (
+                <Feather
+                  name="chevron-right"
+                  size={18}
+                  color={colorByType[active.type ?? "info"]}
+                />
+              ) : null}
+            </Pressable>
           </Animated.View>
         </View>
       ) : null}
@@ -168,15 +234,19 @@ const styles = StyleSheet.create({
   toast: {
     flexDirection: "row",
     alignItems: "center",
-    gap: space.xs,
-    backgroundColor: theme.bg.elevated,
-    borderWidth: 1,
-    borderColor: theme.border.strong,
-    borderRadius: radius.pill,
+    gap: space.sm,
+    borderWidth: 1.5,
     paddingHorizontal: space.md,
     paddingVertical: space.sm,
     maxWidth: 480,
     ...shadow.float,
+  },
+  toastPressed: {
+    opacity: 0.9,
+  },
+  messageColumn: {
+    flexShrink: 1,
+    gap: 2,
   },
   message: {
     flexShrink: 1,

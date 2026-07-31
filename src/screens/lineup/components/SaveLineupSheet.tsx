@@ -1,7 +1,8 @@
 import { RefObject } from "react";
 import { StyleSheet, TextInput, View } from "react-native";
 import { AppText, Button, Input, Sheet } from "../../../components/ui";
-import { space } from "../../../theme/tokens";
+import { theme } from "../../../theme/colors";
+import { radius, space } from "../../../theme/tokens";
 
 type Props = {
   visible: boolean;
@@ -11,6 +12,8 @@ type Props = {
   isSaving: boolean;
   isManualEditSave: boolean;
   error: string | null;
+  duplicateNotice: boolean;
+  onViewDuplicate: () => void;
   inputRef: RefObject<TextInput | null>;
   onSave: () => void;
 };
@@ -24,6 +27,8 @@ const SaveLineupSheet = ({
   isSaving,
   isManualEditSave,
   error,
+  duplicateNotice,
+  onViewDuplicate,
   inputRef,
   onSave,
 }: Props) => (
@@ -47,6 +52,20 @@ const SaveLineupSheet = ({
         error={error}
         accessibilityLabel="Lineup name"
       />
+      {duplicateNotice ? (
+        <View style={styles.duplicateNotice}>
+          <AppText variant="body">
+            This lineup has already been saved for this game.
+          </AppText>
+          <Button
+            label="View saved lineup"
+            variant="secondary"
+            size="sm"
+            onPress={onViewDuplicate}
+            accessibilityLabel="View saved lineup"
+          />
+        </View>
+      ) : null}
       <View style={styles.actions}>
         <Button
           label="Cancel"
@@ -58,6 +77,7 @@ const SaveLineupSheet = ({
           label="Save lineup"
           onPress={onSave}
           loading={isSaving}
+          disabled={duplicateNotice}
           accessibilityLabel="Save lineup"
         />
       </View>
@@ -68,6 +88,15 @@ const SaveLineupSheet = ({
 const styles = StyleSheet.create({
   body: {
     gap: space.sm,
+  },
+  duplicateNotice: {
+    gap: space.xs,
+    padding: space.sm,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: theme.accent.subtleBorder,
+    backgroundColor: theme.accent.subtle,
+    alignItems: "flex-start",
   },
   actions: {
     flexDirection: "row",

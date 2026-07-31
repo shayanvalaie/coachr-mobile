@@ -48,6 +48,7 @@ export const createPlayer = (overrides?: Partial<Player>): Player => ({
   desiredPositions: [],
   fixedAllGame: false,
   lockInPosition: false,
+  benched: false,
   ...overrides,
 })
 

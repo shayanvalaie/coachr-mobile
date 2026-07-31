@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Keyboard, StyleSheet, TouchableWithoutFeedback, View } from "react-native";
 import AuthForm from "../components/auth/AuthForm";
 import AuthHeader from "../components/auth/AuthHeader";
-import { Card, ScreenContainer } from "../components/ui";
+import { Card, Reveal, ScreenContainer } from "../components/ui";
 import { space } from "../theme/tokens";
 import { AuthMode } from "../types/auth";
 import { backendClient } from "../lib/backend/client";
@@ -166,6 +166,9 @@ const AuthScreen = () => {
     <ScreenContainer keyboard scroll contentStyle={styles.scrollContent}>
       <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
         <View style={styles.centerWrap}>
+          {/* First thing shown after boot — ease the card in rather than
+              popping it. Mount-only, so mode/verification swaps stay still. */}
+          <Reveal>
           <Card variant="elevated" padding="lg" style={styles.card}>
             <AuthHeader mode={mode} />
             <AuthForm
@@ -188,6 +191,7 @@ const AuthScreen = () => {
               onToggleMode={handleToggleMode}
             />
           </Card>
+          </Reveal>
         </View>
       </TouchableWithoutFeedback>
     </ScreenContainer>

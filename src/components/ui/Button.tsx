@@ -1,4 +1,10 @@
-import { ActivityIndicator, StyleSheet, View, ViewStyle } from "react-native";
+import {
+  ActivityIndicator,
+  StyleProp,
+  StyleSheet,
+  View,
+  ViewStyle,
+} from "react-native";
 import { Feather, IconName } from "../../icons";
 import { theme } from "../../theme/colors";
 import { radius, space } from "../../theme/tokens";
@@ -19,6 +25,7 @@ type Props = {
   fullWidth?: boolean;
   haptic?: boolean;
   accessibilityLabel?: string;
+  style?: StyleProp<ViewStyle>;
 };
 
 const containerByVariant: Record<Variant, ViewStyle> = {
@@ -68,6 +75,7 @@ const Button = ({
   fullWidth = false,
   haptic,
   accessibilityLabel,
+  style,
 }: Props) => {
   const isBlocked = disabled || loading;
 
@@ -86,6 +94,7 @@ const Button = ({
         size === "sm" && styles.compactPadding,
         fullWidth && styles.fullWidth,
         isBlocked && styles.blocked,
+        style,
       ]}
     >
       {loading ? (

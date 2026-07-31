@@ -11,7 +11,6 @@ import {
 import { safeSignOut } from "../lib/auth";
 import { BackendSession } from "../lib/backend/types";
 import { IAP_SKUS, useSubscription } from "../lib/iap";
-import { ADMIN_EMAILS } from "../lib/proAccess";
 import { theme } from "../theme/colors";
 import { space } from "../theme/tokens";
 
@@ -29,12 +28,12 @@ const ProfileScreen = ({ session, onOpenSubscribe }: Props) => {
     restore,
     loading,
     clearSubscription,
+    isAdmin,
     adminProEnabled,
     setAdminProEnabled,
   } = useSubscription();
-  // Derived from the session prop, not the provider's async auth listener, so
-  // the toggle renders deterministically. The server enforces admin on write.
-  const isAdmin = !!email && ADMIN_EMAILS.has(email.toLowerCase());
+  // Admin status comes from the server (allowlist + DB flag), surfaced on the
+  // subscription status. The server also enforces admin on write.
   const isAdminUnlocked = isAdmin && adminProEnabled && isPro && !activeSku;
   const isDevUnlocked = __DEV__ && isPro && !activeSku;
 

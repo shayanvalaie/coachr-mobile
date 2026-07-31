@@ -104,7 +104,7 @@ export type BackendSubscriptionStatus = {
   expiresAt: string | null;
   /** Admin Pro override flag on the user: true/false/null. */
   proAccess: boolean | null;
-  /** Whether the signed-in user may set `proAccess` (admin allowlist). */
+  /** Whether the signed-in user may set `proAccess` (server-authoritative admin). */
   isAdmin: boolean;
 };
 

@@ -17,7 +17,6 @@ import { motion, space } from "../../../theme/tokens";
 import GameContextCard from "./GameContextCard";
 
 type Props = {
-  header: ReactNode;
   hasProSubscription: boolean;
   games: BackendGame[];
   selectedGame: BackendGame | null;
@@ -31,10 +30,10 @@ type Props = {
   renderVersion: (version: BackendLineupVersionSummary) => ReactNode;
 };
 
-// History tab: the FlatList owns scrolling; the screen header, tab switcher,
-// and game context ride along as the list header.
+// History tab: the FlatList owns scrolling. The screen header + tab switcher
+// are pinned by the parent screen; the generate button and game context ride
+// along as the list header.
 const HistoryTab = ({
-  header,
   hasProSubscription,
   games,
   selectedGame,
@@ -72,7 +71,6 @@ const HistoryTab = ({
       contentContainerStyle={styles.listContent}
       ListHeaderComponent={
         <View style={styles.listHeader}>
-          {header}
           <Button
             label="Generate"
             icon="zap"
