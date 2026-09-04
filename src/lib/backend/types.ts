@@ -1,4 +1,10 @@
 import { Player } from "../../types/lineup";
+import {
+  LeagueDetail,
+  LeagueSummary,
+  RulesetPayload,
+  TeamRulesState,
+} from "../../types/rules";
 
 export type BackendProvider = "fastapi";
 
@@ -38,15 +44,19 @@ export type BackendLineupPlayer = {
   lockInPosition: boolean;
 };
 
-export type BackendRulesConfig = {
+export type BackendTeamRulesInput = {
+  rulesText?: string;
+  sport?: string;
+  coachPreferences?: string;
+};
+
+export type BackendCreateLeagueInput = {
+  name: string;
   sport: string;
-  segmentLabel: string;
-  segmentCount: number;
-  minimumPlayers: number;
-  playersOnField: number;
-  maxConsecutiveBench: number;
-  lineupSlots: string[];
-  customInstructions: string;
+  region?: string;
+  description?: string;
+  rulesText: string;
+  confirmDistinct?: boolean;
 };
 
 export type BackendLineupRequest = {
@@ -57,7 +67,6 @@ export type BackendLineupRequest = {
   gameTitle?: string | null;
   saveLineup?: boolean;
   lineupName?: string | null;
-  rulesConfig?: BackendRulesConfig;
 };
 
 export type BackendSaveLineupRequest = {
@@ -70,7 +79,6 @@ export type BackendSaveLineupRequest = {
   rows: Record<string, unknown>[];
   parentLineupId?: string | null;
   source?: "generated" | "manualSave" | "manualEdit" | null;
-  rulesConfig?: BackendRulesConfig;
 };
 
 export type BackendLineupVersionSummary = {
@@ -161,8 +169,17 @@ export type BackendClient = {
     ) => { data: { subscription: BackendAuthSubscription } };
   };
   getOrCreateTeam: (userId: string) => Promise<string | null>;
-  getTeamRules: (teamId: string) => Promise<string | null>;
-  upsertTeamRules: (teamId: string, ruleText: string) => Promise<void>;
+  getTeamRules: (teamId: string) => Promise<TeamRulesState>;
+  upsertTeamRules: (
+    teamId: string,
+    input: BackendTeamRulesInput,
+  ) => Promise<TeamRulesState>;
+  setTeamLeague: (teamId: string, leagueId: string | null) => Promise<TeamRulesState>;
+  searchLeagues: (query: string, sport?: string) => Promise<LeagueSummary[]>;
+  createLeague: (input: BackendCreateLeagueInput) => Promise<LeagueDetail>;
+  getLeague: (leagueId: string) => Promise<LeagueDetail>;
+  createChangeRequest: (leagueId: string, message: string) => Promise<void>;
+  getRuleset: (rulesetId: string) => Promise<RulesetPayload>;
   getTeamRoster: (teamId: string) => Promise<Player[]>;
   saveTeamPlayer: (teamId: string, player: Player) => Promise<{ id: string }>;
   deleteTeamPlayer: (teamId: string, playerId: string) => Promise<void>;

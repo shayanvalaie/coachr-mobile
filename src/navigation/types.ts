@@ -4,6 +4,8 @@ import { LineupLaunchRequest } from "../types/lineupLaunch";
 export type HomeStackParamList = {
   Home: undefined;
   Rules: undefined;
+  Leagues: undefined;
+  LeagueDetail: { leagueId: string };
   AllLineups: undefined;
 };
 

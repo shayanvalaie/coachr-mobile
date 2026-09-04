@@ -8,7 +8,6 @@ import {
 } from "../../../lib/backend/types";
 import { useToast } from "../../../components/ui";
 import { InningAssignment } from "../../../types/lineup";
-import { parseTeamRulesConfig } from "../../../types/rules";
 import {
   cloneLineupRows,
   normalizeBenchNames,
@@ -268,21 +267,15 @@ export const useLineupCarousel = ({
         setActiveLineupId(lineupVersion.id);
         setDetailsError(null);
 
-        const [roster, rawRules] = await Promise.all([
+        const [roster, teamRules] = await Promise.all([
           backendClient.getTeamRoster(team),
           backendClient.getTeamRules(team),
         ]);
 
-        const rulesConfig = parseTeamRulesConfig(rawRules);
-        const rosterNames = new Set(
-          roster
-            .map((player) => player.name.trim().toLowerCase())
-            .filter((name) => name.length > 0),
-        );
         const validationError = validateEditedLineupForSave(
           editedRows,
-          rulesConfig,
-          rosterNames,
+          teamRules.ruleset?.spec ?? null,
+          roster,
         );
         if (validationError) {
           setDetailsError(validationError);
@@ -308,7 +301,6 @@ export const useLineupCarousel = ({
           rows: toLineupRowsPayload(editedRows),
           parentLineupId: lineupVersion.id,
           source: "manualEdit",
-          rulesConfig,
         });
 
         setDetailsById((prev) => ({

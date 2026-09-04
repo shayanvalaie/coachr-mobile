@@ -3,7 +3,11 @@ import { useFocusEffect } from "@react-navigation/native";
 import { backendClient } from "../../../lib/backend/client";
 import { BackendGame, BackendSession } from "../../../lib/backend/types";
 import { Player } from "../../../types/lineup";
-import { parseTeamRulesConfig, TeamRulesConfig } from "../../../types/rules";
+import {
+  rulesConfigFromTeamRules,
+  TeamRulesConfig,
+  TeamRulesState,
+} from "../../../types/rules";
 import { buildPlayerGenderByName } from "../../../utils/playerNames";
 
 type Params = {
@@ -19,7 +23,7 @@ export const useLineupData = ({ session, setError }: Params) => {
   const [games, setGames] = useState<BackendGame[]>([]);
   const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
   const [activeIds, setActiveIds] = useState<Set<string>>(new Set());
-  const [rulesConfig, setRulesConfig] = useState<TeamRulesConfig | null>(null);
+  const [teamRules, setTeamRules] = useState<TeamRulesState | null>(null);
 
   const ensureTeam = useCallback(async () => {
     if (teamId) return teamId;
@@ -52,7 +56,7 @@ export const useLineupData = ({ session, setError }: Params) => {
             .map((player) => player.id),
         ),
       );
-      setRulesConfig(parseTeamRulesConfig(loadedRules));
+      setTeamRules(loadedRules);
       setGames(loadedGames);
       setSelectedGameId((prev) => {
         if (prev && loadedGames.some((game) => game.id === prev)) {
@@ -81,6 +85,11 @@ export const useLineupData = ({ session, setError }: Params) => {
         setError("Unable to load lineup context.");
       });
     }, [loadTeamContext, setError]),
+  );
+
+  const rulesConfig = useMemo<TeamRulesConfig | null>(
+    () => (teamRules ? rulesConfigFromTeamRules(teamRules) : null),
+    [teamRules],
   );
 
   const activePlayers = useMemo(
@@ -113,6 +122,7 @@ export const useLineupData = ({ session, setError }: Params) => {
     setSelectedGameId,
     activeIds,
     setActiveIds,
+    teamRules,
     rulesConfig,
     ensureTeam,
     loadTeamContext,

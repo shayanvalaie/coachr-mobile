@@ -2,8 +2,8 @@
 // everything here is a plain function of its inputs.
 
 import { BackendGame } from "../lib/backend/types";
-import { InningAssignment } from "../types/lineup";
-import { parseTeamRulesConfig } from "../types/rules";
+import { InningAssignment, Player } from "../types/lineup";
+import { resolveSpecTier, RulesetSpec } from "../types/rules";
 
 export const normalizeLineupRows = (rows: any[]): InningAssignment[] => {
   if (!Array.isArray(rows)) return [];
@@ -203,36 +203,47 @@ export const cloneLineupRows = (rows: InningAssignment[]): InningAssignment[] =>
     droppedPosition: row.droppedPosition,
   }));
 
+// Client-side pre-check before a save; the server runs the full validator.
+// The effective slots depend on the tier the participating roster resolves to
+// (e.g. coed softball drops RCF with exactly 3 women), so the tier is resolved
+// from the players the rows actually reference.
 export const validateEditedLineupForSave = (
   rows: InningAssignment[],
-  rulesConfig: ReturnType<typeof parseTeamRulesConfig>,
-  rosterNames: Set<string>,
+  spec: RulesetSpec | null,
+  roster: Array<Pick<Player, "name" | "gender">>,
 ): string | null => {
-  if (rows.length !== rulesConfig.segmentCount) {
-    return `This lineup has ${rows.length} innings, but your rules require ${rulesConfig.segmentCount}.`;
+  if (!spec) {
+    return "Set up your team rules or join a league before saving lineups.";
   }
 
-  const expectedSlots =
-    rulesConfig.lineupSlots.length > 0
-      ? rulesConfig.lineupSlots
-      : Array.from(
-          { length: rulesConfig.playersOnField },
-          (_unused, idx) => `Slot ${idx + 1}`,
-        );
+  const normalize = (name: string) => name.trim().toLowerCase();
+  const rosterNames = new Set(
+    roster.map((player) => normalize(player.name)).filter((name) => name.length > 0),
+  );
+  const referenced = new Set<string>();
+  rows.forEach((row) => {
+    Object.values(row.positions).forEach((value) => {
+      if (typeof value === "string" && value.trim()) referenced.add(normalize(value));
+    });
+    row.bench.forEach((name) => referenced.add(normalize(name)));
+  });
+  const participants = roster.filter((player) => referenced.has(normalize(player.name)));
+  const tier = resolveSpecTier(spec, participants);
+  const label = spec.segment.label;
 
-  if (expectedSlots.length !== rulesConfig.playersOnField) {
-    return "Rules configuration is invalid: lineup slots must match players on field.";
+  if (rows.length !== spec.segment.count) {
+    return `This lineup has ${rows.length} ${label}s, but your rules require ${spec.segment.count}.`;
   }
 
-  if (rosterNames.size < rulesConfig.playersOnField) {
-    return `Roster has ${rosterNames.size} players, but rules require ${rulesConfig.playersOnField} on field.`;
+  if (participants.length < tier.playersOnField) {
+    return `This lineup involves ${participants.length} players, but rules require ${tier.playersOnField} on the field.`;
   }
 
   for (const row of rows) {
     const assignedNames: string[] = [];
     const missingSlots: string[] = [];
 
-    expectedSlots.forEach((slot) => {
+    tier.slots.forEach((slot) => {
       const value = row.positions[slot];
       if (typeof value === "string" && value.trim()) {
         assignedNames.push(value.trim());
@@ -242,35 +253,33 @@ export const validateEditedLineupForSave = (
     });
 
     if (missingSlots.length > 0) {
-      const maxBench = Math.max(
-        rosterNames.size - rulesConfig.playersOnField,
-        0,
-      );
-      const onFieldCount = assignedNames.length;
-      const benchCount = row.bench.length;
+      const maxBench = Math.max(participants.length - tier.playersOnField, 0);
       const missingLabel = missingSlots.length === 1 ? "slot is" : "slots are";
-      return `Inning ${row.inning}: ${onFieldCount} on field, ${benchCount} benched. You need ${rulesConfig.playersOnField} on field (max ${maxBench} benched). ${missingSlots.length} field ${missingLabel} empty (${missingSlots.join(", ")}).`;
+      return `${capitalizeLabel(label)} ${row.inning}: ${assignedNames.length} on field, ${row.bench.length} benched. You need ${tier.playersOnField} on field (max ${maxBench} benched). ${missingSlots.length} field ${missingLabel} empty (${missingSlots.join(", ")}).`;
     }
 
-    const normalized = assignedNames.map((name) => name.toLowerCase());
+    const normalized = assignedNames.map(normalize);
     const duplicates = normalized.filter(
       (name, idx) => normalized.indexOf(name) !== idx,
     );
     if (duplicates.length > 0) {
       const uniqueDuplicates = [...new Set(duplicates)];
-      return `Inning ${row.inning} has duplicate player assignments: ${uniqueDuplicates.join(", ")}.`;
+      return `${capitalizeLabel(label)} ${row.inning} has duplicate player assignments: ${uniqueDuplicates.join(", ")}.`;
     }
 
     const unknownPlayers = assignedNames.filter(
-      (name) => !rosterNames.has(name.toLowerCase()),
+      (name) => !rosterNames.has(normalize(name)),
     );
     if (unknownPlayers.length > 0) {
-      return `Inning ${row.inning} includes players not in roster: ${unknownPlayers.join(", ")}.`;
+      return `${capitalizeLabel(label)} ${row.inning} includes players not in roster: ${unknownPlayers.join(", ")}.`;
     }
   }
 
   return null;
 };
+
+const capitalizeLabel = (value: string) =>
+  value.charAt(0).toUpperCase() + value.slice(1);
 
 export const normalizeBenchNames = (names: string[]): string[] => {
   const seen = new Set<string>();

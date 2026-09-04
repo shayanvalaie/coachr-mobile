@@ -14,7 +14,7 @@ import {
 } from "../../../lib/backend/types";
 import { getDuplicateLineupError } from "../../../lib/backend/utils";
 import { InningAssignment } from "../../../types/lineup";
-import { parseTeamRulesConfig, TeamRulesConfig } from "../../../types/rules";
+import { TeamRulesConfig } from "../../../types/rules";
 import {
   cloneLineupRows,
   formatGameLabel,
@@ -373,20 +373,14 @@ export const useLineupEditor = ({
         setError(null);
         setDuplicateSave(null);
 
-        const [rosterForSave, rawRules] = await Promise.all([
+        const [rosterForSave, teamRules] = await Promise.all([
           backendClient.getTeamRoster(team),
           backendClient.getTeamRules(team),
         ]);
-        const effectiveRulesConfig = parseTeamRulesConfig(rawRules);
-        const rosterNames = new Set(
-          rosterForSave
-            .map((player) => player.name.trim().toLowerCase())
-            .filter((name) => name.length > 0),
-        );
         const validationError = validateEditedLineupForSave(
           rowsToSave,
-          effectiveRulesConfig,
-          rosterNames,
+          teamRules.ruleset?.spec ?? null,
+          rosterForSave,
         );
         if (validationError) {
           setError(validationError);
@@ -420,7 +414,7 @@ export const useLineupEditor = ({
 
         const saved = await backendClient.saveLineupVersion({
           teamId: team,
-          sport: selectedHistoryDetail?.sport || effectiveRulesConfig.sport,
+          sport: selectedHistoryDetail?.sport || teamRules.ruleset?.sport || "softball",
           roster: rosterPayload,
           gameId: effectiveGameId,
           gameTitle,
@@ -428,7 +422,6 @@ export const useLineupEditor = ({
           rows: toLineupRowsPayload(rowsToSave),
           parentLineupId,
           source: parentLineupId ? "manualEdit" : "manualSave",
-          rulesConfig: effectiveRulesConfig,
         });
 
         await loadLineupHistory(team, effectiveGameId);

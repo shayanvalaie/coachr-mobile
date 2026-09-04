@@ -29,7 +29,7 @@ import { BackendSession } from "../lib/backend/types";
 import { theme } from "../theme/colors";
 import { space } from "../theme/tokens";
 import { Player } from "../types/lineup";
-import { defaultTeamRulesConfig, parseTeamRulesConfig } from "../types/rules";
+import { defaultTeamRulesConfig, rulesConfigFromTeamRules } from "../types/rules";
 import { buildPlayersFromRows, createPlayer } from "../utils/lineupGenerator";
 import {
   findDuplicatePlayerNames,
@@ -99,12 +99,12 @@ const RosterScreen = ({
       const team = await ensureTeam();
       if (!team) return;
 
-      const [nextRoster, rawRules] = await Promise.all([
+      const [nextRoster, teamRules] = await Promise.all([
         backendClient.getTeamRoster(team),
         backendClient.getTeamRules(team),
       ]);
       setRoster(nextRoster);
-      setLineupSlots(parseTeamRulesConfig(rawRules).lineupSlots);
+      setLineupSlots(rulesConfigFromTeamRules(teamRules).lineupSlots);
       setActiveIds(
         new Set(nextRoster.filter((p) => !p.benched).map((p) => p.id)),
       );

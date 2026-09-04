@@ -3,6 +3,7 @@ import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { useBackendAuth } from "../hooks/useBackendAuth";
 import { useReducedMotion } from "../hooks/useReducedMotion";
 import AuthScreen from "../screens/AuthScreen";
+import SetupWizard from "../screens/onboarding/SetupWizard";
 import SubscriptionScreen from "../screens/SubscriptionScreen";
 import { theme } from "../theme/colors";
 import MainTabs from "./MainTabs";
@@ -24,6 +25,7 @@ const RootNavigator = () => {
   }
 
   return (
+    <>
     <RootStack.Navigator
       screenOptions={{
         headerShown: false,
@@ -53,6 +55,10 @@ const RootNavigator = () => {
         </>
       )}
     </RootStack.Navigator>
+    {/* First-run setup overlay: decides for itself whether this account still
+        needs it, so it costs nothing for existing users. */}
+    {session ? <SetupWizard key={session.user.id} session={session} /> : null}
+    </>
   );
 };
 

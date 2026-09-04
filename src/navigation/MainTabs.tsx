@@ -10,6 +10,8 @@ import { BackendSession } from "../lib/backend/types";
 import AllLineupsScreen from "../screens/AllLineupsScreen";
 import CalendarScreen from "../screens/calendar/CalendarScreen";
 import HomeScreen from "../screens/HomeScreen";
+import LeagueDetailScreen from "../screens/leagues/LeagueDetailScreen";
+import LeaguesScreen from "../screens/leagues/LeaguesScreen";
 import LineupScreen from "../screens/lineup/LineupScreen";
 import ProfileScreen from "../screens/ProfileScreen";
 import RosterScreen from "../screens/RosterScreen";
@@ -114,6 +116,28 @@ const HomeStackNavigator = ({ session }: SessionProps) => {
         {({ navigation }) => (
           <RulesScreen
             session={session}
+            onOpenLeagues={() => navigation.navigate("Leagues")}
+          />
+        )}
+      </HomeStack.Screen>
+      <HomeStack.Screen name="Leagues">
+        {({ navigation }) => (
+          <LeaguesScreen
+            session={session}
+            onBack={() => navigation.goBack()}
+            onOpenLeague={(leagueId) =>
+              navigation.navigate("LeagueDetail", { leagueId })
+            }
+          />
+        )}
+      </HomeStack.Screen>
+      <HomeStack.Screen name="LeagueDetail">
+        {({ navigation, route }) => (
+          <LeagueDetailScreen
+            session={session}
+            leagueId={route.params.leagueId}
+            onBack={() => navigation.goBack()}
+            onJoined={() => navigation.navigate("Rules")}
           />
         )}
       </HomeStack.Screen>

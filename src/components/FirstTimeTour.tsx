@@ -1,4 +1,3 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, {
   forwardRef,
   useCallback,
@@ -12,7 +11,6 @@ import { theme } from "../theme/colors";
 import { radius, shadow, space } from "../theme/tokens";
 import { AppText, Button } from "./ui";
 
-const TOUR_KEY = "coachr_onboarding_tour_v1";
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get("window");
 const HIGHLIGHT_PAD = 10;
 const ARROW_SIZE = 10;
@@ -94,12 +92,6 @@ const FirstTimeTour = forwardRef<FirstTimeTourHandle, Props>(
   const [rects, setRects] = useState<Rect[]>([]);
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
-  useEffect(() => {
-    AsyncStorage.getItem(TOUR_KEY).then((val) => {
-      if (!val) setVisible(true);
-    });
-  }, []);
-
   useImperativeHandle(
     ref,
     () => ({
@@ -147,7 +139,6 @@ const FirstTimeTour = forwardRef<FirstTimeTourHandle, Props>(
   }, [stepIndex]);
 
   const dismiss = useCallback(() => {
-    AsyncStorage.setItem(TOUR_KEY, "done");
     Animated.timing(fadeAnim, {
       toValue: 0,
       duration: 200,

@@ -136,6 +136,7 @@ const LineupScreen = ({
     setSelectedGameId,
     activeIds,
     setActiveIds,
+    teamRules,
     rulesConfig,
     ensureTeam,
     loadTeamContext,
@@ -242,7 +243,7 @@ const LineupScreen = ({
     runLineupGeneration,
   } = useLineupGeneration({
     ensureTeam,
-    rulesConfig,
+    teamRules,
     activePlayers,
     hasProSubscription,
     games,

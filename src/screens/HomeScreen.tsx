@@ -23,7 +23,7 @@ import { theme } from "../theme/colors";
 import { space } from "../theme/tokens";
 import {
   defaultTeamRulesConfig,
-  parseTeamRulesConfig,
+  rulesConfigFromTeamRules,
   TeamRulesConfig,
 } from "../types/rules";
 
@@ -146,14 +146,14 @@ const HomeScreen = ({
         return;
       }
 
-      const [roster, rawRules, games, lineups] = await Promise.all([
+      const [roster, teamRules, games, lineups] = await Promise.all([
         backendClient.getTeamRoster(team),
         backendClient.getTeamRules(team),
         backendClient.getTeamGames(team),
         backendClient.getLineupVersions(team).catch(() => []),
       ]);
 
-      const rules = parseTeamRulesConfig(rawRules);
+      const rules = rulesConfigFromTeamRules(teamRules);
       setSummary({
         rosterCount: roster.length,
         gamesCount: games.length,

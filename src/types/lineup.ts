@@ -1,6 +1,8 @@
 export type Gender = 'male' | 'female'
 
-export type Position = 'P' | 'C' | '1B' | '2B' | '3B' | 'SS' | 'LF' | 'LCF' | 'RCF' | 'RF'
+// Lineup slots are whatever the team's or league's ruleset defines, so a
+// position is any string.
+export type Position = string
 
 export type Player = {
   id: string
@@ -17,17 +19,4 @@ export type InningAssignment = {
   positions: Record<string, string | null>
   bench: string[]
   droppedPosition?: string
-}
-
-export type PlayerState = {
-  benchCount: number
-  lastBenched: boolean
-}
-
-export type GameConfig = {
-  fielders: number
-  positions: Position[]
-  catcherMustBeMale: boolean
-  droppedPosition?: Position
-  minWomen: number
 }

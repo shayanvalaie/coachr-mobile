@@ -2,11 +2,20 @@ import { secureStorage } from "../secureStorage";
 import Constants from "expo-constants";
 import { NativeModules } from "react-native";
 import { Player } from "../../types/lineup";
+import {
+  LeagueDetail,
+  LeagueSummary,
+  RulesetPayload,
+  RulesetStatus,
+  TeamRulesState,
+} from "../../types/rules";
 import { parsePositions } from "../../utils/lineupGenerator";
 import {
   BackendAuthEvent,
   BackendAuthResponse,
   BackendClient,
+  BackendCreateLeagueInput,
+  BackendTeamRulesInput,
   BackendSaveLineupRequest,
   BackendLineupExport,
   BackendLineupVersionDetail,
@@ -396,6 +405,55 @@ const mapLineupExport = (raw: any): BackendLineupExport => ({
   base64Data: typeof raw?.base64Data === "string" ? raw.base64Data : "",
 });
 
+const RULESET_STATUSES: RulesetStatus[] = ["active", "baking", "review", "rejected"];
+
+const mapRulesetStatus = (raw: unknown): RulesetStatus =>
+  RULESET_STATUSES.includes(raw as RulesetStatus) ? (raw as RulesetStatus) : "review";
+
+const mapRuleset = (raw: any): RulesetPayload => {
+  if (!raw?.id || !raw?.spec) {
+    throw new Error("Ruleset payload is missing id or spec.");
+  }
+  return {
+    id: String(raw.id),
+    sport: typeof raw.sport === "string" ? raw.sport : "",
+    status: mapRulesetStatus(raw.status),
+    engineCompatible: !!raw.engineCompatible,
+    spec: raw.spec,
+    rulesText: typeof raw.rulesText === "string" ? raw.rulesText : "",
+    unexpressedRules: Array.isArray(raw.unexpressedRules)
+      ? raw.unexpressedRules.filter((rule: unknown) => typeof rule === "string")
+      : [],
+    createdAt: typeof raw.createdAt === "string" ? raw.createdAt : new Date().toISOString(),
+    activatedAt: typeof raw.activatedAt === "string" ? raw.activatedAt : null,
+  };
+};
+
+const mapLeagueSummary = (raw: any): LeagueSummary => ({
+  id: String(raw?.id ?? ""),
+  name: typeof raw?.name === "string" ? raw.name : "",
+  sport: typeof raw?.sport === "string" ? raw.sport : "",
+  region: typeof raw?.region === "string" ? raw.region : null,
+  status: mapRulesetStatus(raw?.status),
+  teamCount: typeof raw?.teamCount === "number" ? raw.teamCount : 0,
+});
+
+const mapLeagueDetail = (raw: any): LeagueDetail => ({
+  ...mapLeagueSummary(raw),
+  description: typeof raw?.description === "string" ? raw.description : null,
+  rulesText: typeof raw?.rulesText === "string" ? raw.rulesText : "",
+  ruleset: mapRuleset(raw?.ruleset),
+  createdAt: typeof raw?.createdAt === "string" ? raw.createdAt : new Date().toISOString(),
+  joined: !!raw?.joined,
+});
+
+const mapTeamRules = (raw: any): TeamRulesState => ({
+  ruleset: raw?.ruleset ? mapRuleset(raw.ruleset) : null,
+  league: raw?.league ? mapLeagueSummary(raw.league) : null,
+  coachPreferences: typeof raw?.coachPreferences === "string" ? raw.coachPreferences : "",
+  rulesText: typeof raw?.rulesText === "string" ? raw.rulesText : null,
+});
+
 const mapSubscriptionStatus = (raw: any): BackendSubscriptionStatus => ({
   isPro: !!raw?.isPro,
   productId: typeof raw?.productId === "string" ? raw.productId : null,
@@ -563,23 +621,88 @@ export const fastApiBackendClient: BackendClient = {
     return payload.id;
   },
   getTeamRules: async (teamId: string) => {
-    const payload = (await authedRequest(
+    const payload = await authedRequest(
       `/teams/${teamId}/rules`,
       { method: "GET" },
       "Unable to load team rules",
-    )) as { ruleText?: string | null } | null;
+    );
 
-    return payload?.ruleText ?? null;
+    return mapTeamRules(payload);
   },
-  upsertTeamRules: async (teamId: string, ruleText: string) => {
-    await authedRequest(
+  upsertTeamRules: async (teamId: string, input: BackendTeamRulesInput) => {
+    const payload = await authedRequest(
       `/teams/${teamId}/rules`,
       {
         method: "PUT",
-        body: JSON.stringify({ ruleText }),
+        body: JSON.stringify(input),
       },
       "Unable to save team rules",
     );
+
+    return mapTeamRules(payload);
+  },
+  setTeamLeague: async (teamId: string, leagueId: string | null) => {
+    const payload = await authedRequest(
+      `/teams/${teamId}/league`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ leagueId }),
+      },
+      "Unable to update league membership",
+    );
+
+    return mapTeamRules(payload);
+  },
+  searchLeagues: async (query: string, sport?: string) => {
+    const params = new URLSearchParams({ q: query });
+    if (sport) params.set("sport", sport);
+    const payload = (await authedRequest(
+      `/leagues/search?${params.toString()}`,
+      { method: "GET" },
+      "Unable to search leagues",
+    )) as { leagues?: any[] } | null;
+
+    return (payload?.leagues ?? []).map(mapLeagueSummary);
+  },
+  createLeague: async (input: BackendCreateLeagueInput) => {
+    const payload = await authedRequest(
+      "/leagues",
+      {
+        method: "POST",
+        body: JSON.stringify(input),
+      },
+      "Unable to create league",
+    );
+
+    return mapLeagueDetail(payload);
+  },
+  getLeague: async (leagueId: string) => {
+    const payload = await authedRequest(
+      `/leagues/${leagueId}`,
+      { method: "GET" },
+      "Unable to load league",
+    );
+
+    return mapLeagueDetail(payload);
+  },
+  createChangeRequest: async (leagueId: string, message: string) => {
+    await authedRequest(
+      `/leagues/${leagueId}/change-requests`,
+      {
+        method: "POST",
+        body: JSON.stringify({ message }),
+      },
+      "Unable to send change request",
+    );
+  },
+  getRuleset: async (rulesetId: string) => {
+    const payload = await authedRequest(
+      `/rulesets/${rulesetId}`,
+      { method: "GET" },
+      "Unable to load ruleset status",
+    );
+
+    return mapRuleset(payload);
   },
   getTeamRoster: async (teamId: string) => {
     const payload = (await authedRequest(

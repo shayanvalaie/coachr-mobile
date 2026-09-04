@@ -3,6 +3,7 @@ import {
   SetStateAction,
   useCallback,
   useEffect,
+  useMemo,
   useState,
 } from "react";
 import { LayoutAnimation } from "react-native";
@@ -11,8 +12,11 @@ import { backendClient } from "../../../lib/backend/client";
 import { BackendGame } from "../../../lib/backend/types";
 import { notifySuccess } from "../../../lib/haptics";
 import { InningAssignment, Player } from "../../../types/lineup";
-import { TeamRulesConfig } from "../../../types/rules";
-import { generateLineup } from "../../../utils/lineupGenerator";
+import {
+  rulesConfigFromTeamRules,
+  RulesetStatus,
+  TeamRulesState,
+} from "../../../types/rules";
 import {
   describeInvokeError,
   extractRowsFromResponse,
@@ -20,17 +24,10 @@ import {
   normalizeLineupRows,
 } from "../../../utils/lineupTransforms";
 
-const LINEUP_GENERATOR_MODE = (
-  process.env.EXPO_PUBLIC_LINEUP_GENERATOR_MODE ?? "fallback"
-)
-  .trim()
-  .toLowerCase();
-const USE_LOCAL_LINEUP_GENERATOR = LINEUP_GENERATOR_MODE !== "openai";
-
-// Minimum time the generating state (skeleton loaders) stays on screen. The
-// local generator is effectively instant, so without this floor the skeletons
-// would flash for a frame and the lineup would snap in. Holding for a beat
-// makes generation read as deliberate work and keeps the swap smooth.
+// Minimum time the generating state (skeleton loaders) stays on screen. Server
+// generation is fast enough that without this floor the skeletons would flash
+// for a frame and the lineup would snap in. Holding for a beat makes
+// generation read as deliberate work and keeps the swap smooth.
 const MIN_GENERATING_MS = 2000;
 
 const wait = (ms: number) =>
@@ -45,6 +42,12 @@ const holdMinGeneratingDuration = async (startedAt: number) => {
   }
 };
 
+const INACTIVE_RULESET_MESSAGES: Record<Exclude<RulesetStatus, "active">, string> = {
+  baking: "Your rules are still being set up. We'll email you when they're ready.",
+  review: "Your rules are in review. We'll email you when they're approved.",
+  rejected: "These rules could not be supported. Update your rules or request a change.",
+};
+
 export type RosterRequirement = {
   required: number;
   have: number;
@@ -53,7 +56,7 @@ export type RosterRequirement = {
 
 type Params = {
   ensureTeam: () => Promise<string | null>;
-  rulesConfig: TeamRulesConfig | null;
+  teamRules: TeamRulesState | null;
   activePlayers: Player[];
   hasProSubscription: boolean;
   games: BackendGame[];
@@ -72,10 +75,11 @@ type Params = {
 
 // Lineup generation flow, including the pre-generation interstitial ad gate
 // (the ad always runs before generation, never while a sheet is open) and the
-// auto-generate handoff from launch requests.
+// auto-generate handoff from launch requests. The server engine is the only
+// generator; there is no offline fallback.
 export const useLineupGeneration = ({
   ensureTeam,
-  rulesConfig,
+  teamRules,
   activePlayers,
   hasProSubscription,
   games,
@@ -99,6 +103,56 @@ export const useLineupGeneration = ({
     gameId: string | null;
   } | null>(null);
 
+  const rulesConfig = useMemo(
+    () => (teamRules ? rulesConfigFromTeamRules(teamRules) : null),
+    [teamRules],
+  );
+
+  const clearLineupState = useCallback(() => {
+    setLineup(null);
+    setLineupInlineEditMode(false);
+    setEditModalVisible(false);
+    setHistoryEditRows(null);
+    setLineupParentVersionId(null);
+    setExpandedInnings(new Set());
+    setStatus("");
+  }, [
+    setEditModalVisible,
+    setExpandedInnings,
+    setHistoryEditRows,
+    setLineup,
+    setLineupInlineEditMode,
+    setLineupParentVersionId,
+    setStatus,
+  ]);
+
+  const applyGeneratedLineup = useCallback(
+    (rows: InningAssignment[], statusMessage: string) => {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      setLineup(rows);
+      setLineupInlineEditMode(false);
+      setEditModalVisible(false);
+      setHistoryEditRows(null);
+      setLineupParentVersionId(null);
+      setExpandedInnings(new Set());
+      setStatus(statusMessage);
+      setSaveModalVisible(false);
+      setSaveLineupName("");
+      notifySuccess();
+    },
+    [
+      setEditModalVisible,
+      setExpandedInnings,
+      setHistoryEditRows,
+      setLineup,
+      setLineupInlineEditMode,
+      setLineupParentVersionId,
+      setSaveLineupName,
+      setSaveModalVisible,
+      setStatus,
+    ],
+  );
+
   const runLineupGeneration = useCallback(
     async (overrideGameId?: string | null) => {
       const effectiveGameId =
@@ -117,8 +171,18 @@ export const useLineupGeneration = ({
           setStatus("");
           return;
         }
-        if (!rulesConfig) {
+        if (!teamRules || !rulesConfig) {
           setError("No rules configuration found.");
+          setStatus("");
+          return;
+        }
+        if (!teamRules.ruleset) {
+          setError("Set up your team rules or join a league before generating.");
+          setStatus("");
+          return;
+        }
+        if (teamRules.ruleset.status !== "active") {
+          setError(INACTIVE_RULESET_MESSAGES[teamRules.ruleset.status]);
           setStatus("");
           return;
         }
@@ -133,66 +197,14 @@ export const useLineupGeneration = ({
           return;
         }
 
-        if (activePlayers.length < rulesConfig.playersOnField) {
-          setRosterRequirement({
-            required: rulesConfig.playersOnField,
-            have: activePlayers.length,
-            detail: `You need at least ${rulesConfig.playersOnField} active players so every ${rulesConfig.segmentLabel} can be filled on the field.`,
-          });
-          setStatus("");
-          return;
-        }
-
         await presentLineupInterstitial(hasProSubscription);
-
-        const fallbackSport = rulesConfig.sport.toLowerCase();
-        const canUseLocalFallback = fallbackSport === "softball";
-
-        if (USE_LOCAL_LINEUP_GENERATOR) {
-          if (!canUseLocalFallback) {
-            setError(
-              "Local lineup generator only supports softball. Set EXPO_PUBLIC_LINEUP_GENERATOR_MODE=openai to use AI generation.",
-            );
-            setStatus("");
-            return;
-          }
-
-          const fallback = generateLineup(activePlayers);
-          // Keep the skeletons up for a beat before revealing the result so the
-          // swap feels smooth rather than instantaneous.
-          await holdMinGeneratingDuration(startedAt);
-          if (fallback.error) {
-            setError(fallback.error);
-            setLineup(null);
-            setLineupInlineEditMode(false);
-            setEditModalVisible(false);
-            setHistoryEditRows(null);
-            setLineupParentVersionId(null);
-            setExpandedInnings(new Set());
-            setStatus("");
-            return;
-          }
-
-          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-          setLineup(fallback.lineup ?? null);
-          setLineupInlineEditMode(false);
-          setEditModalVisible(false);
-          setHistoryEditRows(null);
-          setLineupParentVersionId(null);
-          setExpandedInnings(new Set());
-          setStatus("Lineup generated locally.");
-          setSaveModalVisible(false);
-          setSaveLineupName("");
-          notifySuccess();
-          return;
-        }
 
         const payloadRoster = activePlayers.map((player) => ({
           id: player.id,
           name: player.name,
           gender: player.gender,
           desiredPositions: player.desiredPositions,
-          fixedAllGame: false,
+          fixedAllGame: player.fixedAllGame,
           lockInPosition: player.lockInPosition,
         }));
 
@@ -209,34 +221,17 @@ export const useLineupGeneration = ({
           })(),
           saveLineup: false,
           lineupName: null,
-          rulesConfig,
         });
 
         const nextLineup = normalizeLineupRows(extractRowsFromResponse(data));
         if (nextLineup.length === 0) {
-          throw new Error("AI returned an empty lineup");
+          throw new Error("The server returned an empty lineup");
         }
 
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-        setLineup(nextLineup);
-        setLineupInlineEditMode(false);
-        setEditModalVisible(false);
-        setLineupParentVersionId(null);
-        setExpandedInnings(new Set());
-        setStatus("Lineup generated. Save it if you like it.");
-        setSaveModalVisible(false);
-        setSaveLineupName("");
-        notifySuccess();
+        await holdMinGeneratingDuration(startedAt);
+        applyGeneratedLineup(nextLineup, "Lineup generated. Save it if you like it.");
       } catch (invokeErr) {
         const { message, detail } = await describeInvokeError(invokeErr);
-        const context =
-          invokeErr && typeof invokeErr === "object"
-            ? (invokeErr as { context?: unknown }).context
-            : null;
-        const httpStatus =
-          context && typeof context === "object"
-            ? (context as { status?: unknown }).status
-            : null;
 
         if (__DEV__) {
           console.log(
@@ -246,54 +241,8 @@ export const useLineupGeneration = ({
           );
         }
 
-        if (typeof httpStatus === "number") {
-          setError(message || "Unable to generate lineup.");
-          setLineup(null);
-          setLineupInlineEditMode(false);
-          setEditModalVisible(false);
-          setHistoryEditRows(null);
-          setLineupParentVersionId(null);
-          setExpandedInnings(new Set());
-          setStatus("");
-          return;
-        }
-
-        const fallbackSport = rulesConfig?.sport.toLowerCase() ?? "";
-        const canUseLocalFallback = fallbackSport === "softball";
-
-        if (!canUseLocalFallback) {
-          setError(message || "Unable to generate lineup right now.");
-          setLineup(null);
-          setLineupInlineEditMode(false);
-          setEditModalVisible(false);
-          setHistoryEditRows(null);
-          setLineupParentVersionId(null);
-          setExpandedInnings(new Set());
-          setStatus("");
-          return;
-        }
-
-        const fallback = generateLineup(activePlayers);
-        if (fallback.error) {
-          setError(fallback.error);
-          setLineup(null);
-          setLineupInlineEditMode(false);
-          setEditModalVisible(false);
-          setHistoryEditRows(null);
-          setLineupParentVersionId(null);
-          setExpandedInnings(new Set());
-          setStatus("");
-        } else {
-          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-          setLineup(fallback.lineup ?? null);
-          setLineupInlineEditMode(false);
-          setEditModalVisible(false);
-          setHistoryEditRows(null);
-          setLineupParentVersionId(null);
-          setExpandedInnings(new Set());
-          setStatus("Generated locally (AI unavailable).");
-          notifySuccess();
-        }
+        setError(message || "Unable to generate lineup.");
+        clearLineupState();
       } finally {
         // The skeleton -> grid cross-fade is handled in GameSetup via
         // reanimated; no classic LayoutAnimation here (it fought the sortable
@@ -303,35 +252,30 @@ export const useLineupGeneration = ({
     },
     [
       activePlayers,
+      applyGeneratedLineup,
+      clearLineupState,
       ensureTeam,
       hasProSubscription,
       selectedGameId,
       games,
       rulesConfig,
-      setEditModalVisible,
       setError,
-      setExpandedInnings,
-      setHistoryEditRows,
-      setLineup,
-      setLineupInlineEditMode,
-      setLineupParentVersionId,
-      setSaveLineupName,
-      setSaveModalVisible,
       setStatus,
+      teamRules,
     ],
   );
 
   useEffect(() => {
     if (!pendingAutoGenerate) return;
     if (isGenerating) return;
-    if (!rulesConfig) return;
+    if (!teamRules) return;
 
     runLineupGeneration(pendingAutoGenerate.gameId).finally(() => {
       setPendingAutoGenerate((prev) =>
         prev && prev.requestId === pendingAutoGenerate.requestId ? null : prev,
       );
     });
-  }, [isGenerating, pendingAutoGenerate, rulesConfig, runLineupGeneration]);
+  }, [isGenerating, pendingAutoGenerate, teamRules, runLineupGeneration]);
 
   return {
     isGenerating,
