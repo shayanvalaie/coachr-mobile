@@ -10,7 +10,8 @@ import {
   ViewStyle,
 } from "react-native";
 import { theme } from "../../theme/colors";
-import { space } from "../../theme/tokens";
+import { space, TAB_BAR_CLEARANCE } from "../../theme/tokens";
+import AmbientBackground from "./AmbientBackground";
 
 type Props = {
   children: ReactNode;
@@ -20,6 +21,9 @@ type Props = {
   // Wrap in KeyboardAvoidingView. Use on any screen with text inputs.
   keyboard?: boolean;
   padded?: boolean;
+  // Scroll content ends under the floating tab bar by default; screens
+  // without a tab bar (sign-in, paywall) opt out.
+  floatingTabBar?: boolean;
   refreshing?: boolean;
   onRefresh?: () => void;
   style?: StyleProp<ViewStyle>;
@@ -31,6 +35,7 @@ const ScreenContainer = ({
   scroll = false,
   keyboard = false,
   padded = true,
+  floatingTabBar = true,
   refreshing,
   onRefresh,
   style,
@@ -43,7 +48,7 @@ const ScreenContainer = ({
         style={styles.flex}
         contentContainerStyle={[
           padded && styles.padded,
-          styles.scrollContent,
+          floatingTabBar ? styles.scrollContentTabBar : styles.scrollContent,
           contentStyle,
         ]}
         keyboardShouldPersistTaps="handled"
@@ -80,7 +85,10 @@ const ScreenContainer = ({
   }
 
   return (
-    <View style={[styles.root, styles.topGap, style]}>{content}</View>
+    <View style={[styles.root, style]}>
+      <AmbientBackground />
+      <View style={[styles.flex, styles.topGap]}>{content}</View>
+    </View>
   );
 };
 
@@ -90,7 +98,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.bg.base,
   },
   // The app-level SafeAreaView already consumes the top inset, so this is just
-  // a small breathing gap below the header — not a second safe-area offset.
+  // a small breathing gap - not a second safe-area offset.
   topGap: {
     paddingTop: space.xs,
   },
@@ -102,6 +110,9 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: space.lg,
+  },
+  scrollContentTabBar: {
+    paddingBottom: TAB_BAR_CLEARANCE,
   },
 });
 

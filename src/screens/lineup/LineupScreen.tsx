@@ -8,12 +8,12 @@ import {
 } from "react-native";
 import Animated, { useAnimatedRef } from "react-native-reanimated";
 import {
-  AppPressable,
   AppText,
   Button,
+  PageHeader,
   Reveal,
   ScreenContainer,
-  ScreenHeader,
+  SegmentedControl,
   Sheet,
   useToast,
 } from "../../components/ui";
@@ -21,16 +21,15 @@ import { Feather } from "../../icons";
 import { backendClient } from "../../lib/backend/client";
 import { BackendSession } from "../../lib/backend/types";
 import { theme } from "../../theme/colors";
-import { motion, radius, space } from "../../theme/tokens";
+import { motion, radius, space, TAB_BAR_CLEARANCE } from "../../theme/tokens";
 import { InningAssignment } from "../../types/lineup";
 import { LineupLaunchRequest } from "../../types/lineupLaunch";
 import { navigateFromRef } from "../../navigation/navigationRef";
-import { normalizeLineupRows } from "../../utils/lineupTransforms";
+import { formatGameLabel, normalizeLineupRows } from "../../utils/lineupTransforms";
 import BuildTab from "./components/BuildTab";
 import EditLineupOverlay from "./components/EditLineupOverlay";
 import HistoryCard from "./components/HistoryCard";
 import HistoryTab from "./components/HistoryTab";
-import PlayerPickerSheet from "./components/PlayerPickerSheet";
 import SaveLineupSheet from "./components/SaveLineupSheet";
 import { useLineupData } from "./hooks/useLineupData";
 import { useLineupEditor } from "./hooks/useLineupEditor";
@@ -45,7 +44,6 @@ import {
 type Props = {
   session: BackendSession;
   onOpenRoster: () => void;
-  onOpenRules: () => void;
   hasProSubscription: boolean;
   onRequirePro: (featureLabel: string) => void;
   launchRequest?: LineupLaunchRequest | null;
@@ -53,10 +51,14 @@ type Props = {
   onEditModeChange?: (editing: boolean) => void;
 };
 
+const TAB_OPTIONS: Array<{ key: "build" | "history"; label: string }> = [
+  { key: "build", label: "Generate" },
+  { key: "history", label: "Saved" },
+];
+
 const LineupScreen = ({
   session,
   onOpenRoster,
-  onOpenRules,
   hasProSubscription,
   onRequirePro,
   launchRequest = null,
@@ -77,11 +79,10 @@ const LineupScreen = ({
   const [historyEditRows, setHistoryEditRows] = useState<
     InningAssignment[] | null
   >(null);
-  const [showPlayerPicker, setShowPlayerPicker] = useState(false);
-  const [gameSetupCollapsed, setGameSetupCollapsed] = useState(false);
   const [status, setStatus] = useState("");
   const [error, setError] = useState<string | null>(null);
   const handledLaunchRequestIdsRef = useRef<Set<number>>(new Set());
+  const latestLaunchRequestIdRef = useRef<number | null>(null);
   // Animated ref for the build tab's ScrollView. It's animated because the
   // sortable lineup grid drives it for edge auto-scroll while dragging rows.
   const buildScrollRef = useAnimatedRef<Animated.ScrollView>();
@@ -134,15 +135,12 @@ const LineupScreen = ({
     games,
     selectedGameId,
     setSelectedGameId,
-    activeIds,
-    setActiveIds,
     teamRules,
     rulesConfig,
     ensureTeam,
     loadTeamContext,
     activePlayers,
     playerGenderByName,
-    handleToggleActive,
     selectedGame,
   } = useLineupData({ session, setError });
 
@@ -280,8 +278,13 @@ const LineupScreen = ({
     if (!launchRequest) return;
     if (handledLaunchRequestIdsRef.current.has(launchRequest.id)) return;
     handledLaunchRequestIdsRef.current.add(launchRequest.id);
+    latestLaunchRequestIdRef.current = launchRequest.id;
 
-    let cancelled = false;
+    // A request is only abandoned when a newer one supersedes it. The effect
+    // re-runs as its dependencies settle (e.g. the team id loading), and an
+    // effect-cleanup flag would cancel the request mid-flight on first mount.
+    const isSuperseded = () =>
+      latestLaunchRequestIdRef.current !== launchRequest.id;
 
     const applyLaunchRequest = async () => {
       try {
@@ -292,8 +295,6 @@ const LineupScreen = ({
         setCompareBase(null);
         setEditModalVisible(false);
         setSaveModalVisible(false);
-        setShowPlayerPicker(false);
-        setGameSetupCollapsed(false);
 
         if (launchRequest.gameId !== undefined) {
           setSelectedGameId(launchRequest.gameId);
@@ -301,14 +302,14 @@ const LineupScreen = ({
 
         if (launchRequest.lineupVersionId) {
           const team = await ensureTeam();
-          if (!team || cancelled) return;
+          if (!team || isSuperseded()) return;
 
           setActiveHistoryId(launchRequest.lineupVersionId);
           const detail = await backendClient.getLineupVersion(
             team,
             launchRequest.lineupVersionId,
           );
-          if (cancelled) return;
+          if (isSuperseded()) return;
 
           const restoredRows = normalizeLineupRows(detail.rows as any[]);
           LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -340,18 +341,18 @@ const LineupScreen = ({
           // generating. The focus reload also does this, but auto-generate
           // must not race it — await here so generation sees fresh data.
           await loadTeamContext();
-          if (cancelled) return;
+          if (isSuperseded()) return;
           setPendingAutoGenerate({
             requestId: launchRequest.id,
             gameId: launchRequest.gameId,
           });
         }
       } catch (_err) {
-        if (!cancelled) {
+        if (!isSuperseded()) {
           setError("Unable to open lineup context.");
         }
       } finally {
-        if (!cancelled) {
+        if (!isSuperseded()) {
           setActiveHistoryId(null);
           onLaunchRequestHandled?.(launchRequest.id);
         }
@@ -362,10 +363,6 @@ const LineupScreen = ({
       setError("Unable to open lineup context.");
       onLaunchRequestHandled?.(launchRequest.id);
     });
-
-    return () => {
-      cancelled = true;
-    };
   }, [
     ensureTeam,
     launchRequest,
@@ -430,50 +427,24 @@ const LineupScreen = ({
     setSaveModalVisible,
   ]);
 
+  const headerTitle =
+    activeTab === "build"
+      ? lineup && selectedGame
+        ? formatGameLabel(selectedGame)
+        : lineup
+          ? "Lineup"
+          : "Build"
+      : "Saved";
+
   const header = (
     <View style={styles.headerBlock}>
-      <ScreenHeader
-        title="Line Ups"
-        subtitle={activeTab === "build" ? "Generate Lineup" : "Lineup History"}
+      <PageHeader eyebrow="Lineup" title={headerTitle} />
+      <SegmentedControl
+        options={TAB_OPTIONS}
+        value={activeTab}
+        onChange={setActiveTab}
+        accessibilityLabel="Lineup sections"
       />
-      <View style={styles.tabRow} accessibilityRole="tablist">
-        <AppPressable
-          style={[
-            styles.tabButton,
-            activeTab === "history" && styles.tabButtonActive,
-          ]}
-          onPress={() => setActiveTab("history")}
-          accessibilityRole="tab"
-          accessibilityLabel="Line Ups tab"
-          accessibilityState={{ selected: activeTab === "history" }}
-        >
-          <AppText
-            variant="caption"
-            family="heading"
-            color={activeTab === "history" ? "accent" : "secondary"}
-          >
-            Line Ups
-          </AppText>
-        </AppPressable>
-        <AppPressable
-          style={[
-            styles.tabButton,
-            activeTab === "build" && styles.tabButtonActive,
-          ]}
-          onPress={() => setActiveTab("build")}
-          accessibilityRole="tab"
-          accessibilityLabel="Generate tab"
-          accessibilityState={{ selected: activeTab === "build" }}
-        >
-          <AppText
-            variant="caption"
-            family="heading"
-            color={activeTab === "build" ? "accent" : "secondary"}
-          >
-            Generate
-          </AppText>
-        </AppPressable>
-      </View>
     </View>
   );
 
@@ -503,38 +474,15 @@ const LineupScreen = ({
               rulesConfig={rulesConfig}
               hasProSubscription={hasProSubscription}
               games={games}
-              selectedGame={selectedGame}
               selectedGameId={selectedGameId}
               onSelectGame={setSelectedGameId}
               lineup={lineup}
-              lineupInlineEditMode={lineupInlineEditMode}
-              expandedInnings={expandedInnings}
-              gameSetupCollapsed={gameSetupCollapsed}
               isGenerating={isGenerating}
-              status={status}
               error={error}
-              onToggleCollapse={() => {
-                LayoutAnimation.configureNext(
-                  LayoutAnimation.Presets.easeInEaseOut,
-                );
-                setGameSetupCollapsed((prev) => !prev);
-              }}
-              onEditSelection={() => setShowPlayerPicker(true)}
+              onEditSelection={onOpenRoster}
               onEditLineup={toggleInlineEditMode}
-              onGenerate={runLineupGeneration}
+              onGenerate={() => runLineupGeneration()}
               onSaveLineup={() => setSaveModalVisible(true)}
-              onOpenRules={onOpenRules}
-              onToggleInning={(inning) => {
-                LayoutAnimation.configureNext(
-                  LayoutAnimation.Presets.easeInEaseOut,
-                );
-                setExpandedInnings((prev) => {
-                  const next = new Set(prev);
-                  if (next.has(inning)) next.delete(inning);
-                  else next.add(inning);
-                  return next;
-                });
-              }}
               onSetLineupCell={applyInlinePositionSwap}
               playerGenderByName={playerGenderByName}
               lineupScrollableRef={buildScrollRef}
@@ -546,17 +494,11 @@ const LineupScreen = ({
           <HistoryTab
             hasProSubscription={hasProSubscription}
             games={games}
-            selectedGame={selectedGame}
             selectedGameId={selectedGameId}
             onSelectGame={setSelectedGameId}
             lineupHistory={lineupHistory}
             historyLoading={historyLoading}
             historyError={historyError}
-            isGenerating={isGenerating}
-            onGenerate={() => {
-              setActiveTab("build");
-              void runLineupGeneration();
-            }}
             renderVersion={(version) => (
               <HistoryCard
                 version={version}
@@ -580,7 +522,6 @@ const LineupScreen = ({
           }
           isHistoryEdit={isHistoryEdit}
           lineup={editModalLineup}
-          expandedInnings={expandedInnings}
           editable={lineupInlineEditMode}
           canUndo={canUndo}
           isSaving={isSavingVersion}
@@ -626,18 +567,6 @@ const LineupScreen = ({
         onSave={() => {
           void saveCurrentLineupVersion();
         }}
-      />
-
-      <PlayerPickerSheet
-        visible={showPlayerPicker}
-        onClose={() => setShowPlayerPicker(false)}
-        roster={roster}
-        activeIds={activeIds}
-        onTogglePlayer={handleToggleActive}
-        onSelectAll={() =>
-          setActiveIds(new Set(roster.map((player) => player.id)))
-        }
-        onClear={() => setActiveIds(new Set())}
       />
 
       <Sheet
@@ -721,38 +650,19 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   buildContent: {
-    padding: space.md,
-    paddingBottom: space.lg,
-    gap: space.sm,
+    paddingHorizontal: space.md,
+    paddingTop: space.xxs,
+    paddingBottom: TAB_BAR_CLEARANCE,
+    gap: space.sm + 2,
   },
+  // Pinned above both tabs. Transparent so the ambient glow runs behind it;
+  // the scroll viewports start below it, so nothing ever slides underneath.
   stickyHeader: {
     paddingHorizontal: space.md,
     paddingBottom: space.sm,
-    backgroundColor: theme.bg.base,
   },
   headerBlock: {
     gap: space.sm,
-  },
-  tabRow: {
-    flexDirection: "row",
-    backgroundColor: theme.bg.elevated,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: theme.border.base,
-    padding: space.xxs,
-    gap: space.xxs,
-  },
-  tabButton: {
-    flex: 1,
-    borderRadius: radius.sm,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: space.xs,
-  },
-  tabButtonActive: {
-    backgroundColor: theme.accent.subtle,
-    borderWidth: 1,
-    borderColor: theme.accent.subtleBorder,
   },
   sheetBody: {
     gap: space.sm,

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, StyleSheet, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import RulesSummary from "../components/rules/RulesSummary";
@@ -10,21 +10,28 @@ import {
   EmptyState,
   Input,
   LoadTransition,
+  PageHeader,
   ScreenContainer,
-  ScreenHeader,
+  SectionLabel,
   Sheet,
+  SportPicker,
   Skeleton,
   SkeletonMetricRow,
   useToast,
 } from "../components/ui";
 import { BackendSession } from "../lib/backend/types";
+import { clearReads } from "../lib/backend/cache";
 import { backendClient } from "../lib/backend/client";
 import { toError } from "../lib/backend/utils";
+import { useRulesetStatus } from "../lib/rulesetStatus/RulesetStatusProvider";
 import { radius, space } from "../theme/tokens";
 import { RulesetPayload, TeamRulesState } from "../types/rules";
+import { digitsOnly, parseCount } from "../utils/formNumbers";
+import { describeLeague } from "./leagues/LeagueRow";
 
 type Props = {
   session: BackendSession;
+  onBack: () => void;
   onOpenLeagues: () => void;
 };
 
@@ -47,8 +54,9 @@ const savedRulesMessage = (ruleset: RulesetPayload): string => {
   }
 };
 
-const RulesScreen = ({ session, onOpenLeagues }: Props) => {
+const RulesScreen = ({ session, onBack, onOpenLeagues }: Props) => {
   const toast = useToast();
+  const rulesetStatus = useRulesetStatus();
   const [teamId, setTeamId] = useState<string | null>(null);
   const [rules, setRules] = useState<TeamRulesState | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -56,14 +64,14 @@ const RulesScreen = ({ session, onOpenLeagues }: Props) => {
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [rulesDraft, setRulesDraft] = useState("");
-  const [sportDraft, setSportDraft] = useState("");
+  const [sportDraft, setSportDraft] = useState<string | null>(null);
+  const [segmentCountDraft, setSegmentCountDraft] = useState("");
+  const [playersOnFieldDraft, setPlayersOnFieldDraft] = useState("");
   const [rulesError, setRulesError] = useState<string | null>(null);
   const [isSavingRules, setIsSavingRules] = useState(false);
 
   const [prefsDraft, setPrefsDraft] = useState("");
-  const [isSavingPrefs, setIsSavingPrefs] = useState(false);
 
-  const [isCheckingStatus, setIsCheckingStatus] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
 
   const [changeSheetVisible, setChangeSheetVisible] = useState(false);
@@ -86,7 +94,9 @@ const RulesScreen = ({ session, onOpenLeagues }: Props) => {
   const applyRules = useCallback((next: TeamRulesState) => {
     setRules(next);
     setRulesDraft(next.rulesText ?? "");
-    setSportDraft(next.ruleset?.sport ?? "");
+    setSportDraft(next.ruleset?.sport ?? null);
+    setSegmentCountDraft(next.ruleset ? String(next.ruleset.spec.segment.count) : "");
+    setPlayersOnFieldDraft(next.ruleset ? String(next.ruleset.spec.field.playersOnField) : "");
     setPrefsDraft(next.coachPreferences);
   }, []);
 
@@ -120,35 +130,37 @@ const RulesScreen = ({ session, onOpenLeagues }: Props) => {
     toast.show({ message: loadError, type: "error" });
   }, [loadError, toast]);
 
+  // The provider polls while baking; when it observes "active" and this
+  // screen still shows the pending ruleset, reload so it flips in place.
+  const localStatusRef = useRef<string | null>(null);
+  localStatusRef.current = rules?.ruleset?.status ?? null;
+  useEffect(() => {
+    if (rulesetStatus.status !== "active") return;
+    if (localStatusRef.current === null || localStatusRef.current === "active") return;
+    void loadRules();
+  }, [loadRules, rulesetStatus.status]);
+
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
+    // Pull-to-refresh means "go to the server", not "reuse the last read".
+    clearReads();
     loadRules().finally(() => setRefreshing(false));
   }, [loadRules]);
-
-  const handleCheckStatus = useCallback(async () => {
-    if (!rules?.ruleset) return;
-    setIsCheckingStatus(true);
-    try {
-      const ruleset = await backendClient.getRuleset(rules.ruleset.id);
-      setRules((prev) => (prev ? { ...prev, ruleset } : prev));
-      toast.show({
-        message:
-          ruleset.status === "active"
-            ? "Your rules are ready."
-            : "Still working on it. We'll email you.",
-        type: ruleset.status === "active" ? "success" : "info",
-      });
-    } catch (err) {
-      toast.show({ message: toError(err).message, type: "error" });
-    } finally {
-      setIsCheckingStatus(false);
-    }
-  }, [rules, toast]);
 
   const handleSaveRules = useCallback(async () => {
     const rulesText = rulesDraft.trim();
     if (!rulesText) {
       setRulesError("Describe your rules before saving.");
+      return;
+    }
+    if (sportDraft === null) {
+      setRulesError("Pick a sport.");
+      return;
+    }
+    const segmentCount = parseCount(segmentCountDraft);
+    const playersOnField = parseCount(playersOnFieldDraft);
+    if (segmentCount === null || playersOnField === null) {
+      setRulesError("Enter how many innings or periods you play and how many players are on the field (1–30).");
       return;
     }
     setRulesError(null);
@@ -159,9 +171,12 @@ const RulesScreen = ({ session, onOpenLeagues }: Props) => {
 
       const next = await backendClient.upsertTeamRules(team, {
         rulesText,
-        sport: sportDraft.trim() || undefined,
+        sport: sportDraft,
+        segmentCount,
+        playersOnField,
       });
       applyRules(next);
+      void rulesetStatus.refresh();
       if (next.ruleset) {
         toast.show({
           message: savedRulesMessage(next.ruleset),
@@ -173,10 +188,20 @@ const RulesScreen = ({ session, onOpenLeagues }: Props) => {
     } finally {
       setIsSavingRules(false);
     }
-  }, [applyRules, ensureTeam, rulesDraft, sportDraft, toast]);
+  }, [
+    applyRules,
+    ensureTeam,
+    playersOnFieldDraft,
+    rulesDraft,
+    rulesetStatus,
+    segmentCountDraft,
+    sportDraft,
+    toast,
+  ]);
 
+  // Coach notes persist quietly when the field blurs.
   const handleSavePrefs = useCallback(async () => {
-    setIsSavingPrefs(true);
+    if (prefsDraft === (rules?.coachPreferences ?? "")) return;
     try {
       const team = await ensureTeam();
       if (!team) return;
@@ -185,13 +210,10 @@ const RulesScreen = ({ session, onOpenLeagues }: Props) => {
         coachPreferences: prefsDraft,
       });
       setRules(next);
-      toast.show({ message: "Coach notes saved.", type: "success" });
     } catch (err) {
       toast.show({ message: toError(err).message, type: "error" });
-    } finally {
-      setIsSavingPrefs(false);
     }
-  }, [ensureTeam, prefsDraft, toast]);
+  }, [ensureTeam, prefsDraft, rules?.coachPreferences, toast]);
 
   const leaveLeague = useCallback(async () => {
     setIsLeaving(true);
@@ -200,13 +222,14 @@ const RulesScreen = ({ session, onOpenLeagues }: Props) => {
       if (!team) return;
 
       applyRules(await backendClient.setTeamLeague(team, null));
+      void rulesetStatus.refresh();
       toast.show({ message: "Left the league. Set up your own rules below.", type: "info" });
     } catch (err) {
       toast.show({ message: toError(err).message, type: "error" });
     } finally {
       setIsLeaving(false);
     }
-  }, [applyRules, ensureTeam, toast]);
+  }, [applyRules, ensureTeam, rulesetStatus, toast]);
 
   const confirmLeaveLeague = useCallback(() => {
     if (!rules?.league) return;
@@ -243,8 +266,13 @@ const RulesScreen = ({ session, onOpenLeagues }: Props) => {
 
   const league = rules?.league ?? null;
   const ruleset = rules?.ruleset ?? null;
-  const rulesDirty = rulesDraft.trim() !== (rules?.rulesText ?? "").trim();
-  const prefsDirty = prefsDraft !== (rules?.coachPreferences ?? "");
+  const savedSegmentCount = ruleset ? String(ruleset.spec.segment.count) : "";
+  const savedPlayersOnField = ruleset ? String(ruleset.spec.field.playersOnField) : "";
+  const rulesDirty =
+    rulesDraft.trim() !== (rules?.rulesText ?? "").trim() ||
+    sportDraft !== (ruleset?.sport ?? null) ||
+    segmentCountDraft !== savedSegmentCount ||
+    playersOnFieldDraft !== savedPlayersOnField;
 
   return (
     <ScreenContainer
@@ -254,165 +282,144 @@ const RulesScreen = ({ session, onOpenLeagues }: Props) => {
       onRefresh={handleRefresh}
       contentStyle={styles.content}
     >
-      <ScreenHeader
-        title="Lineup Rules"
-        subtitle={
-          league
-            ? "Your team plays by its league's rules."
-            : "Describe your rules once. Coachr builds the lineup engine."
-        }
-      />
+      {league ? (
+        <PageHeader
+          back={{ label: "Back", onPress: onBack }}
+          eyebrow="League rules"
+          title={league.name}
+          subtitle={describeLeague(league)}
+        />
+      ) : (
+        <PageHeader
+          back={{ label: "Back", onPress: onBack }}
+          eyebrow="Your rules"
+          title={ruleset ? `${capitalize(ruleset.sport)} rules` : "Team rules"}
+          subtitle={
+            isLoading
+              ? undefined
+              : "Describe your rules once. Coachr builds the lineup engine."
+          }
+        />
+      )}
 
       <LoadTransition
         loading={isLoading}
         style={styles.loadedStack}
         skeleton={
           <>
-            <Skeleton height={150} radius={radius.lg} />
-            <SkeletonMetricRow count={3} height={67} />
-            <Skeleton height={260} radius={radius.lg} />
-            <Skeleton height={140} radius={radius.lg} />
+            <SkeletonMetricRow count={2} />
+            <SkeletonMetricRow count={2} />
+            <Skeleton height={120} radius={radius.lg} delay={120} />
+            <Skeleton height={140} radius={radius.lg} delay={180} />
           </>
         }
       >
         {ruleset && ruleset.status !== "active" ? (
-          <RulesetStatusBanner
-            status={ruleset.status}
-            onCheckStatus={handleCheckStatus}
-            checking={isCheckingStatus}
-          />
+          <RulesetStatusBanner status={ruleset.status} />
         ) : null}
 
         {!league ? (
-          <Card variant="elevated">
-            <View style={styles.cardInner}>
-              <AppText variant="caption" family="heading" color="accent" style={styles.eyebrow}>
-                Start here
-              </AppText>
-              <View style={styles.rowBetween}>
-                <View style={styles.rowText}>
-                  <AppText variant="title" family="heading">
-                    Is your league on Coachr?
-                  </AppText>
-                  <AppText variant="caption" color="secondary">
-                    Join it and your team plays by its rules — nothing to write. Not
-                    there? Create it once for every team, or set up your own rules
-                    below.
-                  </AppText>
-                </View>
-              </View>
-              <Button
-                label="Find or create your league"
-                icon="search"
-                onPress={onOpenLeagues}
-                fullWidth
-                accessibilityLabel="Find or create your league"
-              />
-            </View>
-          </Card>
-        ) : null}
-
-        {league ? (
-          <Card variant="elevated">
-            <View style={styles.cardInner}>
-              <AppText variant="caption" family="heading" color="accent" style={styles.eyebrow}>
-                League
-              </AppText>
-              <AppText variant="display" family="display">
-                {league.name}
-              </AppText>
-              <AppText variant="body" color="secondary">
-                {[
-                  capitalize(league.sport),
-                  league.region,
-                  `${league.teamCount} ${league.teamCount === 1 ? "team" : "teams"}`,
-                ]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </AppText>
-              <AppText variant="caption" color="muted">
-                League rules are shared and can't be edited here. Spot a mistake or a
-                rule change? Send a request and we'll update it for every team.
-              </AppText>
-              <View style={styles.buttonRow}>
-                <View style={styles.buttonGrow}>
-                  <Button
-                    label="Request a change"
-                    icon="edit-3"
-                    variant="secondary"
-                    fullWidth
-                    onPress={() => setChangeSheetVisible(true)}
-                    accessibilityLabel="Request a change to the league rules"
-                  />
-                </View>
+          <>
+            <Card variant="glass" radius="xl">
+              <View style={styles.cardInner}>
+                <AppText variant="caption" family="heading" color="accent" style={styles.eyebrow}>
+                  Start here
+                </AppText>
+                <AppText variant="title" family="heading">
+                  Is your league on Coachr?
+                </AppText>
+                <AppText variant="body" color="secondary">
+                  Join it and your team plays by its rules, nothing to write. Not
+                  there? Create it once for every team, or set up your own rules
+                  below.
+                </AppText>
                 <Button
-                  label="Leave"
-                  variant="danger"
-                  loading={isLeaving}
-                  onPress={confirmLeaveLeague}
-                  accessibilityLabel="Leave this league"
+                  label="Find or create your league"
+                  icon="search"
+                  onPress={onOpenLeagues}
+                  fullWidth
+                  accessibilityLabel="Find or create your league"
                 />
               </View>
-            </View>
-          </Card>
-        ) : (
-          <Card variant="elevated">
-            <View style={styles.cardInner}>
-              <AppText variant="caption" family="heading" color="secondary" style={styles.eyebrow}>
-                Or set up your own rules
-              </AppText>
-              <AppText variant="title" family="heading">
-                Write your rules in plain English
-              </AppText>
-              <AppText variant="body" color="secondary">
-                Players on the field, innings or periods, positions, gender rules,
-                bench limits. Anything the rulebook says.
-              </AppText>
-              <Input
-                label="Sport"
-                value={sportDraft}
-                onChangeText={setSportDraft}
-                placeholder="softball, kickball, soccer…"
-                autoCapitalize="none"
-                autoCorrect={false}
-                accessibilityLabel="Sport"
-              />
-              <Input
-                label="Rules"
-                value={rulesDraft}
-                onChangeText={(value) => {
-                  setRulesDraft(value);
-                  if (rulesError) setRulesError(null);
-                }}
-                placeholder={RULES_PLACEHOLDER}
-                multiline
-                textAlignVertical="top"
-                style={styles.textarea}
-                error={rulesError}
-                hint="Simple rules go live instantly. Unusual ones get a custom engine built in a few minutes."
-                accessibilityLabel="Team rules"
-              />
-              <Button
-                label={ruleset ? "Save rules" : "Set up rules"}
-                icon="check"
-                onPress={handleSaveRules}
-                loading={isSavingRules}
-                disabled={!rulesDirty && !!ruleset}
-                fullWidth
-                accessibilityLabel="Save team rules"
-              />
-            </View>
-          </Card>
-        )}
+            </Card>
+
+            <Card>
+              <View style={styles.cardInner}>
+                <AppText variant="title" family="heading">
+                  Write your rules in plain English
+                </AppText>
+                <AppText variant="body" color="secondary">
+                  Players on the field, innings or periods, positions, gender rules,
+                  bench limits. Anything the rulebook says.
+                </AppText>
+                <SportPicker
+                  value={sportDraft}
+                  onChange={(code) => {
+                    setSportDraft(code);
+                    if (rulesError) setRulesError(null);
+                  }}
+                />
+                <View style={styles.fieldRow}>
+                  <Input
+                    label="Innings or periods"
+                    value={segmentCountDraft}
+                    onChangeText={(value) => {
+                      setSegmentCountDraft(digitsOnly(value, 2));
+                      if (rulesError) setRulesError(null);
+                    }}
+                    placeholder="7"
+                    keyboardType="number-pad"
+                    maxLength={2}
+                    containerStyle={styles.field}
+                    accessibilityLabel="Innings or periods"
+                  />
+                  <Input
+                    label="Players on field"
+                    value={playersOnFieldDraft}
+                    onChangeText={(value) => {
+                      setPlayersOnFieldDraft(digitsOnly(value, 2));
+                      if (rulesError) setRulesError(null);
+                    }}
+                    placeholder="10"
+                    keyboardType="number-pad"
+                    maxLength={2}
+                    containerStyle={styles.field}
+                    accessibilityLabel="Players on the field"
+                  />
+                </View>
+                <Input
+                  label="Rules"
+                  value={rulesDraft}
+                  onChangeText={(value) => {
+                    setRulesDraft(value);
+                    if (rulesError) setRulesError(null);
+                  }}
+                  placeholder={RULES_PLACEHOLDER}
+                  multiline
+                  textAlignVertical="top"
+                  style={styles.textarea}
+                  error={rulesError}
+                  hint="Simple rules go live instantly. Unusual ones get a custom engine built in a few minutes."
+                  accessibilityLabel="Team rules"
+                />
+                <Button
+                  label="Save rules"
+                  size="lg"
+                  onPress={handleSaveRules}
+                  loading={isSavingRules}
+                  disabled={!rulesDirty && !!ruleset}
+                  fullWidth
+                  accessibilityLabel="Save team rules"
+                />
+              </View>
+            </Card>
+          </>
+        ) : null}
 
         {ruleset ? (
-          <RulesSummary
-            spec={ruleset.spec}
-            unexpressedRules={ruleset.unexpressedRules}
-            eyebrow={league ? "League rules" : "What's enforced"}
-          />
+          <RulesSummary ruleset={ruleset} />
         ) : (
-          <Card variant="outline" padding="xxs">
+          <Card padding="xxs">
             <EmptyState
               icon="clipboard"
               title="No rules yet"
@@ -421,36 +428,39 @@ const RulesScreen = ({ session, onOpenLeagues }: Props) => {
           </Card>
         )}
 
-        <Card>
-          <View style={styles.cardInner}>
-            <AppText variant="bodyLg" family="heading">
-              Coach notes
-            </AppText>
-            <AppText variant="caption" color="secondary">
-              Personal reminders for game day. Saved with your team, never shared
-              with the league, and not applied by the generator — use player
-              positions, locks, and bench flags for that.
-            </AppText>
-            <Input
-              value={prefsDraft}
-              onChangeText={setPrefsDraft}
-              placeholder="Sam prefers SS in late innings. Keep the Ortiz twins apart."
-              multiline
-              textAlignVertical="top"
-              style={styles.notes}
-              accessibilityLabel="Coach notes"
+        <View style={styles.notes}>
+          <SectionLabel>Coach notes</SectionLabel>
+          <Input
+            value={prefsDraft}
+            onChangeText={setPrefsDraft}
+            onBlur={() => void handleSavePrefs()}
+            placeholder="Sam prefers SS in late innings. Keep the Ortiz twins apart."
+            multiline
+            textAlignVertical="top"
+            style={styles.notesInput}
+            hint="Private to you. Not applied by the generator."
+            accessibilityLabel="Coach notes"
+          />
+        </View>
+
+        {league ? (
+          <View style={styles.footerRow}>
+            <Button
+              label="Request a change"
+              variant="secondary"
+              onPress={() => setChangeSheetVisible(true)}
+              style={styles.footerGrow}
+              accessibilityLabel="Request a change to the league rules"
             />
             <Button
-              label="Save notes"
-              variant="secondary"
-              onPress={handleSavePrefs}
-              loading={isSavingPrefs}
-              disabled={!prefsDirty}
-              fullWidth
-              accessibilityLabel="Save coach notes"
+              label="Leave"
+              variant="danger"
+              loading={isLeaving}
+              onPress={confirmLeaveLeague}
+              accessibilityLabel="Leave this league"
             />
           </View>
-        </Card>
+        ) : null}
       </LoadTransition>
 
       <Sheet
@@ -492,43 +502,42 @@ const RulesScreen = ({ session, onOpenLeagues }: Props) => {
 
 const styles = StyleSheet.create({
   content: {
-    gap: space.sm,
+    gap: space.md,
   },
   // Mirrors the screen's content gap so wrapping the loaded region in the
   // transition view doesn't change spacing.
   loadedStack: {
-    gap: space.sm,
+    gap: space.md,
   },
   cardInner: {
     gap: space.sm,
   },
-  eyebrow: {
-    textTransform: "uppercase",
-    letterSpacing: 1,
-  },
-  buttonRow: {
+  fieldRow: {
     flexDirection: "row",
-    gap: space.xs,
-    marginTop: space.xxs,
-  },
-  buttonGrow: {
-    flex: 1,
-  },
-  rowBetween: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
     gap: space.sm,
   },
-  rowText: {
+  field: {
     flex: 1,
-    gap: space.xxs,
+  },
+  eyebrow: {
+    textTransform: "uppercase",
+    letterSpacing: 1.4,
   },
   textarea: {
     minHeight: 120,
   },
   notes: {
-    minHeight: 88,
+    gap: space.xs,
+  },
+  notesInput: {
+    minHeight: 60,
+  },
+  footerRow: {
+    flexDirection: "row",
+    gap: space.xs,
+  },
+  footerGrow: {
+    flex: 1,
   },
 });
 

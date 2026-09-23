@@ -47,13 +47,20 @@ export type BackendLineupPlayer = {
 export type BackendTeamRulesInput = {
   rulesText?: string;
   sport?: string;
+  // Structured facts that override the prose; the forms always send both.
+  segmentCount?: number;
+  playersOnField?: number;
   coachPreferences?: string;
 };
 
 export type BackendCreateLeagueInput = {
   name: string;
   sport: string;
-  region?: string;
+  city: string;
+  state: string;
+  zip: string;
+  segmentCount: number;
+  playersOnField: number;
   description?: string;
   rulesText: string;
   confirmDistinct?: boolean;
@@ -124,6 +131,11 @@ export type BackendVerifySubscriptionRequest = {
   platform: "ios" | "android";
 };
 
+export type BackendTeam = {
+  id: string;
+  name: string;
+};
+
 export type BackendGame = {
   id?: string;
   title: string;
@@ -169,6 +181,7 @@ export type BackendClient = {
     ) => { data: { subscription: BackendAuthSubscription } };
   };
   getOrCreateTeam: (userId: string) => Promise<string | null>;
+  getMyTeam: () => Promise<BackendTeam>;
   getTeamRules: (teamId: string) => Promise<TeamRulesState>;
   upsertTeamRules: (
     teamId: string,

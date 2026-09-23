@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0a1410;font-family:'Avenir Next','Nunito Sans',system-ui,sans-serif;color:#f6f1e7}
+a{color:#f2a63b}a:hover{color:#ffbf63}
+input{font-family:inherit}
+@keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes shimmer{0%{opacity:.35}50%{opacity:.7}100%{opacity:.35}}
+@keyframes spin{to{transform:rotate(360deg)}}
+::-webkit-scrollbar{width:0;height:0}
+</style>
+</helmet>
+<div style="min-height:100vh;display:flex;gap:40px;padding:40px;box-sizing:border-box;align-items:flex-start">
+
+  <!-- Side notes -->
+  <div style="width:260px;flex-shrink:0;display:flex;flex-direction:column;gap:22px;position:sticky;top:40px">
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <div style="font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#f2a63b;font-weight:700">Coachr · Prototype</div>
+      <div style="font-size:22px;font-weight:800;line-height:1.2">Redesign, clickable</div>
+      <div style="font-size:13px;color:#a9b5ad;line-height:1.5">Tap through the phone, or jump to a screen.</div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px">
+      <sc-for list="{{ jumps }}" as="j" hint-placeholder-count="6">
+        <div onClick="{{ j.go }}" style="font-size:12px;font-weight:600;padding:7px 11px;border-radius:999px;border:1px solid #2a4a3d;background:#132520;color:#c9c0ab;cursor:pointer;transition:transform .12s ease" style-active="transform:scale(.99)">{{ j.label }}</div>
+      </sc-for>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px;font-size:13px;color:#a9b5ad;line-height:1.5">
+      <div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#7ecf9d;font-weight:700">What changed</div>
+      <div>One header pattern everywhere: eyebrow, title, one line of context. No more card inside card.</div>
+      <div>Each screen has one amber action. Everything else is quiet.</div>
+      <div>Home leads with the next game, not a dashboard.</div>
+      <div>Lineup grid is the hero of the Lineup tab, with a real skeleton and reveal.</div>
+      <div>Onboarding: join by search first, create or write your own as secondary. Progress bar fixed.</div>
+    </div>
+  </div>
+
+  <!-- Phone -->
+  <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ true }}" hint-size="393px,852px">
+    <div style="height:100%;background:radial-gradient(120% 55% at 30% -10%,#183328 0%,#0f1f18 55%),radial-gradient(80% 40% at 100% 100%,#132820 0%,#0f1f18 60%);color:#f6f1e7;font-family:'Avenir Next','Nunito Sans',system-ui,sans-serif;display:flex;flex-direction:column;box-sizing:border-box;padding-top:58px;overflow:hidden;position:relative">
+      <div style="position:absolute;inset:0;pointer-events:none;z-index:5;opacity:.03;mix-blend-mode:overlay;background-image:url(&quot;data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='160' height='160' filter='url(%23n)'/></svg>&quot;)"></div>
+
+      <!-- AUTH -->
+      <sc-if value="{{ isAuth }}" hint-placeholder-val="{{ true }}">
+        <div style="flex:1;display:flex;flex-direction:column;padding:0 24px 40px;animation:rise .28s ease-out">
+          <div style="flex:1"></div>
+          <div style="font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:#c9c0ab">Lineup Studio</div>
+          <div style="font-size:44px;font-weight:800;letter-spacing:.06em;margin-top:6px">COACHR</div>
+          <div style="font-size:15px;color:#c9c0ab;line-height:1.5;margin-top:12px;max-width:280px">Fair lineups for every inning. Your rules, your roster, one tap.</div>
+          <div style="flex:1"></div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <input value="coach@ridgeline.club" readOnly="{{ true }}" style="background:rgba(6,14,11,.3);border:1px solid rgba(246,241,231,.1);box-shadow:inset 0 1px 3px rgba(0,0,0,.2);border-radius:14px;padding:15px 16px;color:#f6f1e7;font-size:15px;outline:none">
+            <input value="••••••••••" readOnly="{{ true }}" style="background:rgba(6,14,11,.3);border:1px solid rgba(246,241,231,.1);box-shadow:inset 0 1px 3px rgba(0,0,0,.2);border-radius:14px;padding:15px 16px;color:#f6f1e7;font-size:15px;outline:none">
+            <div onClick="{{ signIn }}" style="margin-top:6px;background:#f2a63b;color:#1c1205;border-radius:14px;padding:16px;text-align:center;font-weight:800;font-size:16px;cursor:pointer;transition:transform .12s ease" style-active="transform:scale(.99)">Sign in</div>
+            <div style="text-align:center;font-size:13px;color:#c9c0ab;margin-top:8px">New here? <span style="color:#f2a63b;font-weight:600">Create an account</span></div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ONBOARDING -->
+      <sc-if value="{{ isOb }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;display:flex;flex-direction:column;min-height:0">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 20px 0">
+            <div style="display:flex;align-items:center;gap:8px">
+              <sc-if value="{{ obCanBack }}" hint-placeholder-val="{{ false }}">
+                <svg onClick="{{ obBack }}" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#f6f1e7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="cursor:pointer;margin-left:-4px;transition:transform .12s ease" style-active="transform:scale(.99)"><path d="M15 18l-6-6 6-6"></path></svg>
+              </sc-if>
+              <div style="display:flex;gap:8px">
+                <sc-for list="{{ obDots }}" as="d" hint-placeholder-count="4">
+                  <span style="width:22px;height:4px;border-radius:2px;background:{{ d.bg }};transition:background .2s"></span>
+                </sc-for>
+              </div>
+            </div>
+            <sc-if value="{{ obNotLast }}" hint-placeholder-val="{{ true }}">
+              <div onClick="{{ finishOb }}" style="font-size:14px;font-weight:600;color:#c9c0ab;cursor:pointer;padding:8px 0;transition:transform .12s ease" style-active="transform:scale(.99)">Set up later</div>
+            </sc-if>
+          </div>
+
+          <div style="flex:1;overflow:auto;padding:0 20px 32px;display:flex;flex-direction:column">
+            <!-- welcome -->
+            <sc-if value="{{ ob0 }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;flex-direction:column;flex:1;animation:rise .28s ease-out">
+                <div style="margin-top:44px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#f2a63b;font-weight:700">Welcome to Coachr</div>
+                <div style="margin-top:10px;font-size:34px;font-weight:800;line-height:1.1;letter-spacing:-.01em">Let's get your first lineup ready</div>
+                <div style="margin-top:14px;font-size:15px;color:#c9c0ab;line-height:1.5">Two quick things and you're generating: your rules, then your players.</div>
+                <div style="margin-top:36px;display:flex;flex-direction:column;gap:18px">
+                  <div style="display:flex;gap:14px;align-items:center">
+                    <span style="width:36px;height:36px;border-radius:50%;background:rgba(242,166,59,.14);border:1px solid rgba(242,166,59,.4);display:flex;align-items:center;justify-content:center;color:#f2a63b;font-weight:800;font-size:13px">1</span>
+                    <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:16px;font-weight:700">Rules</span><span style="font-size:13px;color:#c9c0ab">Join or create your league, or write your own</span></div>
+                  </div>
+                  <div style="display:flex;gap:14px;align-items:center">
+                    <span style="width:36px;height:36px;border-radius:50%;background:rgba(242,166,59,.14);border:1px solid rgba(242,166,59,.4);display:flex;align-items:center;justify-content:center;color:#f2a63b;font-weight:800;font-size:13px">2</span>
+                    <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:16px;font-weight:700">Roster</span><span style="font-size:13px;color:#c9c0ab">Add your players</span></div>
+                  </div>
+                  <div style="display:flex;gap:14px;align-items:center">
+                    <span style="width:36px;height:36px;border-radius:50%;background:rgba(242,166,59,.14);border:1px solid rgba(242,166,59,.4);display:flex;align-items:center;justify-content:center;color:#f2a63b;font-weight:800;font-size:13px">3</span>
+                    <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:16px;font-weight:700">Lineup</span><span style="font-size:13px;color:#c9c0ab">Generate a fair lineup instantly</span></div>
+                  </div>
+                </div>
+                <div style="flex:1"></div>
+                <div onClick="{{ obNext }}" style="background:#f2a63b;color:#1c1205;border-radius:14px;padding:16px;text-align:center;font-weight:800;font-size:16px;cursor:pointer;display:flex;justify-content:center;gap:8px;align-items:center;transition:transform .12s ease" style-active="transform:scale(.99)">Set up my team <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1c1205" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14 M12 5l7 7-7 7"></path></svg></div>
+              </div>
+            </sc-if>
+
+            <!-- rules -->
+            <sc-if value="{{ ob1 }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;flex-direction:column;flex:1;animation:rise .28s ease-out">
+                <div style="margin-top:36px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#f2a63b;font-weight:700">Step 1 of 3 · Rules</div>
+                <div style="margin-top:8px;font-size:30px;font-weight:800;line-height:1.15;letter-spacing:-.01em">{{ obRulesTitle }}</div>
+                <sc-if value="{{ obCreate }}" hint-placeholder-val="{{ false }}">
+                  <div style="margin-top:20px;display:flex;flex-direction:column;gap:12px;animation:rise .24s ease-out">
+                    <div style="display:flex;flex-direction:column;gap:6px"><span style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#c9c0ab;font-weight:700">League name</span><input value="{{ leagueName }}" onChange="{{ setLeagueName }}" placeholder="Austin Coed Kickball" style="background:rgba(6,14,11,.3);border:1px solid rgba(246,241,231,.1);box-shadow:inset 0 1px 3px rgba(0,0,0,.2);border-radius:12px;padding:13px 14px;color:#f6f1e7;font-size:15px;outline:none"></div>
+                    <div style="display:flex;gap:10px">
+                      <div style="flex:1;display:flex;flex-direction:column;gap:6px"><span style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#c9c0ab;font-weight:700">Sport</span><input value="{{ sportDraft }}" onChange="{{ setSport }}" placeholder="softball" style="background:rgba(6,14,11,.3);border:1px solid rgba(246,241,231,.1);box-shadow:inset 0 1px 3px rgba(0,0,0,.2);border-radius:12px;padding:13px 14px;color:#f6f1e7;font-size:15px;outline:none;min-width:0"></div>
+                      <div style="flex:1;display:flex;flex-direction:column;gap:6px"><span style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#c9c0ab;font-weight:700">Region</span><input value="{{ regionDraft }}" onChange="{{ setRegion }}" placeholder="Austin, TX" style="background:rgba(6,14,11,.3);border:1px solid rgba(246,241,231,.1);box-shadow:inset 0 1px 3px rgba(0,0,0,.2);border-radius:12px;padding:13px 14px;color:#f6f1e7;font-size:15px;outline:none;min-width:0"></div>
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:6px"><span style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#c9c0ab;font-weight:700">League rules</span><textarea value="{{ rulesDraft }}" onChange="{{ setRules }}" placeholder="e.g. 6 innings, 9 on the field (P, C, 1B, 2B, 3B, SS, LF, CF, RF), nobody sits twice in a row." style="background:rgba(6,14,11,.3);border:1px solid rgba(246,241,231,.1);box-shadow:inset 0 1px 3px rgba(0,0,0,.2);border-radius:12px;padding:13px 14px;color:#f6f1e7;font-size:15px;outline:none;min-height:120px;resize:none;font-family:inherit;line-height:1.45"></textarea><span style="font-size:12px;color:#8a978f;line-height:1.5">Simple rules go live instantly. Unusual ones get a custom engine built in a few minutes.</span></div>
+                    <div style="flex:1"></div>
+                    <div onClick="{{ obSubmitRules }}" style="margin-top:8px;background:{{ obRulesBtnBg }};color:{{ obRulesBtnColor }};border-radius:14px;padding:16px;text-align:center;font-weight:800;font-size:16px;cursor:pointer;transition:all .2s;box-shadow:{{ obRulesBtnShadow }}" style-active="transform:scale(.99)">Create league</div>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ obOwn }}" hint-placeholder-val="{{ false }}">
+                  <div style="margin-top:20px;display:flex;flex-direction:column;gap:12px;animation:rise .24s ease-out">
+                    <div style="display:flex;flex-direction:column;gap:6px"><span style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#c9c0ab;font-weight:700">Sport</span><input value="{{ sportDraft }}" onChange="{{ setSport }}" placeholder="softball, kickball, soccer…" style="background:rgba(6,14,11,.3);border:1px solid rgba(246,241,231,.1);box-shadow:inset 0 1px 3px rgba(0,0,0,.2);border-radius:12px;padding:13px 14px;color:#f6f1e7;font-size:15px;outline:none"></div>
+                    <div style="display:flex;flex-direction:column;gap:6px"><span style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#c9c0ab;font-weight:700">Rules</span><textarea value="{{ rulesDraft }}" onChange="{{ setRules }}" placeholder="e.g. 7 innings, 10 on the field (P, C, 1B, 2B, 3B, SS, LF, LCF, RCF, RF). At least 3 women. Nobody sits two innings in a row." style="background:rgba(6,14,11,.3);border:1px solid rgba(246,241,231,.1);box-shadow:inset 0 1px 3px rgba(0,0,0,.2);border-radius:12px;padding:13px 14px;color:#f6f1e7;font-size:15px;outline:none;min-height:150px;resize:none;font-family:inherit;line-height:1.45"></textarea><span style="font-size:12px;color:#8a978f;line-height:1.5">Simple rules go live instantly. Unusual ones get a custom engine built in a few minutes.</span></div>
+                    <div style="flex:1"></div>
+                    <div onClick="{{ obSubmitRules }}" style="margin-top:8px;background:{{ obRulesBtnBg }};color:{{ obRulesBtnColor }};border-radius:14px;padding:16px;text-align:center;font-weight:800;font-size:16px;cursor:pointer;transition:all .2s;box-shadow:{{ obRulesBtnShadow }}" style-active="transform:scale(.99)">Save rules</div>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ obOptions }}" hint-placeholder-val="{{ true }}">
+                <div style="display:flex;flex-direction:column;flex:1">
+                <div style="margin-top:22px;display:flex;align-items:center;gap:10px;background:rgba(6,14,11,.3);box-shadow:inset 0 1px 3px rgba(0,0,0,.2);border:1px solid {{ searchBorder }};border-radius:14px;padding:14px 16px;transition:border-color .2s">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f2a63b" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 21l-4.35-4.35 M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16"></path></svg>
+                  <input value="{{ leagueQuery }}" onChange="{{ setLeagueQuery }}" placeholder="Search leagues on Coachr" style="flex:1;background:transparent;border:none;outline:none;color:#f6f1e7;font-size:16px;min-width:0">
+                </div>
+                <sc-if value="{{ hasLeagueResults }}" hint-placeholder-val="{{ false }}">
+                  <div style="margin-top:10px;display:flex;flex-direction:column;border-radius:14px;background:#183129;border:1px solid rgba(246,241,231,.06);box-shadow:0 1px 6px rgba(4,18,11,.18);overflow:hidden">
+                    <sc-for list="{{ leagueResults }}" as="l" hint-placeholder-count="3">
+                      <div onClick="{{ l.join }}" style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid rgba(246,241,231,.08);cursor:pointer;transition:transform .12s ease" style-active="transform:scale(.99)">
+                        <div style="flex:1;display:flex;flex-direction:column;gap:2px"><span style="font-size:15px;font-weight:700">{{ l.name }}</span><span style="font-size:12px;color:#c9c0ab">{{ l.meta }}</span></div>
+                        <span style="font-size:12px;font-weight:700;color:#f2a63b">Join</span>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ noLeagueResults }}" hint-placeholder-val="{{ true }}">
+                  <div style="margin-top:10px;font-size:13px;color:#8a978f;line-height:1.5">If it's on Coachr, you get its rules instantly. Try "Austin".</div>
+                </sc-if>
+                <div style="margin-top:32px;display:flex;align-items:center;gap:12px;color:#5f7169;font-size:11px;letter-spacing:.12em;font-weight:700"><span style="flex:1;height:1px;background:#24382f"></span>NOT IN A LEAGUE?<span style="flex:1;height:1px;background:#24382f"></span></div>
+                <div style="margin-top:16px;display:flex;flex-direction:column;gap:10px">
+                  <div onClick="{{ obGoCreate }}" style="display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:14px;background:rgba(30,59,49,.42);backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2);border:1px solid rgba(246,241,231,.1);cursor:pointer;transition:transform .12s ease" style-active="transform:scale(.99)">
+                    <span style="width:34px;height:34px;border-radius:50%;background:rgba(242,166,59,.14);display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f2a63b" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14 M5 12h14"></path></svg></span>
+                    <div style="flex:1;display:flex;flex-direction:column;gap:2px"><span style="font-size:15px;font-weight:700">Create a league</span><span style="font-size:12px;color:#c9c0ab">Every team in it can use your rules</span></div>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8a978f" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"></path></svg>
+                  </div>
+                  <div onClick="{{ obGoOwn }}" style="display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:14px;background:rgba(30,59,49,.42);backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2);border:1px solid rgba(246,241,231,.1);cursor:pointer;transition:transform .12s ease" style-active="transform:scale(.99)">
+                    <span style="width:34px;height:34px;border-radius:50%;background:rgba(242,166,59,.14);display:flex;align-items:center;justify-content:center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f2a63b" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9 M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg></span>
+                    <div style="flex:1;display:flex;flex-direction:column;gap:2px"><span style="font-size:15px;font-weight:700">Write my own rules</span><span style="font-size:12px;color:#c9c0ab">Just your team, plain English</span></div>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8a978f" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"></path></svg>
+                  </div>
+                </div>
+              </div>
+              </sc-if>
+              </div>
+            </sc-if>
+
+            <!-- roster -->
+            <sc-if value="{{ ob2 }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;flex-direction:column;flex:1;animation:rise .28s ease-out">
+                <div style="margin-top:36px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#f2a63b;font-weight:700">Step 2 of 3 · Roster</div>
+                <div style="margin-top:8px;font-size:30px;font-weight:800;line-height:1.15;letter-spacing:-.01em">Add your players</div>
+                <div style="margin-top:8px;font-size:14px;color:#c9c0ab;line-height:1.5">{{ obRosterHint }}</div>
+                <div style="margin-top:20px;display:flex;gap:8px">
+                  <input value="{{ nameDraft }}" onChange="{{ setNameDraft }}" onKeyDown="{{ nameKey }}" placeholder="Player name" style="flex:1;min-width:0;background:#183129;border:1px solid rgba(246,241,231,.06);box-shadow:0 1px 6px rgba(4,18,11,.18);border-radius:12px;padding:12px 14px;color:#f6f1e7;font-size:15px;outline:none">
+                  <div style="display:flex;border:1px solid #2a4a3d;border-radius:12px;overflow:hidden">
+                    <div onClick="{{ setMale }}" style="padding:0 12px;display:flex;align-items:center;font-size:12px;font-weight:700;background:{{ maleBg }};color:{{ maleColor }};cursor:pointer;transition:transform .12s ease" style-active="transform:scale(.99)">M</div>
+                    <div onClick="{{ setFemale }}" style="padding:0 12px;display:flex;align-items:center;font-size:12px;font-weight:700;background:{{ femaleBg }};color:{{ femaleColor }};cursor:pointer;transition:transform .12s ease" style-active="transform:scale(.99)">W</div>
+                  </div>
+                  <div onClick="{{ addObPlayer }}" style="background:#f2a63b;color:#1c1205;border-radius:12px;padding:0 16px;display:flex;align-items:center;font-weight:800;font-size:14px;cursor:pointer;transition:transform .12s ease" style-active="transform:scale(.99)">Add</div>
+                </div>
+                <div style="margin-top:14px;display:flex;flex-wrap:wrap;gap:8px;min-height:34px">
+                  <sc-for list="{{ obPlayers }}" as="p" hint-placeholder-count="0">
+                    <div onClick="{{ p.remove }}" style="display:flex;align-items:center;gap:6px;border-radius:999px;border:1px solid #2a4a3d;background:#183129;padding:0 12px;height:34px;cursor:pointer;transition:transform .12s ease" style-active="transform:scale(.99)">
+                      <span style="width:7px;height:7px;border-radius:50%;background:{{ p.dot }}"></span>
+                      <span style="font-size:12px;font-weight:700">{{ p.name }}</span>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#c9c0ab" stroke-width="2.4" stroke-linecap="round"><path d="M18 6L6 18 M6 6l12 12"></path></svg>
+                    </div>
+                  </sc-for>
+                </div>
+                <div onClick="{{ importSample }}" style="margin-top:14px;display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:14px;border:1px dashed #2a4a3d;cursor:pointer;transition:transform .12s ease" style-active="transform:scale(.99)">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f2a63b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4 M17 8l-5-5-5 5 M12 3v12"></path></svg>
+                  <div style="flex:1;display:flex;flex-direction:column;gap:2px"><span style="font-size:14px;font-weight:700">Import a spreadsheet</span><span style="font-size:12px;color:#c9c0ab">Excel or CSV with names and genders</span></div>
+                </div>
+                <div style="flex:1"></div>
+                <div onClick="{{ obContinueRoster }}" style="margin-top:20px;background:{{ obRosterBtnBg }};color:{{ obRosterBtnColor }};border-radius:14px;padding:16px;text-align:center;font-weight:800;font-size:16px;cursor:pointer;transition:all .2s" style-active="transform:scale(.99)">{{ obRosterBtnLabel }}</div>
+              </div>
+            </sc-if>
+
+            <!-- ready -->
+            <sc-if value="{{ ob3 }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;flex-direction:column;flex:1;animation:rise .28s ease-out">
+                <div style="margin-top:36px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#f2a63b;font-weight:700">Step 3 of 3 · Lineup</div>
+                <div style="margin-top:8px;font-size:34px;font-weight:800;line-height:1.1;letter-spacing:-.01em">You're ready</div>
+                <div style="margin-top:24px;border-radius:16px;background:#183129;border:1px solid rgba(246,241,231,.06);box-shadow:0 1px 6px rgba(4,18,11,.18);overflow:hidden">
+                  <div style="display:flex;align-items:center;gap:12px;padding:16px;border-bottom:1px solid rgba(246,241,231,.08)">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#c9c0ab" stroke-width="2" stroke-linecap="round"><path d="M4 21v-7 M4 10V3 M12 21v-9 M12 8V3 M20 21v-5 M20 12V3 M1 14h6 M9 8h6 M17 16h6"></path></svg>
+                    <span style="flex:1;font-size:15px">{{ obRulesLabel }}</span>
+                    <span style="font-size:12px;font-weight:700;color:#7ecf9d">Ready</span>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:12px;padding:16px">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#c9c0ab" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M23 21v-2a4 4 0 0 0-3-3.87 M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                    <span style="flex:1;font-size:15px">{{ obPlayerCountLabel }}</span>
+                    <span style="font-size:12px;font-weight:700;color:#7ecf9d">Ready</span>
+                  </div>
+                </div>
+                <div style="flex:1"></div>
+                <div onClick="{{ obGenerate }}" style="background:#f2a63b;color:#1c1205;border-radius:14px;padding:16px;text-align:center;font-weight:800;font-size:16px;cursor:pointer;display:flex;justify-content:center;gap:8px;align-items:center;transition:transform .12s ease" style-active="transform:scale(.99)"><svg width="18" height="18" viewBox="0 0 24 24" fill="#1c1205" stroke="#1c1205" stroke-width="1.5" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path></svg>Generate my first lineup</div>
+                <div onClick="{{ finishOb }}" style="margin-top:12px;text-align:center;font-size:14px;font-weight:600;color:#c9c0ab;cursor:pointer;padding:8px;transition:transform .12s ease" style-active="transform:scale(.99)">I'll explore on my own</div>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- APP -->
+      <sc-if value="{{ isApp }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;display:flex;flex-direction:column;min-height:0">
+
+          <!-- HOME -->
+          <sc-if value="{{ showHome }}" hint-placeholder-val="{{ true }}">
+            <div style="flex:1;overflow:auto;padding:8px 20px 128px;display:flex;flex-direction:column;gap:20px;animation:rise .24s ease-out">
+              <div style="display:flex;align-items:flex-end;justify-content:space-between">
+                <div style="display:flex;flex-direction:column;gap:4px">
+                  <div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#f2a63b;font-weight:700">Thursday, Sep 3</div>
+                  <div style="font-size:28px;font-weight:800;letter-spacing:-.01em">Ridgeline Coed</div>
+                </div>
+                <div onClick="{{ goRules }}" style="width:40px;height:40px;border-radius:12px;background:rgba(30,59,49,.42);backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2);border:1px solid rgba(246,241,231,.1);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform .12s ease" style-active="transform:scale(.99)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#f6f1e7" stroke-width="2" stroke-linecap="round"><path d="M4 21v-7 M4 10V3 M12 21v-9 M12 8V3 M20 21v-5 M20 12V3 M1 14h6 M9 8h6 M17 16h6"></path></svg></div>
+              </div>
+
+              <div style="border-radius:20px;background:rgba(30,59,49,.42);backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2);border:1px solid rgba(246,241,231,.1);box-shadow:0 4px 16px rgba(4,18,11,.22);padding:20px;display:flex;flex-direction:column;gap:14px;position:relative;overflow:hidden">
+                
+                <div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#f2a63b;font-weight:700">Next game · Sun, Sep 13</div>
+                <div style="display:flex;flex-direction:column;gap:2px">
+                  <div style="font-size:26px;font-weight:800;line-height:1.1">vs Bombers</div>
+                  <div style="font-size:14px;color:#c9c0ab">11:30 AM · Away · Krieg Complex</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:#c9c0ab"><span style="width:8px;height:8px;border-radius:50%;background:#7ecf9d"></span>{{ readiness }}</div>
+                <div onClick="{{ goGenerate }}" style="background:#f2a63b;color:#1c1205;border-radius:14px;padding:15px;text-align:center;font-weight:800;font-size:16px;cursor:pointer;display:flex;justify-content:center;gap:8px;align-items:center;transition:transform .12s ease" style-active="transform:scale(.99)"><svg width="17" height="17" viewBox="0 0 24 24" fill="#1c1205" stroke="#1c1205" stroke-width="1.5" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path></svg>Generate lineup</div>
+              </div>
+
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+                <div onClick="{{ goRoster }}" style="border-radius:16px;background:#183129;border:1px solid rgba(246,241,231,.06);box-shadow:0 1px 6px rgba(4,18,11,.18);padding:14px;display:flex;flex-direction:column;gap:4px;cursor:pointer;transition:transform .12s ease" style-active="transform:scale(.99)"><span style="font-size:24px;font-weight:800">{{ activeCount }}</span><span style="font-size:12px;color:#c9c0ab">Active players</span></div>
+                <div onClick="{{ goRules }}" style="border-radius:16px;background:#183129;border:1px solid rgba(246,241,231,.06);box-shadow:0 1px 6px rgba(4,18,11,.18);padding:14px;display:flex;flex-direction:column;gap:4px;cursor:pointer;transition:transform .12s ease" style-active="transform:scale(.99)"><span style="font-size:24px;font-weight:800">7</span><span style="font-size:12px;color:#c9c0ab">Innings</span></div>
+                <div onClick="{{ goRules }}" style="border-radius:16px;background:#183129;border:1px solid rgba(246,241,231,.06);box-shadow:0 1px 6px rgba(4,18,11,.18);padding:14px;display:flex;flex-direction:column;gap:4px;cursor:pointer;transition:transform .12s ease" style-active="transform:scale(.99)"><span style="font-size:24px;font-weight:800">10</span><span style="font-size:12px;color:#c9c0ab">On field</span></div>
+              </div>
+
+              <div style="display:flex;flex-direction:column;gap:10px">
+                <div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:16px;font-weight:700">Recent lineups</span><span onClick="{{ goSaved }}" style="font-size:13px;font-weight:600;color:#f2a63b;cursor:pointer;transition:transform .12s ease" style-active="transform:scale(.99)">See all</span></div>
+                <div style="border-radius:16px;background:#183129;border:1px solid rgba(246,241,231,.06);box-shadow:0 1px 6px rgba(4,18,11,.18);overflow:hidden">
+                  <sc-for list="{{ historyShort }}" as="h" hint-placeholder-count="2">
+                    <div onClick="{{ goSaved }}" style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid rgba(246,241,231,.08);cursor:pointer;transition:transform .12s ease" style-active="transform:scale(.99)">
+                      <div style="flex:1;display:flex;flex-direction:column;gap:2px"><span style="font-size:15px;font-weight:700">{{ h.name }}</span><span style="font-size:12px;color:#c9c0ab">{{ h.date }}</span></div>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8a978f" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"></path></svg>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+
+          <!-- ROSTER -->
+          <sc-if value="{{ showRoster }}" hint-placeholder-val="{{ false }}">
+            <div style="flex:1;overflow:auto;padding:8px 20px 128px;display:flex;flex-direction:column;gap:16px;animation:rise .24s ease-out">
+              <div style="display:flex;align-items:flex-end;justify-content:space-between">
+                <div style="display:flex;flex-direction:column;gap:4px">
+                  <div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#f2a63b;font-weight:700">Roster</div>
+                  <div style="font-size:28px;font-weight:800;letter-spacing:-.01em">{{ rosterTitle }}</div>
+                </div>
+                <div style="display:flex;gap:8px">
+                  <div style="width:40px;height:40px;border-radius:12px;background:rgba(30,59,49,.42);backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2);border:1px solid rgba(246,241,231,.1);display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f6f1e7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4 M17 8l-5-5-5 5 M12 3v12"></path></svg></div>
+                  <div style="width:40px;height:40px;border-radius:12px;background:#f2a63b;display:flex;align-items:center;justify-content:center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1c1205" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14 M5 12h14"></path></svg></div>
+                </div>
+              </div>
+              <div style="font-size:13px;color:#c9c0ab;line-height:1.5">Tap a chip to bench a player for the next lineup. Tap a name for positions.</div>
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <sc-for list="{{ roster }}" as="p" hint-placeholder-count="6">
+                  <div style="border-radius:16px;background:#183129;border:1px solid rgba(246,241,231,.06);box-shadow:0 1px 6px rgba(4,18,11,.18);opacity:{{ p.opacity }};transition:opacity .2s">
+                    <div style="display:flex;align-items:center;gap:12px;padding:12px 14px">
+                      <div onClick="{{ p.expand }}" style="display:flex;align-items:center;gap:12px;flex:1;cursor:pointer;min-width:0;transition:transform .12s ease" style-active="transform:scale(.99)">
+                        <span style="width:38px;height:38px;border-radius:50%;background:rgba(242,166,59,.14);border:1px solid rgba(242,166,59,.4);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#f2a63b;flex-shrink:0">{{ p.initials }}</span>
+                        <div style="display:flex;flex-direction:column;gap:2px;min-width:0">
+                          <div style="display:flex;align-items:center;gap:6px"><span style="font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.name }}</span><span style="font-size:10px;font-weight:800;color:{{ p.gColor }};border:1px solid {{ p.gBorder }};border-radius:6px;padding:1px 5px">{{ p.g }}</span></div>
+                          <span style="font-size:12px;color:#c9c0ab">{{ p.posLabel }}</span>
+                        </div>
+                      </div>
+                      <div onClick="{{ p.toggle }}" style="font-size:12px;font-weight:700;padding:7px 12px;border-radius:999px;background:{{ p.chipBg }};color:{{ p.chipColor }};border:1px solid {{ p.chipBorder }};cursor:pointer;transition:all .2s" style-active="transform:scale(.99)">{{ p.chipLabel }}</div>
+                    </div>
+                    <sc-if value="{{ p.isExpanded }}" hint-placeholder-val="{{ false }}">
+                      <div style="padding:0 14px 14px;display:flex;flex-direction:column;gap:10px;animation:rise .2s ease-out">
+                        <div style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#c9c0ab;font-weight:700">Preferred positions</div>
+                        <div style="display:flex;flex-wrap:wrap;gap:6px">
+                          <sc-for list="{{ p.slots }}" as="s" hint-placeholder-count="10">
+                            <span onClick="{{ s.toggle }}" style="font-size:12px;font-weight:700;padding:6px 10px;border-radius:8px;background:{{ s.bg }};color:{{ s.color }};border:1px solid {{ s.border }};cursor:pointer;transition:transform .12s ease" style-active="transform:scale(.99)">{{ s.label }}</span>
+                          </sc-for>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:12px;background:#1e3b31;border:1px solid #2a4a3d">
+                          <span style="font-size:13px;color:#c9c0ab">Lock to one position</span>
+                          <span style="width:40px;height:24px;border-radius:12px;background:#2a4a3d;position:relative"><span style="position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:#f6f1e7"></span></span>
+                        </div>
+                      </div>
+                    </sc-if>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+
+          <!-- LINEUP -->
+          <sc-if value="{{ showLineup }}" hint-placeholder-val="{{ false }}">
+            <div style="flex:1;display:flex;flex-direction:column;min-height:0;animation:rise .24s ease-out">
+              <div style="padding:8px 20px 12px;display:flex;flex-direction:column;gap:14px">
+                <div style="display:flex;flex-direction:column;gap:4px">
+                  <div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#f2a63b;font-weight:700">Lineup</div>
+                  <div style="font-size:28px;font-weight:800;letter-spacing:-.01em">{{ lineupTitle }}</div>
+                </div>
+                <div style="display:flex;background:rgba(30,59,49,.42);backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2);border:1px solid rgba(246,241,231,.1);border-radius:12px;padding:4px;gap:4px">
+                  <div onClick="{{ setBuild }}" style="flex:1;text-align:center;padding:9px;border-radius:9px;font-size:13px;font-weight:700;background:{{ buildBg }};color:{{ buildColor }};border:1px solid {{ buildBorder }};cursor:pointer;transition:all .2s" style-active="transform:scale(.99)">Generate</div>
+                  <div onClick="{{ setHistory }}" style="flex:1;text-align:center;padding:9px;border-radius:9px;font-size:13px;font-weight:700;background:{{ histBg }};color:{{ histColor }};border:1px solid {{ histBorder }};cursor:pointer;transition:all .2s" style-active="transform:scale(.99)">Saved</div>
+                </div>
+              </div>
+              <div style="flex:1;overflow:auto;padding:0 20px 128px;display:flex;flex-direction:column;gap:14px">
+                <sc-if value="{{ isBuild }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:flex;flex-direction:column;gap:14px">
+                    <div style="display:flex;gap:8px;overflow:auto">
+                      <sc-for list="{{ gameChips }}" as="g" hint-placeholder-count="3">
+                        <div onClick="{{ g.pick }}" style="white-space:nowrap;font-size:12px;font-weight:700;padding:8px 12px;border-radius:999px;background:{{ g.bg }};color:{{ g.color }};border:1px solid {{ g.border }};cursor:pointer;transition:transform .12s ease" style-active="transform:scale(.99)">{{ g.label }}</div>
+                      </sc-for>
+                    </div>
+                    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-radius:14px;background:#183129;border:1px solid #2a4a3d">
+                      <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:14px;font-weight:700">{{ activeSummary }}</span><span style="font-size:12px;color:#c9c0ab">Softball · 7 innings · 10 on field</span></div>
+                      <span onClick="{{ goRoster }}" style="font-size:13px;font-weight:600;color:#f2a63b;cursor:pointer;transition:transform .12s ease" style-active="transform:scale(.99)">Edit</span>
+                    </div>
+                    <sc-if value="{{ noLineup }}" hint-placeholder-val="{{ true }}">
+                      <div onClick="{{ generate }}" style="background:#f2a63b;color:#1c1205;border-radius:14px;padding:16px;text-align:center;font-weight:800;font-size:16px;cursor:pointer;display:flex;justify-content:center;gap:8px;align-items:center;transition:transform .12s ease" style-active="transform:scale(.99)"><svg width="17" height="17" viewBox="0 0 24 24" fill="#1c1205" stroke="#1c1205" stroke-width="1.5" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path></svg>Generate lineup</div>
+                    </sc-if>
+                    <sc-if value="{{ generating }}" hint-placeholder-val="{{ false }}">
+                      <div style="border-radius:16px;background:#183129;border:1px solid rgba(246,241,231,.06);box-shadow:0 1px 6px rgba(4,18,11,.18);padding:14px;display:flex;flex-direction:column;gap:10px">
+                        <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:#c9c0ab"><span style="width:14px;height:14px;border-radius:50%;border:2px solid #2a4a3d;border-top-color:#f2a63b;animation:spin .8s linear infinite"></span>Balancing bench time across 7 innings…</div>
+                        <sc-for list="{{ skelRows }}" as="s" hint-placeholder-count="0">
+                          <div style="display:flex;gap:6px;align-items:center;animation:shimmer 1.2s ease-in-out infinite;animation-delay:{{ s.delay }}">
+                            <span style="width:110px;height:14px;border-radius:6px;background:#2a4a3d"></span>
+                            <span style="flex:1;height:26px;border-radius:6px;background:#22392f"></span><span style="flex:1;height:26px;border-radius:6px;background:#22392f"></span><span style="flex:1;height:26px;border-radius:6px;background:#22392f"></span><span style="flex:1;height:26px;border-radius:6px;background:#22392f"></span><span style="flex:1;height:26px;border-radius:6px;background:#22392f"></span><span style="flex:1;height:26px;border-radius:6px;background:#22392f"></span><span style="flex:1;height:26px;border-radius:6px;background:#22392f"></span>
+                          </div>
+                        </sc-for>
+                      </div>
+                    </sc-if>
+                    <sc-if value="{{ hasLineup }}" hint-placeholder-val="{{ false }}">
+                      <div style="display:flex;flex-direction:column;gap:12px;animation:rise .3s ease-out">
+                        <div style="border-radius:16px;background:#183129;border:1px solid rgba(246,241,231,.06);box-shadow:0 1px 6px rgba(4,18,11,.18);overflow:hidden">
+                          <div style="display:flex;align-items:center;padding:0 10px;height:36px;background:rgba(246,241,231,.04);border-bottom:1px solid rgba(246,241,231,.08)">
+                            <span style="width:118px;font-size:11px;font-weight:700;color:#c9c0ab;letter-spacing:.06em">PLAYER</span>
+                            <sc-for list="{{ innings }}" as="i" hint-placeholder-count="7"><span style="flex:1;text-align:center;font-size:12px;font-weight:700;color:#c9c0ab">{{ i }}</span></sc-for>
+                          </div>
+                          <sc-for list="{{ lineupRows }}" as="r" hint-placeholder-count="0">
+                            <div style="display:flex;align-items:center;padding:0 10px;height:40px;background:{{ r.bg }};border-bottom:1px solid rgba(246,241,231,.06)">
+                              <div style="width:118px;display:flex;align-items:center;gap:6px;min-width:0"><span style="width:20px;height:20px;border-radius:50%;background:rgba(246,241,231,.14);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">{{ r.num }}</span><span style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.name }}</span></div>
+                              <sc-for list="{{ r.cells }}" as="c" hint-placeholder-count="7"><span style="flex:1;text-align:center;font-size:12px;font-weight:700;color:{{ c.color }}">{{ c.v }}</span></sc-for>
+                            </div>
+                          </sc-for>
+                        </div>
+                        <div style="font-size:12px;color:#8a978f">X = benched that inning. Rose rows are women.</div>
+                        <div style="display:flex;gap:8px">
+                          <div onClick="{{ generate }}" style="flex:1;background:#183129;border:1px solid rgba(246,241,231,.06);box-shadow:0 1px 6px rgba(4,18,11,.18);color:#f6f1e7;border-radius:12px;padding:13px;text-align:center;font-weight:700;font-size:14px;cursor:pointer;transition:transform .12s ease" style-active="transform:scale(.99)">Regenerate</div>
+                          <div style="flex:1;background:#183129;border:1px solid rgba(126,207,157,.45);color:#7ecf9d;border-radius:12px;padding:13px;text-align:center;font-weight:700;font-size:14px;cursor:pointer;transition:transform .12s ease" style-active="transform:scale(.99)">Edit</div>
+                          <div onClick="{{ saveLineup }}" style="flex:1;background:#f2a63b;color:#1c1205;border-radius:12px;padding:13px;text-align:center;font-weight:800;font-size:14px;cursor:pointer;transition:transform .12s ease" style-active="transform:scale(.99)">Save</div>
+                        </div>
+                      </div>
+                    </sc-if>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ isHistory }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;gap:8px;animation:rise .2s ease-out">
+                    <sc-for list="{{ history }}" as="h" hint-placeholder-count="3">
+                      <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:14px;background:rgba(30,59,49,.42);backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2);border:1px solid rgba(246,241,231,.1);cursor:pointer;transition:transform .12s ease" style-active="transform:scale(.99)">
+                        <div style="flex:1;display:flex;flex-direction:column;gap:2px"><span style="font-size:15px;font-weight:700">{{ h.name }}</span><span style="font-size:12px;color:#c9c0ab">{{ h.date }}</span></div>
+                        <span style="font-size:11px;font-weight:700;color:#c9c0ab;border:1px solid #2a4a3d;border-radius:6px;padding:2px 6px">{{ h.v }}</span>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8a978f" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"></path></svg>
+                      </div>
+                    </sc-for>
+                    <div style="margin-top:6px;font-size:12px;color:#8a978f;text-align:center">Long-press a lineup to delete. Export to Excel or PDF from inside.</div>
+                  </div>
+                </sc-if>
+              </div>
+            </div>
+          </sc-if>
+
+          <!-- CALENDAR -->
+          <sc-if value="{{ showCalendar }}" hint-placeholder-val="{{ false }}">
+            <div style="flex:1;overflow:auto;padding:8px 20px 128px;display:flex;flex-direction:column;gap:16px;animation:rise .24s ease-out">
+              <div style="display:flex;align-items:flex-end;justify-content:space-between">
+                <div style="display:flex;flex-direction:column;gap:4px">
+                  <div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#f2a63b;font-weight:700">Calendar</div>
+                  <div style="font-size:28px;font-weight:800;letter-spacing:-.01em">September</div>
+                </div>
+                <div style="display:flex;gap:8px;align-items:center">
+                  <div style="width:36px;height:36px;border-radius:10px;background:rgba(30,59,49,.42);backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2);border:1px solid rgba(246,241,231,.1);display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f6f1e7" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"></path></svg></div>
+                  <div style="width:36px;height:36px;border-radius:10px;background:rgba(30,59,49,.42);backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2);border:1px solid rgba(246,241,231,.1);display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f6f1e7" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"></path></svg></div>
+                </div>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">
+                <span style="text-align:center;font-size:11px;font-weight:700;color:#8a978f;padding:6px 0">S</span><span style="text-align:center;font-size:11px;font-weight:700;color:#8a978f;padding:6px 0">M</span><span style="text-align:center;font-size:11px;font-weight:700;color:#8a978f;padding:6px 0">T</span><span style="text-align:center;font-size:11px;font-weight:700;color:#8a978f;padding:6px 0">W</span><span style="text-align:center;font-size:11px;font-weight:700;color:#8a978f;padding:6px 0">T</span><span style="text-align:center;font-size:11px;font-weight:700;color:#8a978f;padding:6px 0">F</span><span style="text-align:center;font-size:11px;font-weight:700;color:#8a978f;padding:6px 0">S</span>
+                <sc-for list="{{ days }}" as="d" hint-placeholder-count="35">
+                  <div onClick="{{ d.pick }}" style="height:44px;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;background:{{ d.bg }};border:1px solid {{ d.border }};cursor:pointer;transition:all .15s" style-active="transform:scale(.99)">
+                    <span style="font-size:14px;font-weight:{{ d.weight }};color:{{ d.color }}">{{ d.n }}</span>
+                    <span style="width:5px;height:5px;border-radius:50%;background:{{ d.dot }}"></span>
+                  </div>
+                </sc-for>
+              </div>
+              <sc-if value="{{ hasDayGame }}" hint-placeholder-val="{{ true }}">
+                <div style="border-radius:18px;background:rgba(30,59,49,.42);backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2);border:1px solid rgba(246,241,231,.1);box-shadow:0 4px 16px rgba(4,18,11,.22);padding:18px;display:flex;flex-direction:column;gap:12px;animation:rise .2s ease-out">
+                  <div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#f2a63b;font-weight:700">{{ dayLabel }}</div>
+                  <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:22px;font-weight:800">{{ dayGame.title }}</span><span style="font-size:13px;color:#c9c0ab">{{ dayGame.meta }}</span></div>
+                  <div style="font-size:13px;color:{{ dayGame.lineupColor }}">{{ dayGame.lineupLabel }}</div>
+                  <div style="display:flex;gap:8px">
+                    <div onClick="{{ goGenerate }}" style="flex:2;background:#f2a63b;color:#1c1205;border-radius:12px;padding:13px;text-align:center;font-weight:800;font-size:14px;cursor:pointer;transition:transform .12s ease" style-active="transform:scale(.99)">{{ dayGame.cta }}</div>
+                    <div style="flex:1;background:#183129;border:1px solid rgba(246,241,231,.06);box-shadow:0 1px 6px rgba(4,18,11,.18);color:#f6f1e7;border-radius:12px;padding:13px;text-align:center;font-weight:700;font-size:14px">Edit</div>
+                  </div>
+                </div>
+              </sc-if>
+              <sc-if value="{{ noDayGame }}" hint-placeholder-val="{{ false }}">
+                <div style="border-radius:18px;border:1px dashed #2a4a3d;padding:20px;display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;animation:rise .2s ease-out">
+                  <span style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#8a978f;font-weight:700">{{ dayLabel }}</span>
+                  <span style="font-size:15px;font-weight:700">No game scheduled</span>
+                  <div style="display:flex;align-items:center;gap:6px;font-size:14px;font-weight:700;color:#f2a63b"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f2a63b" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14 M5 12h14"></path></svg>Add game</div>
+                </div>
+              </sc-if>
+            </div>
+          </sc-if>
+
+          <!-- PROFILE -->
+          <sc-if value="{{ showProfile }}" hint-placeholder-val="{{ false }}">
+            <div style="flex:1;overflow:auto;padding:8px 20px 128px;display:flex;flex-direction:column;gap:16px;animation:rise .24s ease-out">
+              <div style="display:flex;flex-direction:column;gap:4px">
+                <div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#f2a63b;font-weight:700">Profile</div>
+                <div style="font-size:28px;font-weight:800;letter-spacing:-.01em">Coach</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:14px;padding:16px;border-radius:16px;background:#183129;border:1px solid #2a4a3d">
+                <span style="width:48px;height:48px;border-radius:50%;background:rgba(242,166,59,.14);border:1px solid rgba(242,166,59,.4);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:#f2a63b">RC</span>
+                <div style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:0"><span style="font-size:15px;font-weight:700">Ridgeline Coed</span><span style="font-size:13px;color:#c9c0ab;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">coach@ridgeline.club</span></div>
+              </div>
+              <div onClick="{{ goPro }}" style="border-radius:18px;background:rgba(30,59,49,.42);backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2);border:1px solid rgba(242,166,59,.3);box-shadow:0 4px 16px rgba(4,18,11,.22);padding:18px;display:flex;flex-direction:column;gap:10px;cursor:pointer;transition:transform .12s ease" style-active="transform:scale(.99)">
+                <div style="display:flex;align-items:center;gap:6px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#f2a63b;font-weight:700"><svg width="12" height="12" viewBox="0 0 24 24" fill="#f2a63b" stroke="#f2a63b" stroke-width="1.5" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg>Free plan</div>
+                <div style="font-size:20px;font-weight:800;line-height:1.2">Upgrade to Pro</div>
+                <div style="font-size:13px;color:#c9c0ab;line-height:1.5">No ads, roster import, exports, and the full calendar. $4.99/mo or $29.99/yr.</div>
+              </div>
+              <div style="border-radius:16px;background:#183129;border:1px solid rgba(246,241,231,.06);box-shadow:0 1px 6px rgba(4,18,11,.18);overflow:hidden">
+                <div onClick="{{ goRules }}" style="display:flex;align-items:center;gap:12px;padding:15px 16px;border-bottom:1px solid rgba(246,241,231,.08);cursor:pointer;transition:transform .12s ease" style-active="transform:scale(.99)"><span style="flex:1;font-size:15px;font-weight:600">Team rules</span><span style="font-size:13px;color:#c9c0ab">Austin Coed Softball</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8a978f" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"></path></svg></div>
+                <div style="display:flex;align-items:center;gap:12px;padding:15px 16px;border-bottom:1px solid rgba(246,241,231,.08)"><span style="flex:1;font-size:15px;font-weight:600">Restore purchases</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8a978f" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"></path></svg></div>
+                <div style="display:flex;align-items:center;gap:12px;padding:15px 16px;border-bottom:1px solid rgba(246,241,231,.08)"><span style="flex:1;font-size:15px;font-weight:600">Replay app tour</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8a978f" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"></path></svg></div>
+                <div onClick="{{ signOut }}" style="display:flex;align-items:center;gap:12px;padding:15px 16px;cursor:pointer;transition:transform .12s ease" style-active="transform:scale(.99)"><span style="flex:1;font-size:15px;font-weight:600;color:#ef6b5b">Sign out</span></div>
+              </div>
+            </div>
+          </sc-if>
+
+          <!-- RULES (sub) -->
+          <sc-if value="{{ showRules }}" hint-placeholder-val="{{ false }}">
+            <div style="flex:1;overflow:auto;padding:8px 20px 128px;display:flex;flex-direction:column;gap:16px;animation:rise .24s ease-out">
+              <div onClick="{{ closeSub }}" style="display:flex;align-items:center;gap:4px;font-size:14px;color:#c9c0ab;cursor:pointer;align-self:flex-start;transition:transform .12s ease" style-active="transform:scale(.99)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#c9c0ab" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"></path></svg>Back</div>
+              <div style="display:flex;flex-direction:column;gap:4px">
+                <div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#f2a63b;font-weight:700">League rules</div>
+                <div style="font-size:28px;font-weight:800;letter-spacing:-.01em;line-height:1.1">Austin Coed Softball</div>
+                <div style="font-size:13px;color:#c9c0ab;margin-top:4px">Softball · Austin, TX · 14 teams</div>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                <div style="border-radius:16px;background:#183129;border:1px solid rgba(246,241,231,.06);box-shadow:0 1px 6px rgba(4,18,11,.18);padding:14px;display:flex;flex-direction:column;gap:4px"><span style="font-size:24px;font-weight:800">7</span><span style="font-size:12px;color:#c9c0ab">Innings</span></div>
+                <div style="border-radius:16px;background:#183129;border:1px solid rgba(246,241,231,.06);box-shadow:0 1px 6px rgba(4,18,11,.18);padding:14px;display:flex;flex-direction:column;gap:4px"><span style="font-size:24px;font-weight:800">10</span><span style="font-size:12px;color:#c9c0ab">On the field</span></div>
+                <div style="border-radius:16px;background:#183129;border:1px solid rgba(246,241,231,.06);box-shadow:0 1px 6px rgba(4,18,11,.18);padding:14px;display:flex;flex-direction:column;gap:4px"><span style="font-size:24px;font-weight:800">3+</span><span style="font-size:12px;color:#c9c0ab">Women on field</span></div>
+                <div style="border-radius:16px;background:#183129;border:1px solid rgba(246,241,231,.06);box-shadow:0 1px 6px rgba(4,18,11,.18);padding:14px;display:flex;flex-direction:column;gap:4px"><span style="font-size:24px;font-weight:800">1</span><span style="font-size:12px;color:#c9c0ab">Max innings benched in a row</span></div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <div style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#c9c0ab;font-weight:700">Positions</div>
+                <div style="display:flex;flex-wrap:wrap;gap:6px">
+                  <sc-for list="{{ slotList }}" as="s" hint-placeholder-count="10"><span style="font-size:12px;font-weight:700;padding:6px 10px;border-radius:8px;background:#183129;border:1px solid #2a4a3d">{{ s }}</span></sc-for>
+                </div>
+              </div>
+              <div style="border-radius:16px;background:#183129;border:1px solid rgba(246,241,231,.06);box-shadow:0 1px 6px rgba(4,18,11,.18);padding:14px;display:flex;flex-direction:column;gap:6px">
+                <span style="font-size:13px;font-weight:700">With exactly 3 women</span>
+                <span style="font-size:13px;color:#c9c0ab;line-height:1.5">Play 9. RCF is dropped and the catcher must be a man.</span>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <div style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#c9c0ab;font-weight:700">Coach notes</div>
+                <div style="border-radius:14px;background:#183129;border:1px solid rgba(246,241,231,.06);box-shadow:0 1px 6px rgba(4,18,11,.18);padding:14px;font-size:14px;color:#c9c0ab;line-height:1.5;min-height:60px">Sam prefers SS in late innings. Keep the twins apart.</div>
+                <div style="font-size:12px;color:#8a978f">Private to you. Not applied by the generator.</div>
+              </div>
+              <div style="display:flex;gap:8px;margin-top:4px">
+                <div onClick="{{ goLeagues }}" style="flex:1;background:#183129;border:1px solid rgba(246,241,231,.06);box-shadow:0 1px 6px rgba(4,18,11,.18);color:#f6f1e7;border-radius:12px;padding:13px;text-align:center;font-weight:700;font-size:14px;cursor:pointer;transition:transform .12s ease" style-active="transform:scale(.99)">Request a change</div>
+                <div style="background:#183129;border:1px solid rgba(239,107,91,.4);color:#ef6b5b;border-radius:12px;padding:13px 16px;text-align:center;font-weight:700;font-size:14px">Leave</div>
+              </div>
+            </div>
+          </sc-if>
+
+          <!-- LEAGUES (sub) -->
+          <sc-if value="{{ showLeagues }}" hint-placeholder-val="{{ false }}">
+            <div style="flex:1;overflow:auto;padding:8px 20px 128px;display:flex;flex-direction:column;gap:16px;animation:rise .24s ease-out">
+              <div onClick="{{ goRules }}" style="display:flex;align-items:center;gap:4px;font-size:14px;color:#c9c0ab;cursor:pointer;align-self:flex-start;transition:transform .12s ease" style-active="transform:scale(.99)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#c9c0ab" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"></path></svg>Rules</div>
+              <div style="display:flex;align-items:flex-end;justify-content:space-between">
+                <div style="display:flex;flex-direction:column;gap:4px">
+                  <div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#f2a63b;font-weight:700">Leagues</div>
+                  <div style="font-size:28px;font-weight:800;letter-spacing:-.01em">Find yours</div>
+                </div>
+                <div style="width:40px;height:40px;border-radius:12px;background:#f2a63b;display:flex;align-items:center;justify-content:center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1c1205" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14 M5 12h14"></path></svg></div>
+              </div>
+              <div style="display:flex;align-items:center;gap:10px;background:#183129;border:1px solid rgba(246,241,231,.06);box-shadow:0 1px 6px rgba(4,18,11,.18);border-radius:14px;padding:13px 16px">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#c9c0ab" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 21l-4.35-4.35 M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16"></path></svg>
+                <span style="font-size:15px;color:#8a978f">Search by name or region</span>
+              </div>
+              <div style="border-radius:16px;background:#183129;border:1px solid rgba(246,241,231,.06);box-shadow:0 1px 6px rgba(4,18,11,.18);overflow:hidden">
+                <sc-for list="{{ allLeagues }}" as="l" hint-placeholder-count="5">
+                  <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid rgba(246,241,231,.08)">
+                    <div style="flex:1;display:flex;flex-direction:column;gap:2px"><span style="font-size:15px;font-weight:700">{{ l.name }}</span><span style="font-size:12px;color:#c9c0ab">{{ l.meta }}</span></div>
+                    <sc-if value="{{ l.badge }}" hint-placeholder-val="{{ false }}"><span style="font-size:11px;font-weight:700;color:#f2a63b;border:1px solid rgba(242,166,59,.4);background:rgba(242,166,59,.14);border-radius:999px;padding:3px 8px">{{ l.badge }}</span></sc-if>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8a978f" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"></path></svg>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+
+          <!-- PRO (modal) -->
+          <sc-if value="{{ showPro }}" hint-placeholder-val="{{ false }}">
+            <div style="flex:1;overflow:auto;padding:8px 20px 32px;display:flex;flex-direction:column;gap:18px;animation:rise .24s ease-out">
+              <div style="display:flex;align-items:flex-start;justify-content:space-between">
+                <div style="display:flex;flex-direction:column;gap:4px">
+                  <div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#f2a63b;font-weight:700">Coachr Pro</div>
+                  <div style="font-size:30px;font-weight:800;letter-spacing:-.01em;line-height:1.1">Cleaner game days</div>
+                </div>
+                <div onClick="{{ closeSub }}" style="width:36px;height:36px;border-radius:10px;background:rgba(30,59,49,.42);backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2);border:1px solid rgba(246,241,231,.1);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform .12s ease" style-active="transform:scale(.99)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f6f1e7" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18 M6 6l12 12"></path></svg></div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:12px">
+                <div style="display:flex;gap:10px;align-items:center;font-size:14px;color:#c9c0ab"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f2a63b" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>No ads during lineup generation</div>
+                <div style="display:flex;gap:10px;align-items:center;font-size:14px;color:#c9c0ab"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f2a63b" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>Import rosters from spreadsheets</div>
+                <div style="display:flex;gap:10px;align-items:center;font-size:14px;color:#c9c0ab"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f2a63b" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>Export lineups to Excel and PDF</div>
+                <div style="display:flex;gap:10px;align-items:center;font-size:14px;color:#c9c0ab"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f2a63b" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>Full access to the calendar</div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:10px">
+                <div onClick="{{ pickAnnual }}" style="border-radius:16px;background:#1e3b31;border:2px solid {{ annualBorder }};padding:16px;display:flex;align-items:center;gap:14px;cursor:pointer;transition:border-color .2s" style-active="transform:scale(.99)">
+                  <div style="flex:1;display:flex;flex-direction:column;gap:4px">
+                    <div style="display:flex;align-items:center;gap:8px"><span style="font-size:16px;font-weight:700">Annual</span><span style="font-size:10px;font-weight:800;letter-spacing:.08em;color:#1c1205;background:#f2a63b;border-radius:5px;padding:2px 6px">SAVE 50%</span></div>
+                    <span style="font-size:13px;color:#c9c0ab">$29.99 per year · $2.50/mo</span>
+                  </div>
+                  <span style="width:22px;height:22px;border-radius:50%;border:2px solid {{ annualBorder }};background:{{ annualDot }};display:flex;align-items:center;justify-content:center;box-sizing:border-box;transition:all .2s"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1c1205" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></span>
+                </div>
+                <div onClick="{{ pickMonthly }}" style="border-radius:16px;background:#183129;border:2px solid {{ monthlyBorder }};padding:16px;display:flex;align-items:center;gap:14px;cursor:pointer;transition:border-color .2s" style-active="transform:scale(.99)">
+                  <div style="flex:1;display:flex;flex-direction:column;gap:4px"><span style="font-size:16px;font-weight:700">Monthly</span><span style="font-size:13px;color:#c9c0ab">$4.99 per month</span></div>
+                  <span style="width:22px;height:22px;border-radius:50%;border:2px solid {{ monthlyBorder }};background:{{ monthlyDot }};box-sizing:border-box;transition:all .2s"></span>
+                </div>
+              </div>
+              <div style="flex:1"></div>
+              <div style="background:#f2a63b;color:#1c1205;border-radius:14px;padding:16px;text-align:center;font-weight:800;font-size:16px">{{ proCta }}</div>
+              <div style="font-size:11px;color:#8a978f;text-align:center;line-height:1.5">Billed to your Apple ID. Renews automatically unless cancelled 24 hours before the period ends. <span style="text-decoration:underline">Terms</span> · <span style="text-decoration:underline">Privacy</span></div>
+            </div>
+          </sc-if>
+
+          <!-- TAB BAR -->
+          <sc-if value="{{ showTabs }}" hint-placeholder-val="{{ true }}">
+            <div style="position:absolute;left:0;right:0;bottom:0;padding:8px 14px 30px;background:linear-gradient(180deg,rgba(15,31,24,0),rgba(15,31,24,.85) 40%)">
+              <div style="display:flex;background:rgba(30,59,49,.55);backdrop-filter:blur(18px) saturate(1.2);-webkit-backdrop-filter:blur(18px) saturate(1.2);border:1px solid rgba(246,241,231,.1);box-shadow:0 4px 16px rgba(4,18,11,.28);border-radius:18px;padding:4px;gap:2px">
+                <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="5">
+                  <div onClick="{{ t.go }}" style="flex:1;min-height:52px;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;background:{{ t.bg }};border:1px solid {{ t.border }};cursor:pointer;transition:all .2s" style-active="transform:scale(.99)">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="{{ t.color }}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="{{ t.d }}"></path></svg>
+                    <span style="font-size:10px;font-weight:700;color:{{ t.color }}">{{ t.label }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <!-- toast -->
+      <sc-if value="{{ hasToast }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;left:20px;right:20px;bottom:110px;background:rgba(246,241,231,.88);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);color:#0f1f18;border-radius:14px;padding:12px 16px;font-size:13px;font-weight:700;display:flex;align-items:center;gap:10px;box-shadow:0 6px 20px rgba(4,18,11,.35);animation:rise .25s ease-out"><span style="width:8px;height:8px;border-radius:50%;background:#2f9e5f"></span>{{ toast }}</div>
+      </sc-if>
+    </div>
+  </x-import>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const SLOTS = ["P","C","1B","2B","3B","SS","LF","LCF","RCF","RF"];
+const ROSTER = [
+  ["Maya Chen","F",["SS","2B"]],["Jordan Reyes","M",["P"]],["Sam Okafor","M",["C","1B"]],["Priya Nair","F",["LF","LCF"]],
+  ["Diego Alvarez","M",["3B","SS"]],["Tess Whitman","F",["RF"]],["Luis Moreno","M",["1B"]],["Kenji Sato","M",["LCF","RCF"]],
+  ["Aisha Bell","F",["2B"]],["Noah Fischer","M",["RCF","LF"]],["Rosa Delgado","F",["C"]],["Eli Brandt","M",["P","3B"]]
+].map((r,i)=>({id:i,name:r[0],g:r[1],pos:r[2]}));
+const GAMES = [
+  {day:6,title:"vs Hornets",meta:"10:00 AM · Home · Zilker Field 2",lineups:1},
+  {day:13,title:"vs Bombers",meta:"11:30 AM · Away · Krieg Complex",lineups:0},
+  {day:16,title:"vs Night Owls",meta:"7:00 PM · Home · Zilker Field 1",lineups:0},
+  {day:20,title:"vs Ramblers",meta:"10:00 AM · Home · Zilker Field 2",lineups:0},
+  {day:27,title:"vs Hornets",meta:"1:00 PM · Away · Krieg Complex",lineups:0}
+];
+const HISTORY = [
+  {name:"Sunday vs Hornets",date:"Sep 6 · 9:12 AM",v:"v3"},
+  {name:"Scrimmage lineup",date:"Aug 30 · 8:40 AM",v:"v2"},
+  {name:"Lineup v1",date:"Aug 23 · 9:05 AM",v:"v1"}
+];
+const LEAGUES = [
+  {name:"Austin Coed Softball",meta:"Softball · Austin, TX · 14 teams",badge:""},
+  {name:"Austin Kickball League",meta:"Kickball · Austin, TX · 22 teams",badge:""},
+  {name:"ATX Sunday Slowpitch",meta:"Softball · Round Rock, TX · 6 teams",badge:"Setting up"},
+  {name:"Hill Country Coed",meta:"Softball · Dripping Springs, TX · 8 teams",badge:""},
+  {name:"Capital City Coed",meta:"Softball · Austin, TX · 11 teams",badge:"In review"}
+];
+const ICONS = {
+  home:"M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z M9 22V12h6v10",
+  roster:"M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M23 21v-2a4 4 0 0 0-3-3.87 M16 3.13a4 4 0 0 1 0 7.75",
+  lineup:"M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20 M12 18a6 6 0 1 0 0-12 6 6 0 0 0 0 12 M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4",
+  calendar:"M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z M16 2v4 M8 2v4 M3 10h18",
+  profile:"M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2 M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8"
+};
+const AMBER="#f2a63b", CREAM="#f6f1e7", SEC="#c9c0ab", RAISED="#183129", BORDER="#2a4a3d", A_SUB="rgba(242,166,59,.14)", A_BRD="rgba(242,166,59,.4)";
+const ini = n => n.split(" ").map(p=>p[0]).join("").slice(0,2).toUpperCase();
+
+class Component extends DCLogic {
+  state = {
+    screen:"auth", ob:0, obJoined:false, obCreated:false, obMode:"options", leagueQuery:"", leagueName:"", sportDraft:"", regionDraft:"", rulesDraft:"", obPlayers:[], nameDraft:"", genderDraft:"M",
+    tab:"home", sub:null, lineupTab:"build", lineup:null, generating:false,
+    benched:{}, expanded:null, prefs:{}, game:1, day:13, plan:"annual", toast:""
+  };
+  go(screen, extra){ this.setState({screen, ...(extra||{})}); }
+  setTab(tab){ this.setState({tab, sub:null}); }
+  showToast(msg){ clearTimeout(this._t); this.setState({toast:msg}); this._t=setTimeout(()=>this.setState({toast:""}),2600); }
+  activePlayers(){ return ROSTER.filter(p=>!this.state.benched[p.id]); }
+  computeLineup(){
+    const act=this.activePlayers(); const n=act.length, onField=Math.min(10,n), sit=n-onField;
+    const rows=act.map((p,i)=>({name:p.name,num:i+1,bg:p.g==="F"?"rgba(201,111,149,.28)":"transparent",cells:[]}));
+    for(let inn=0;inn<7;inn++){
+      const benchIdx=new Set(); for(let j=0;j<sit;j++) benchIdx.add((inn*sit+j)%n);
+      const free=[...SLOTS.slice(0,onField)];
+      const assign={};
+      act.forEach((p,i)=>{ if(benchIdx.has(i)) return; const pref=(this.state.prefs[p.id]||p.pos).find(s=>free.includes(s)); if(pref){assign[i]=pref;free.splice(free.indexOf(pref),1);} });
+      act.forEach((p,i)=>{ if(benchIdx.has(i)||assign[i]) return; assign[i]=free.shift()||"-"; });
+      act.forEach((p,i)=>{ const b=benchIdx.has(i); rows[i].cells.push({v:b?"X":assign[i],color:b?"#ef6b5b":CREAM}); });
+    }
+    return rows;
+  }
+  generate(){
+    if(this.state.generating) return;
+    this.setState({generating:true,lineup:null,lineupTab:"build"});
+    clearTimeout(this._g);
+    this._g=setTimeout(()=>{ this.setState({generating:false,lineup:this.computeLineup()}); this.showToast("Lineup generated"); },1600);
+  }
+  renderVals(){
+    const s=this.state;
+    const isApp=s.screen==="app";
+    const active=this.activePlayers();
+    const chip=(on)=>({bg:on?A_SUB:RAISED,color:on?AMBER:SEC,border:on?A_BRD:BORDER});
+    const q=s.leagueQuery.trim().toLowerCase();
+    const leagueResults=q?LEAGUES.filter(l=>l.name.toLowerCase().includes(q)||l.meta.toLowerCase().includes(q)).slice(0,4).map(l=>({...l,join:()=>{this.setState({obJoined:true,ob:2});this.showToast("Joined "+l.name);}})):[];
+    const obMin=10, obCount=s.obPlayers.length, obReady=obCount>=obMin;
+    const rulesValid = s.rulesDraft.trim().length>=10 && s.sportDraft.trim().length>=2 && (s.obMode!=="create" || s.leagueName.trim().length>=2);
+    const tabs=["home","roster","lineup","calendar","profile"].map(k=>{const on=isApp&&s.tab===k&&!s.sub;return {key:k,label:k[0].toUpperCase()+k.slice(1),d:ICONS[k],go:()=>this.setTab(k),bg:on?A_SUB:"transparent",border:on?A_BRD:"transparent",color:on?AMBER:SEC};});
+    const dayGameRaw=GAMES.find(g=>g.day===s.day);
+    const sel=chip(true), un=chip(false);
+    const jump=(label,fn)=>({label,go:fn});
+    return {
+      isAuth:s.screen==="auth", isOb:s.screen==="ob", isApp,
+      signIn:()=>this.go("ob",{ob:0}), signOut:()=>this.go("auth",{tab:"home",sub:null}),
+      // onboarding
+      ob0:s.ob===0, ob1:s.ob===1, ob2:s.ob===2, ob3:s.ob===3, obNotLast:s.ob<3,
+      obDots:[0,1,2,3].map(i=>({bg:i<=s.ob?AMBER:BORDER})),
+      obCanBack:s.ob>0, obBack:()=>{ if(s.ob===1&&s.obMode!=="options") this.setState({obMode:"options"}); else this.setState({ob:Math.max(0,s.ob-1),obMode:"options"}); },
+      obOptions:s.obMode==="options", obCreate:s.obMode==="create", obOwn:s.obMode==="own",
+      obRulesTitle:s.obMode==="create"?"Start a shared league":s.obMode==="own"?"Write your rules in plain English":"Which league do you play in?",
+      obGoCreate:()=>this.setState({obMode:"create",leagueName:s.leagueQuery.trim()}), obGoOwn:()=>this.setState({obMode:"own"}),
+      leagueName:s.leagueName, setLeagueName:e=>this.setState({leagueName:e.target.value}),
+      sportDraft:s.sportDraft, setSport:e=>this.setState({sportDraft:e.target.value}),
+      regionDraft:s.regionDraft, setRegion:e=>this.setState({regionDraft:e.target.value}),
+      rulesDraft:s.rulesDraft, setRules:e=>this.setState({rulesDraft:e.target.value}),
+      obRulesBtnBg:rulesValid?"#f2a63b":RAISED, obRulesBtnColor:rulesValid?"#1c1205":SEC,
+      obRulesBtnShadow:rulesValid?"none":"none",
+      obSubmitRules:()=>{ if(!rulesValid) return; const created=s.obMode==="create"; this.setState({obJoined:false,obCreated:created,ob:2,obMode:"options"}); this.showToast(created?`${s.leagueName.trim()} is live. Your team joined.`:"Rules are live."); },
+      obNext:()=>this.setState({ob:Math.min(3,s.ob+1)}),
+      finishOb:()=>this.go("app",{tab:"home",sub:null}),
+      leagueQuery:s.leagueQuery, setLeagueQuery:e=>this.setState({leagueQuery:e.target.value}),
+      searchBorder:q?A_BRD:BORDER, leagueResults, hasLeagueResults:leagueResults.length>0, noLeagueResults:leagueResults.length===0,
+      obRosterHint:obReady?"That's enough to generate. Add the rest whenever.":`Your rules need ${obMin-obCount} more player${obMin-obCount===1?"":"s"}.`,
+      nameDraft:s.nameDraft, setNameDraft:e=>this.setState({nameDraft:e.target.value}),
+      nameKey:e=>{ if(e.key==="Enter") this.addObPlayer(); },
+      setMale:()=>this.setState({genderDraft:"M"}), setFemale:()=>this.setState({genderDraft:"F"}),
+      maleBg:s.genderDraft==="M"?A_SUB:"transparent", maleColor:s.genderDraft==="M"?AMBER:SEC,
+      femaleBg:s.genderDraft==="F"?A_SUB:"transparent", femaleColor:s.genderDraft==="F"?AMBER:SEC,
+      addObPlayer:()=>this.addObPlayer(),
+      obPlayers:s.obPlayers.map((p,i)=>({...p,dot:p.g==="F"?"#c96f95":AMBER,remove:()=>this.setState({obPlayers:s.obPlayers.filter((_,j)=>j!==i)})})),
+      importSample:()=>{this.setState({obPlayers:ROSTER.map(p=>({name:p.name,g:p.g}))});this.showToast("Imported 12 players from roster.xlsx");},
+      obRosterBtnBg:obReady?AMBER:RAISED, obRosterBtnColor:obReady?"#1c1205":SEC,
+      obRosterBtnLabel:obReady?"Continue":`${obCount} of ${obMin} players`,
+      obContinueRoster:()=>{ if(obReady) this.setState({ob:3}); },
+      obRulesLabel:s.obJoined?"Austin Coed Softball rules":s.obCreated?`${s.leagueName.trim()} rules`:`Your ${(s.sportDraft.trim()||"softball").replace(/^./,c=>c.toUpperCase())} rules`,
+      obPlayerCountLabel:`${obCount} players on the roster`,
+      obGenerate:()=>{ this.go("app",{tab:"lineup",sub:null}); this.generate(); },
+      // app routing
+      showHome:isApp&&!s.sub&&s.tab==="home", showRoster:isApp&&!s.sub&&s.tab==="roster", showLineup:isApp&&!s.sub&&s.tab==="lineup",
+      showCalendar:isApp&&!s.sub&&s.tab==="calendar", showProfile:isApp&&!s.sub&&s.tab==="profile",
+      showRules:isApp&&s.sub==="rules", showLeagues:isApp&&s.sub==="leagues", showPro:isApp&&s.sub==="pro", showTabs:isApp&&s.sub!=="pro",
+      goRules:()=>this.setState({sub:"rules"}), goLeagues:()=>this.setState({sub:"leagues"}), goPro:()=>this.setState({sub:"pro"}), closeSub:()=>this.setState({sub:null}),
+      goRoster:()=>this.setTab("roster"), goGenerate:()=>{this.setTab("lineup");this.setState({lineupTab:"build"});}, goSaved:()=>{this.setTab("lineup");this.setState({lineupTab:"history"});},
+      tabs,
+      // home
+      readiness:`${active.length} active · ${active.length>=10?"ready to generate":`${10-active.length} more needed`}`,
+      activeCount:active.length, historyShort:HISTORY.slice(0,2),
+      // roster
+      rosterTitle:`${ROSTER.length} players`,
+      roster:ROSTER.map(p=>{const b=!!s.benched[p.id];const prefs=s.prefs[p.id]||p.pos;const c=chip(!b);return {
+        name:p.name,initials:ini(p.name),g:p.g,gColor:p.g==="F"?"#d98bb0":SEC,gBorder:p.g==="F"?"rgba(201,111,149,.5)":BORDER,
+        posLabel:prefs.length?prefs.join(" · "):"No preferred positions",opacity:b?.6:1,
+        chipLabel:b?"Bench":"Active",chipBg:c.bg,chipColor:c.color,chipBorder:c.border,
+        toggle:()=>{this.setState({benched:{...s.benched,[p.id]:!b},lineup:null});},
+        isExpanded:s.expanded===p.id, expand:()=>this.setState({expanded:s.expanded===p.id?null:p.id}),
+        slots:SLOTS.map(sl=>{const on=prefs.includes(sl);const cc=chip(on);return {label:sl,bg:cc.bg,color:cc.color,border:cc.border,toggle:()=>{const next=on?prefs.filter(x=>x!==sl):[...prefs,sl];this.setState({prefs:{...s.prefs,[p.id]:next}});}};})
+      };}),
+      // lineup
+      lineupTitle:s.lineupTab==="build"?(s.lineup?"vs Bombers":"Build"):"Saved",
+      setBuild:()=>this.setState({lineupTab:"build"}), setHistory:()=>this.setState({lineupTab:"history"}),
+      isBuild:s.lineupTab==="build", isHistory:s.lineupTab==="history",
+      buildBg:s.lineupTab==="build"?A_SUB:"transparent", buildColor:s.lineupTab==="build"?AMBER:SEC, buildBorder:s.lineupTab==="build"?A_BRD:"transparent",
+      histBg:s.lineupTab==="history"?A_SUB:"transparent", histColor:s.lineupTab==="history"?AMBER:SEC, histBorder:s.lineupTab==="history"?A_BRD:"transparent",
+      gameChips:[{label:"No game"},...GAMES.slice(1,3).map(g=>({label:`Sep ${g.day} ${g.title}`}))].map((g,i)=>{const on=s.game===i;const c=chip(on);return {...g,...c,pick:()=>this.setState({game:i})};}),
+      activeSummary:`${active.length} of ${ROSTER.length} players active`,
+      noLineup:!s.lineup&&!s.generating, generating:s.generating, hasLineup:!!s.lineup,
+      generate:()=>this.generate(),
+      skelRows:active.map((_,i)=>({delay:`${i*60}ms`})),
+      innings:[1,2,3,4,5,6,7], lineupRows:s.lineup||[],
+      saveLineup:()=>{this.showToast("Saved as “Sunday vs Bombers”");},
+      history:HISTORY,
+      // calendar
+      days:[null,null,...Array.from({length:30},(_,i)=>i+1)].map((n,i)=>{ if(!n) return {n:"",bg:"transparent",border:"transparent",color:"transparent",dot:"transparent",weight:400,pick:()=>{}};
+        const g=GAMES.some(x=>x.day===n), on=s.day===n, today=n===3;
+        return {n,pick:()=>this.setState({day:n}),bg:on?A_SUB:(today?RAISED:"transparent"),border:on?A_BRD:(today?BORDER:"transparent"),color:on?AMBER:CREAM,dot:g?(on?AMBER:"#7ecf9d"):"transparent",weight:g||today?700:400}; }),
+      dayLabel:`${["Tue","Wed","Thu","Fri","Sat","Sun","Mon"][(s.day-1)%7]}, Sep ${s.day}`,
+      hasDayGame:!!dayGameRaw, noDayGame:!dayGameRaw,
+      dayGame:dayGameRaw?{...dayGameRaw,lineupLabel:dayGameRaw.lineups?`${dayGameRaw.lineups} saved lineup`:"No lineup yet",lineupColor:dayGameRaw.lineups?"#7ecf9d":"#8a978f",cta:dayGameRaw.lineups?"Open lineup":"Generate lineup"}:{},
+      // rules / leagues
+      slotList:SLOTS, allLeagues:LEAGUES,
+      // pro
+      pickAnnual:()=>this.setState({plan:"annual"}), pickMonthly:()=>this.setState({plan:"monthly"}),
+      annualBorder:s.plan==="annual"?AMBER:BORDER, annualDot:s.plan==="annual"?AMBER:"transparent",
+      monthlyBorder:s.plan==="monthly"?AMBER:BORDER, monthlyDot:s.plan==="monthly"?AMBER:"transparent",
+      proCta:s.plan==="annual"?"Start annual · $29.99/yr":"Start monthly · $4.99/mo",
+      // toast
+      hasToast:!!s.toast, toast:s.toast,
+      // jumps
+      jumps:[jump("Sign in",()=>this.go("auth")),jump("Onboarding",()=>this.go("ob",{ob:0})),jump("Rules step",()=>this.go("ob",{ob:1})),jump("Home",()=>this.go("app",{tab:"home",sub:null})),jump("Roster",()=>this.go("app",{tab:"roster",sub:null})),jump("Lineup",()=>this.go("app",{tab:"lineup",sub:null,lineupTab:"build"})),jump("Calendar",()=>this.go("app",{tab:"calendar",sub:null})),jump("Rules",()=>this.go("app",{sub:"rules"})),jump("Leagues",()=>this.go("app",{sub:"leagues"})),jump("Profile",()=>this.go("app",{tab:"profile",sub:null})),jump("Pro",()=>this.go("app",{sub:"pro"}))]
+    };
+  }
+  addObPlayer(){
+    const name=this.state.nameDraft.trim(); if(!name) return;
+    this.setState({obPlayers:[...this.state.obPlayers,{name,g:this.state.genderDraft}],nameDraft:""});
+  }
+}
+</script>
+</body>
+</html>

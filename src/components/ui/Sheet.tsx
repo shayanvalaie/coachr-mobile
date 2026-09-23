@@ -135,7 +135,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
     borderWidth: 1,
-    borderColor: theme.border.base,
+    borderColor: theme.border.glass,
     paddingHorizontal: space.md,
     paddingTop: space.sm,
     gap: space.sm,

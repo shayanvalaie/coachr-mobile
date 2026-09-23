@@ -4,28 +4,37 @@ import FirstTimeTour, {
   FirstTimeTourHandle,
   TourStep,
 } from "../components/FirstTimeTour";
-import Header from "../components/Header";
 import {
   AppPressable,
   AppText,
   Button,
   Card,
   EmptyState,
+  IconButton,
+  ListGroup,
+  ListRow,
   LoadTransition,
   MetricTile,
-  Reveal,
+  PageHeader,
   ScreenContainer,
+  Skeleton,
   SkeletonMetricRow,
 } from "../components/ui";
+import { clearReads } from "../lib/backend/cache";
 import { backendClient } from "../lib/backend/client";
-import { BackendGame, BackendSession } from "../lib/backend/types";
+import {
+  BackendGame,
+  BackendLineupVersionSummary,
+  BackendSession,
+} from "../lib/backend/types";
 import { theme } from "../theme/colors";
-import { space } from "../theme/tokens";
+import { radius, space } from "../theme/tokens";
 import {
   defaultTeamRulesConfig,
   rulesConfigFromTeamRules,
   TeamRulesConfig,
 } from "../types/rules";
+import { formatDateTime } from "../utils/lineupTransforms";
 
 type Props = {
   session: BackendSession;
@@ -33,38 +42,58 @@ type Props = {
   onOpenRosterPage: () => void;
   onOpenLineupPage: () => void;
   onOpenCalendarPage: () => void;
-  onOpenLineupsPage: () => void;
+  onOpenSavedLineups: () => void;
+  onOpenLineup: (version: BackendLineupVersionSummary) => void;
+  // Profile's "Replay app tour" lands here with this flag set.
+  replayTourRequested: boolean;
+  onTourHandled: () => void;
 };
 
 type DashboardSummary = {
-  rosterCount: number;
-  gamesCount: number;
+  teamName: string;
+  activeCount: number;
+  nextGame: BackendGame | null;
+  recentLineups: BackendLineupVersionSummary[];
   lineupsCount: number;
-  nextGameLabel: string;
   rules: TeamRulesConfig;
 };
 
-const formatNextGameLabel = (games: BackendGame[]): string => {
-  const now = Date.now();
-  const upcoming = games
-    .map((game) => ({
-      title: game.title || game.opponentName || "Game",
-      time: Date.parse(game.scheduledAt),
-      status: game.status,
-    }))
-    .filter(
-      (game): game is { title: string; time: number; status: BackendGame["status"] } =>
-        Number.isFinite(game.time) &&
-        game.status === "scheduled" &&
-        game.time >= now,
-    )
-    .sort((a, b) => a.time - b.time)[0];
+const RECENT_LINEUPS = 2;
 
-  if (!upcoming) return "No upcoming game";
-  return new Date(upcoming.time).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  });
+const findNextGame = (games: BackendGame[]): BackendGame | null => {
+  const now = Date.now();
+  return (
+    games
+      .filter((game) => {
+        const time = Date.parse(game.scheduledAt);
+        return Number.isFinite(time) && game.status === "scheduled" && time >= now;
+      })
+      .sort((a, b) => Date.parse(a.scheduledAt) - Date.parse(b.scheduledAt))[0] ??
+    null
+  );
+};
+
+const formatShortDate = (date: Date) =>
+  date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+
+const formatTime = (date: Date) =>
+  date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+
+const gameTitle = (game: BackendGame) => {
+  const opponent = game.opponentName.trim();
+  if (opponent) return `vs ${opponent}`;
+  return game.title.trim() || "Game";
+};
+
+const gameMeta = (game: BackendGame) => {
+  const date = new Date(game.scheduledAt);
+  return [
+    Number.isNaN(date.getTime()) ? null : formatTime(date),
+    game.homeAway === "home" ? "Home" : "Away",
+    game.location.trim() || null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 };
 
 const HomeScreen = ({
@@ -73,39 +102,42 @@ const HomeScreen = ({
   onOpenRosterPage,
   onOpenLineupPage,
   onOpenCalendarPage,
-  onOpenLineupsPage,
+  onOpenSavedLineups,
+  onOpenLineup,
+  replayTourRequested,
+  onTourHandled,
 }: Props) => {
-  const rosterBtnRef = useRef<View>(null);
+  const rosterTileRef = useRef<View>(null);
   const rulesBtnRef = useRef<View>(null);
   const generateBtnRef = useRef<View>(null);
-  const lineupsBtnRef = useRef<View>(null);
+  const lineupsRef = useRef<View>(null);
   const tourRef = useRef<FirstTimeTourHandle>(null);
 
   const tourSteps = useMemo<TourStep[]>(
     () => [
       {
-        ref: rosterBtnRef,
+        ref: rosterTileRef,
         title: "Build your Roster",
         description:
-          "Add and manage your players here. Set their positions, gender, and active status before generating a lineup.",
+          "Tap the active players tile to add players, set their positions, and bench anyone sitting out.",
       },
       {
         ref: rulesBtnRef,
         title: "Set your Rules",
         description:
-          "Configure your sport, number of innings, field positions, and any custom instructions that shape how lineups are generated.",
+          "Join your league or write your own rules: innings, positions, and gender rules shape every lineup.",
       },
       {
         ref: generateBtnRef,
         title: "Generate a Lineup",
         description:
-          "Tap here to generate a fair lineup for your next game based on your roster and team rules.",
+          "One tap builds a fair lineup for your next game from your roster and rules.",
       },
       {
-        ref: lineupsBtnRef,
-        title: "View Past Lineups",
+        ref: lineupsRef,
+        title: "Find Past Lineups",
         description:
-          "Browse all previously generated lineups here. Share or review any game lineup at any time.",
+          "Every saved lineup lives under the Lineup tab. Open one to edit, export, or reuse it.",
       },
     ],
     [],
@@ -113,10 +145,11 @@ const HomeScreen = ({
 
   const [teamId, setTeamId] = useState<string | null>(null);
   const [summary, setSummary] = useState<DashboardSummary>({
-    rosterCount: 0,
-    gamesCount: 0,
+    teamName: "",
+    activeCount: 0,
+    nextGame: null,
+    recentLineups: [],
     lineupsCount: 0,
-    nextGameLabel: "No upcoming game",
     rules: defaultTeamRulesConfig,
   });
   const [loading, setLoading] = useState(true);
@@ -146,20 +179,24 @@ const HomeScreen = ({
         return;
       }
 
-      const [roster, teamRules, games, lineups] = await Promise.all([
+      const [teamInfo, roster, teamRules, games, lineups] = await Promise.all([
+        backendClient.getMyTeam(),
         backendClient.getTeamRoster(team),
         backendClient.getTeamRules(team),
         backendClient.getTeamGames(team),
         backendClient.getLineupVersions(team).catch(() => []),
       ]);
 
-      const rules = rulesConfigFromTeamRules(teamRules);
+      const recent = [...lineups].sort(
+        (a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt),
+      );
       setSummary({
-        rosterCount: roster.length,
-        gamesCount: games.length,
+        teamName: teamInfo.name,
+        activeCount: roster.filter((player) => !player.benched).length,
+        nextGame: findNextGame(games),
+        recentLineups: recent.slice(0, RECENT_LINEUPS),
         lineupsCount: lineups.length,
-        nextGameLabel: formatNextGameLabel(games),
-        rules,
+        rules: rulesConfigFromTeamRules(teamRules),
       });
     } catch (_err) {
       setError("Unable to load home data.");
@@ -176,8 +213,19 @@ const HomeScreen = ({
     });
   }, [loadDashboard]);
 
+  useEffect(() => {
+    if (!replayTourRequested || loading) return;
+    onTourHandled();
+    // Let the screen settle after the tab switch before measuring targets.
+    // No cleanup on purpose: clearing the flag re-renders with a fresh
+    // onTourHandled, which would otherwise cancel this timer.
+    setTimeout(() => tourRef.current?.start(), 250);
+  }, [loading, onTourHandled, replayTourRequested]);
+
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
+    // Pull-to-refresh means "go to the server", not "reuse the last read".
+    clearReads();
     loadDashboard()
       .catch(() => {
         setError("Unable to load home data.");
@@ -187,215 +235,241 @@ const HomeScreen = ({
       });
   }, [loadDashboard]);
 
-  const readinessText = useMemo(() => {
-    const activeCount = summary.rosterCount;
-    if (activeCount >= summary.rules.minimumPlayers) {
-      return "Ready to generate";
-    }
-    return `${summary.rules.minimumPlayers - activeCount} more players needed`;
-  }, [summary.rosterCount, summary.rules.minimumPlayers]);
+  const isReady = summary.activeCount >= summary.rules.minimumPlayers;
+  const readinessText = isReady
+    ? `${summary.activeCount} active · ready to generate`
+    : `${summary.activeCount} active · ${summary.rules.minimumPlayers - summary.activeCount} more needed`;
+
+  const nextGame = summary.nextGame;
+  const nextGameDate = nextGame ? new Date(nextGame.scheduledAt) : null;
+  const nextGameEyebrow =
+    nextGameDate && !Number.isNaN(nextGameDate.getTime())
+      ? `Next game · ${formatShortDate(nextGameDate)}`
+      : "Next game";
 
   return (
     <>
-      <View style={styles.screen}>
-        <Header
-          onInfoPress={() => tourRef.current?.start()}
-          showMenu={false}
-        />
-
-        <ScreenContainer
-          scroll
-          refreshing={refreshing}
-          onRefresh={handleRefresh}
-          contentStyle={styles.content}
-        >
-          <Card variant="elevated" style={styles.heroCard}>
-            <AppText
-              variant="caption"
-              family="heading"
-              color="accent"
-              style={styles.eyebrow}
-            >
-              Home
-            </AppText>
-            <AppText variant="display" family="display">
-              Ready for game day?
-            </AppText>
-            <AppText variant="body" color="secondary">
-              {readinessText}
-            </AppText>
-            <View
-              ref={generateBtnRef}
-              collapsable={false}
-              style={styles.heroButtonWrap}
-            >
-              <Button
-                label="Generate now"
-                onPress={onOpenLineupPage}
-                accessibilityLabel="Generate a lineup now"
+      <ScreenContainer
+        scroll
+        refreshing={refreshing}
+        onRefresh={handleRefresh}
+        contentStyle={styles.content}
+      >
+        <PageHeader
+          eyebrow={new Date().toLocaleDateString(undefined, {
+            weekday: "long",
+            month: "short",
+            day: "numeric",
+          })}
+          title={summary.teamName || "Your team"}
+          right={
+            <View ref={rulesBtnRef} collapsable={false}>
+              <IconButton
+                icon="sliders"
+                onPress={onOpenRulesPage}
+                accessibilityLabel="Team rules"
               />
             </View>
-          </Card>
+          }
+        />
 
-          {!loading && !error && summary.lineupsCount === 0 ? (
-            <Reveal>
-              <Card variant="outline" padding="xxs">
+        <LoadTransition
+          loading={loading}
+          style={styles.content}
+          skeleton={
+            <>
+              <Skeleton height={208} radius={radius.xl} />
+              <SkeletonMetricRow count={3} />
+              <Skeleton height={140} radius={radius.lg} delay={120} />
+            </>
+          }
+        >
+          <View ref={generateBtnRef} collapsable={false}>
+            <Card variant="glass" radius="xl" padding="none">
+              <View style={styles.hero}>
+                <AppText
+                  variant="caption"
+                  family="heading"
+                  color="accent"
+                  style={styles.eyebrow}
+                >
+                  {nextGame ? nextGameEyebrow : "Next game"}
+                </AppText>
+                <View style={styles.heroTitleBlock}>
+                  <AppText variant="display" family="display" style={styles.heroTitle}>
+                    {nextGame ? gameTitle(nextGame) : "No game scheduled"}
+                  </AppText>
+                  <AppText variant="body" color="secondary">
+                    {nextGame ? gameMeta(nextGame) : "Add one to the calendar to plan ahead."}
+                  </AppText>
+                </View>
+                <View style={styles.readinessRow}>
+                  <View
+                    style={[
+                      styles.readinessDot,
+                      { backgroundColor: isReady ? theme.success.base : theme.accent.base },
+                    ]}
+                  />
+                  <AppText variant="body" color="secondary">
+                    {readinessText}
+                  </AppText>
+                </View>
+                {nextGame ? (
+                  <Button
+                    label="Generate lineup"
+                    icon="zap"
+                    size="lg"
+                    fullWidth
+                    onPress={onOpenLineupPage}
+                    accessibilityLabel="Generate a lineup now"
+                  />
+                ) : (
+                  <Button
+                    label="Add a game"
+                    icon="calendar"
+                    size="lg"
+                    fullWidth
+                    onPress={onOpenCalendarPage}
+                    accessibilityLabel="Add a game to the calendar"
+                  />
+                )}
+              </View>
+            </Card>
+          </View>
+
+          <View style={styles.metricsRow}>
+            <View ref={rosterTileRef} collapsable={false} style={styles.metricSlot}>
+              <MetricTile
+                label="Active players"
+                value={summary.activeCount}
+                onPress={onOpenRosterPage}
+                accessibilityHint="Opens the roster"
+              />
+            </View>
+            <MetricTile
+              label={summary.rules.segmentLabel === "inning" ? "Innings" : "Periods"}
+              value={summary.rules.segmentCount}
+              onPress={onOpenRulesPage}
+              accessibilityHint="Opens team rules"
+            />
+            <MetricTile
+              label="On field"
+              value={summary.rules.playersOnField}
+              onPress={onOpenRulesPage}
+              accessibilityHint="Opens team rules"
+            />
+          </View>
+
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <AppText variant="bodyLg" family="heading">
+                Recent lineups
+              </AppText>
+              <View ref={lineupsRef} collapsable={false}>
+                <AppPressable
+                  onPress={onOpenSavedLineups}
+                  pressScale={1}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="See all saved lineups"
+                >
+                  <AppText variant="caption" family="heading" color="accent">
+                    See all
+                  </AppText>
+                </AppPressable>
+              </View>
+            </View>
+            {summary.recentLineups.length > 0 ? (
+              <ListGroup>
+                {summary.recentLineups.map((version) => (
+                  <ListRow
+                    key={version.id}
+                    title={version.lineupName || `Lineup v${version.versionNumber}`}
+                    subtitle={formatDateTime(version.createdAt)}
+                    onPress={() => onOpenLineup(version)}
+                  />
+                ))}
+              </ListGroup>
+            ) : (
+              <Card padding="xxs">
                 <EmptyState
-                  icon="clipboard"
+                  icon="layers"
                   title="No lineups yet"
-                  body="You haven't created a lineup yet. Generate your first one to get ready for game day."
-                  action={{
-                    label: "Create your first lineup",
-                    onPress: onOpenLineupPage,
-                  }}
+                  body="Generate your first one and it will show up here."
+                  action={{ label: "Generate a lineup", onPress: onOpenLineupPage }}
                 />
               </Card>
-            </Reveal>
-          ) : null}
+            )}
+          </View>
+        </LoadTransition>
 
-          <LoadTransition
-            loading={loading}
-            style={styles.metricsGrid}
-            skeleton={
-              <>
-                <SkeletonMetricRow count={2} />
-                <SkeletonMetricRow count={2} />
-              </>
-            }
+        {error ? (
+          <AppPressable
+            style={styles.footerMessage}
+            onPress={() => {
+              loadDashboard().catch(() => {
+                setError("Unable to load home data.");
+              });
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={`${error} Tap to retry`}
           >
-            <View style={styles.metricsRow}>
-              <MetricTile label="Roster" value={summary.rosterCount} />
-              <MetricTile label="Innings" value={summary.rules.segmentCount} />
-            </View>
-            <View style={styles.metricsRow}>
-              <MetricTile label="On Field" value={summary.rules.playersOnField} />
-              <MetricTile label="Next Game" value={summary.nextGameLabel} small />
-            </View>
-          </LoadTransition>
-
-          <Card style={styles.quickActionsCard}>
-            <AppText variant="bodyLg" family="heading">
-              Quick Actions
+            <AppText variant="caption" color="danger">
+              {error} Tap to retry.
             </AppText>
-            <View style={styles.quickActionsRow}>
-              <View
-                ref={rosterBtnRef}
-                collapsable={false}
-                style={styles.quickButtonWrap}
-              >
-                <Button
-                  label="Roster"
-                  onPress={onOpenRosterPage}
-                  variant="secondary"
-                  fullWidth
-                  accessibilityLabel="Open roster"
-                />
-              </View>
-              <View
-                ref={rulesBtnRef}
-                collapsable={false}
-                style={styles.quickButtonWrap}
-              >
-                <Button
-                  label="Rules"
-                  onPress={onOpenRulesPage}
-                  variant="secondary"
-                  fullWidth
-                  accessibilityLabel="Open team rules"
-                />
-              </View>
-              <View collapsable={false} style={styles.quickButtonWrap}>
-                <Button
-                  label="Calendar"
-                  onPress={onOpenCalendarPage}
-                  variant="secondary"
-                  fullWidth
-                  accessibilityLabel="Open calendar"
-                />
-              </View>
-              <View
-                ref={lineupsBtnRef}
-                collapsable={false}
-                style={styles.quickButtonWrap}
-              >
-                <Button
-                  label="All Lineups"
-                  onPress={onOpenLineupsPage}
-                  variant="secondary"
-                  fullWidth
-                  accessibilityLabel="View all lineups"
-                />
-              </View>
-            </View>
-          </Card>
-
-          {loading ? (
-            <View style={styles.footerMessage} />
-          ) : error ? (
-            <AppPressable
-              style={styles.footerMessage}
-              onPress={() => {
-                loadDashboard().catch(() => {
-                  setError("Unable to load home data.");
-                });
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={`${error} Tap to retry`}
-            >
-              <AppText variant="caption" color="danger">
-                {error} Tap to retry.
-              </AppText>
-            </AppPressable>
-          ) : null}
-        </ScreenContainer>
-      </View>
+          </AppPressable>
+        ) : null}
+      </ScreenContainer>
       <FirstTimeTour ref={tourRef} steps={tourSteps} onDone={() => {}} />
     </>
   );
 };
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: theme.bg.base,
-  },
   content: {
-    flexGrow: 1,
-    paddingTop: space.md,
-    gap: space.sm,
+    gap: space.xl - space.sm,
   },
   eyebrow: {
     textTransform: "uppercase",
-    letterSpacing: 1.2,
+    letterSpacing: 1.4,
   },
-  heroCard: {
+  hero: {
+    padding: space.xl - space.sm,
+    gap: space.sm + 2,
+  },
+  heroTitleBlock: {
+    gap: 2,
+  },
+  heroTitle: {
+    letterSpacing: -0.2,
+  },
+  readinessRow: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: space.xs,
   },
-  heroButtonWrap: {
-    alignSelf: "flex-start",
-    marginTop: space.xxs,
-  },
-  metricsGrid: {
-    gap: space.sm,
+  readinessDot: {
+    width: 8,
+    height: 8,
+    borderRadius: radius.pill,
   },
   metricsRow: {
     flexDirection: "row",
-    gap: space.sm,
+    gap: space.sm - 2,
   },
-  quickActionsCard: {
-    gap: space.sm,
-  },
-  quickActionsRow: {
+  metricSlot: {
+    flex: 1,
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: space.xs,
   },
-  quickButtonWrap: {
-    flexBasis: "48%",
-    flexGrow: 1,
+  section: {
+    gap: space.xs + 2,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   footerMessage: {
-    marginTop: "auto",
     minHeight: 24,
     justifyContent: "center",
   },

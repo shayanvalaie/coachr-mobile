@@ -1,7 +1,9 @@
 import { StyleSheet, View } from "react-native";
 import { BackendGame, BackendLineupVersionSummary } from "../../../lib/backend/types";
 import { AppText, Button, Card } from "../../../components/ui";
-import { space } from "../../../theme/tokens";
+import { theme } from "../../../theme/colors";
+import { radius, space } from "../../../theme/tokens";
+import { typeface } from "../../../theme/typography";
 
 type Props = {
   game: BackendGame;
@@ -11,71 +13,97 @@ type Props = {
   onDelete: (gameId: string) => void;
 };
 
-// One game in the selected-day agenda: schedule details, saved-lineup summary,
-// and the Line Up / Edit / Delete actions.
-const GameCard = ({ game, savedLineups, onOpenLineups, onEdit, onDelete }: Props) => {
+const capitalize = (value: string) =>
+  value.charAt(0).toUpperCase() + value.slice(1);
+
+export const gameEyebrow = (game: BackendGame) => {
   const date = new Date(game.scheduledAt);
-  const title = `${game.title || "Untitled Game"} vs ${game.opponentName || "TBD"}`;
+  if (Number.isNaN(date.getTime())) return "Game";
+  return date.toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+};
+
+const gameTitle = (game: BackendGame) => {
+  const opponent = game.opponentName.trim();
+  if (opponent) return `vs ${opponent}`;
+  return game.title.trim() || "Game";
+};
+
+const gameMeta = (game: BackendGame) => {
+  const date = new Date(game.scheduledAt);
+  return [
+    Number.isNaN(date.getTime())
+      ? null
+      : date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }),
+    game.homeAway === "home" ? "Home" : "Away",
+    game.location.trim() || null,
+    game.status === "scheduled" ? null : capitalize(game.status),
+  ]
+    .filter(Boolean)
+    .join(" · ");
+};
+
+// One game on the selected day: a glass hero with the schedule, lineup
+// status, and the day's one amber action. Long-press to delete.
+const GameCard = ({ game, savedLineups, onOpenLineups, onEdit, onDelete }: Props) => {
+  const hasLineup = savedLineups.length > 0;
+  const title = gameTitle(game);
+  const hasScore = game.ourScore != null || game.opponentScore != null;
 
   return (
-    <Card padding="sm">
+    <Card
+      variant="glass"
+      radius="tab"
+      padding="none"
+      onLongPress={game.id ? () => onDelete(game.id!) : undefined}
+      accessibilityLabel={`${title}, ${gameEyebrow(game)}`}
+      accessibilityHint="Press and hold to delete this game"
+    >
       <View style={styles.inner}>
-        <View style={styles.info}>
-          <AppText variant="body" family="heading">
-            {title}
-          </AppText>
+        <AppText variant="caption" family="heading" color="accent" style={styles.eyebrow}>
+          {gameEyebrow(game)}
+        </AppText>
+        <View style={styles.titleBlock}>
+          <AppText style={styles.title}>{title}</AppText>
           <AppText variant="caption" color="secondary">
-            {Number.isNaN(date.getTime()) ? game.scheduledAt : date.toLocaleString()}
+            {gameMeta(game)}
           </AppText>
-          <AppText variant="caption" color="secondary">
-            {game.homeAway.toUpperCase()} - {game.location || "No location"} -{" "}
-            {game.status}
-          </AppText>
-          {(game.ourScore != null || game.opponentScore != null) && (
+          {hasScore ? (
             <AppText variant="caption" family="heading">
-              Score: {game.ourScore ?? "-"} - {game.opponentScore ?? "-"}
+              Score {game.ourScore ?? "-"} – {game.opponentScore ?? "-"}
             </AppText>
-          )}
-          {savedLineups.length > 0 ? (
-            <View style={styles.lineupInfoWrap}>
-              <AppText variant="caption" family="heading" color="accent">
-                Saved lineups: {savedLineups.length}
-              </AppText>
-              <AppText variant="caption" color="secondary">
-                Latest:{" "}
-                {savedLineups[0].lineupName || `v${savedLineups[0].versionNumber}`}
-              </AppText>
-            </View>
-          ) : (
-            <AppText variant="caption" color="muted">
-              No lineup saved for this game yet.
-            </AppText>
-          )}
+          ) : null}
+        </View>
+        <View style={styles.statusRow}>
+          <View
+            style={[
+              styles.statusDot,
+              { backgroundColor: hasLineup ? theme.success.base : theme.text.muted },
+            ]}
+          />
+          <AppText variant="caption" family="heading" color={hasLineup ? "success" : "muted"}>
+            {hasLineup
+              ? `${savedLineups.length} saved lineup${savedLineups.length === 1 ? "" : "s"}`
+              : "No lineup yet"}
+          </AppText>
         </View>
         <View style={styles.actions}>
           <Button
-            label="Line Up"
-            variant="secondary"
-            size="sm"
-            icon="layers"
+            label={hasLineup ? "Open lineup" : "Generate lineup"}
+            icon={hasLineup ? undefined : "zap"}
             onPress={() => onOpenLineups(game)}
-            accessibilityLabel={`Open lineups for ${title}`}
+            style={styles.primaryAction}
+            accessibilityLabel={`${hasLineup ? "Open lineups" : "Generate a lineup"} for ${title}`}
           />
           <Button
             label="Edit"
             variant="secondary"
-            size="sm"
-            icon="edit-2"
             onPress={() => onEdit(game)}
+            style={styles.secondaryAction}
             accessibilityLabel={`Edit ${title}`}
-          />
-          <Button
-            label="Delete"
-            variant="danger"
-            size="sm"
-            icon="trash-2"
-            onPress={() => game.id && onDelete(game.id)}
-            accessibilityLabel={`Delete ${title}`}
           />
         </View>
       </View>
@@ -85,19 +113,42 @@ const GameCard = ({ game, savedLineups, onOpenLineups, onEdit, onDelete }: Props
 
 const styles = StyleSheet.create({
   inner: {
+    padding: space.md + 2,
+    gap: space.sm,
+  },
+  eyebrow: {
+    textTransform: "uppercase",
+    letterSpacing: 1.4,
+  },
+  titleBlock: {
+    gap: 2,
+  },
+  title: {
+    fontFamily: typeface.display,
+    fontSize: 22,
+    lineHeight: 27,
+    letterSpacing: -0.2,
+  },
+  statusRow: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: space.xs,
   },
-  info: {
-    gap: 2,
-  },
-  lineupInfoWrap: {
-    marginTop: 2,
-    gap: 2,
+  statusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: radius.pill,
   },
   actions: {
     flexDirection: "row",
-    flexWrap: "wrap",
     gap: space.xs,
+    marginTop: space.xxs,
+  },
+  primaryAction: {
+    flex: 2,
+  },
+  secondaryAction: {
+    flex: 1,
   },
 });
 

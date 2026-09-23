@@ -2,6 +2,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { useBackendAuth } from "../hooks/useBackendAuth";
 import { useReducedMotion } from "../hooks/useReducedMotion";
+import { RulesetStatusProvider } from "../lib/rulesetStatus/RulesetStatusProvider";
 import AuthScreen from "../screens/AuthScreen";
 import SetupWizard from "../screens/onboarding/SetupWizard";
 import SubscriptionScreen from "../screens/SubscriptionScreen";
@@ -24,7 +25,7 @@ const RootNavigator = () => {
     );
   }
 
-  return (
+  const content = (
     <>
     <RootStack.Navigator
       screenOptions={{
@@ -60,6 +61,9 @@ const RootNavigator = () => {
     {session ? <SetupWizard key={session.user.id} session={session} /> : null}
     </>
   );
+
+  if (!session) return content;
+  return <RulesetStatusProvider session={session}>{content}</RulesetStatusProvider>;
 };
 
 const styles = StyleSheet.create({

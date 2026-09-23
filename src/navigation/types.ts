@@ -2,11 +2,11 @@ import { NavigatorScreenParams } from "@react-navigation/native";
 import { LineupLaunchRequest } from "../types/lineupLaunch";
 
 export type HomeStackParamList = {
-  Home: undefined;
+  // Profile's "Replay app tour" lands on Home with this flag set.
+  Home: { replayTour?: boolean } | undefined;
   Rules: undefined;
   Leagues: undefined;
   LeagueDetail: { leagueId: string };
-  AllLineups: undefined;
 };
 
 export type MainTabParamList = {

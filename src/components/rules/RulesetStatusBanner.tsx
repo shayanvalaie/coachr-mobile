@@ -3,13 +3,10 @@ import { Feather, IconName } from "../../icons";
 import { theme, withAlpha } from "../../theme/colors";
 import { radius, space } from "../../theme/tokens";
 import { RulesetStatus } from "../../types/rules";
-import { AppText, Button } from "../ui";
+import { AppText } from "../ui";
 
 type Props = {
   status: Exclude<RulesetStatus, "active">;
-  // Shown on the right; used for a manual status re-check while baking.
-  onCheckStatus?: () => void;
-  checking?: boolean;
 };
 
 const copyByStatus: Record<
@@ -38,7 +35,7 @@ const copyByStatus: Record<
 
 // Pending/blocked ruleset state. Tinted wash of the tone colour over the card
 // surface so it reads as a notice, not an error toast.
-const RulesetStatusBanner = ({ status, onCheckStatus, checking = false }: Props) => {
+const RulesetStatusBanner = ({ status }: Props) => {
   const copy = copyByStatus[status];
   const color = copy.tone === "danger" ? theme.danger.base : theme.accent.base;
 
@@ -61,19 +58,6 @@ const RulesetStatusBanner = ({ status, onCheckStatus, checking = false }: Props)
         <AppText variant="body" color="secondary">
           {copy.body}
         </AppText>
-        {status === "baking" && onCheckStatus ? (
-          <View style={styles.action}>
-            <Button
-              label="Check status"
-              variant="secondary"
-              size="sm"
-              icon="refresh-cw"
-              loading={checking}
-              onPress={onCheckStatus}
-              accessibilityLabel="Check whether the rules are ready"
-            />
-          </View>
-        ) : null}
       </View>
     </View>
   );
@@ -97,10 +81,6 @@ const styles = StyleSheet.create({
   textColumn: {
     flex: 1,
     gap: space.xxs,
-  },
-  action: {
-    alignSelf: "flex-start",
-    marginTop: space.xs,
   },
 });
 

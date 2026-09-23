@@ -11,7 +11,7 @@ import { radius, space } from "../../theme/tokens";
 import AppPressable from "./AppPressable";
 import AppText from "./AppText";
 
-type Variant = "primary" | "secondary" | "ghost" | "danger";
+type Variant = "primary" | "secondary" | "ghost" | "danger" | "success";
 type Size = "sm" | "md" | "lg";
 
 type Props = {
@@ -28,33 +28,45 @@ type Props = {
   style?: StyleProp<ViewStyle>;
 };
 
+// One amber action per screen; everything else is a quiet raised outline.
 const containerByVariant: Record<Variant, ViewStyle> = {
   primary: {
     backgroundColor: theme.accent.base,
   },
   secondary: {
-    backgroundColor: theme.bg.elevated,
+    backgroundColor: theme.bg.raised,
     borderWidth: 1,
-    borderColor: theme.border.base,
+    borderColor: theme.border.subtle,
   },
   ghost: {
     backgroundColor: "transparent",
   },
   danger: {
-    backgroundColor: theme.danger.subtle,
+    backgroundColor: theme.bg.raised,
     borderWidth: 1,
     borderColor: theme.danger.subtleBorder,
+  },
+  success: {
+    backgroundColor: theme.bg.raised,
+    borderWidth: 1,
+    borderColor: theme.success.subtleBorder,
   },
 };
 
 const heightBySize: Record<Size, number> = { sm: 36, md: 44, lg: 52 };
-const iconSizeBySize: Record<Size, number> = { sm: 14, md: 16, lg: 18 };
+const iconSizeBySize: Record<Size, number> = { sm: 14, md: 16, lg: 17 };
+const radiusBySize: Record<Size, number> = {
+  sm: radius.md,
+  md: radius.lg,
+  lg: radius.lg,
+};
 
 const textColorByVariant = {
   primary: "onAccent",
   secondary: "primary",
   ghost: "secondary",
   danger: "danger",
+  success: "success",
 } as const;
 
 const iconColorByVariant: Record<Variant, string> = {
@@ -62,6 +74,7 @@ const iconColorByVariant: Record<Variant, string> = {
   secondary: theme.text.primary,
   ghost: theme.text.secondary,
   danger: theme.danger.base,
+  success: theme.success.base,
 };
 
 const Button = ({
@@ -78,6 +91,9 @@ const Button = ({
   style,
 }: Props) => {
   const isBlocked = disabled || loading;
+  // A disabled primary drops to a quiet raised surface instead of dimming, so
+  // "not yet" reads as a state rather than a broken button.
+  const isMutedPrimary = variant === "primary" && disabled && !loading;
 
   return (
     <AppPressable
@@ -90,10 +106,11 @@ const Button = ({
       style={[
         styles.base,
         containerByVariant[variant],
-        { minHeight: heightBySize[size] },
+        { minHeight: heightBySize[size], borderRadius: radiusBySize[size] },
         size === "sm" && styles.compactPadding,
         fullWidth && styles.fullWidth,
-        isBlocked && styles.blocked,
+        isMutedPrimary && styles.mutedPrimary,
+        isBlocked && !isMutedPrimary && styles.blocked,
         style,
       ]}
     >
@@ -105,13 +122,15 @@ const Button = ({
             <Feather
               name={icon}
               size={iconSizeBySize[size]}
-              color={iconColorByVariant[variant]}
+              color={
+                isMutedPrimary ? theme.text.secondary : iconColorByVariant[variant]
+              }
             />
           ) : null}
           <AppText
             variant={size === "sm" ? "caption" : "bodyLg"}
-            family="heading"
-            color={textColorByVariant[variant]}
+            family={variant === "primary" ? "display" : "heading"}
+            color={isMutedPrimary ? "secondary" : textColorByVariant[variant]}
           >
             {label}
           </AppText>
@@ -123,7 +142,6 @@ const Button = ({
 
 const styles = StyleSheet.create({
   base: {
-    borderRadius: radius.md,
     paddingHorizontal: space.md,
     alignItems: "center",
     justifyContent: "center",
@@ -138,6 +156,11 @@ const styles = StyleSheet.create({
   },
   fullWidth: {
     alignSelf: "stretch",
+  },
+  mutedPrimary: {
+    backgroundColor: theme.bg.raised,
+    borderWidth: 1,
+    borderColor: theme.border.subtle,
   },
   blocked: {
     opacity: 0.55,

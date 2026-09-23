@@ -17,14 +17,13 @@ import LineupGrid from "../../../components/lineup/LineupGrid";
 import { AppPressable, AppText, Button } from "../../../components/ui";
 import { Feather } from "../../../icons";
 import { theme, withAlpha } from "../../../theme/colors";
-import { radius, space } from "../../../theme/tokens";
+import { radius, shadow, space } from "../../../theme/tokens";
 import { InningAssignment, Player } from "../../../types/lineup";
 
 type Props = {
   title: string;
   isHistoryEdit: boolean;
   lineup: InningAssignment[] | null;
-  expandedInnings: Set<number>;
   editable: boolean;
   canUndo: boolean;
   isSaving: boolean;
@@ -57,7 +56,6 @@ const EditLineupOverlay = ({
   title,
   isHistoryEdit,
   lineup,
-  expandedInnings,
   editable,
   canUndo,
   isSaving,
@@ -268,8 +266,6 @@ const EditLineupOverlay = ({
           >
             <LineupGrid
               lineup={lineup}
-              expandedInnings={expandedInnings}
-              onToggleInning={() => {}}
               editable={editable}
               onSetPlayerPosition={onSetPlayerPosition}
               playerGenderByName={playerGenderByName}
@@ -417,7 +413,7 @@ const styles = StyleSheet.create({
     height: 34,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: theme.border.base,
+    borderColor: theme.border.glass,
     backgroundColor: theme.bg.raised,
     alignItems: "center",
     justifyContent: "center",
@@ -443,9 +439,10 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: theme.border.base,
+    borderColor: theme.border.subtle,
     backgroundColor: theme.bg.raised,
     overflow: "hidden",
+    ...shadow.card,
   },
   body: {
     flex: 1,
@@ -469,7 +466,7 @@ const styles = StyleSheet.create({
     width: EXPORT_MENU_WIDTH,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: theme.border.base,
+    borderColor: theme.border.glass,
     backgroundColor: theme.bg.base,
     paddingVertical: space.xxs,
     shadowColor: "#000",

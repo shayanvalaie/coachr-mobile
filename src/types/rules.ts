@@ -49,7 +49,7 @@ export type RulesetSpec = {
   segment: { label: string; count: number };
   roster: { minPlayers: number; requirements?: GenderMin[] };
   field: { playersOnField: number; slots: string[] };
-  bench: { maxConsecutive: number };
+  bench: { maxConsecutive: number; maxPerGame?: number };
   tiers?: SpecTier[];
 };
 
@@ -61,6 +61,9 @@ export type RulesetPayload = {
   spec: RulesetSpec;
   rulesText: string;
   unexpressedRules: string[];
+  // AI-written, display only. Empty while a pre-existing ruleset is being
+  // backfilled, or when the summary could not be generated.
+  summaryRules: string[];
   createdAt: string;
   activatedAt: string | null;
 };
@@ -70,9 +73,17 @@ export type LeagueSummary = {
   name: string;
   sport: string;
   region: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
   status: RulesetStatus;
   teamCount: number;
 };
+
+// Why the server offered a league instead of creating a new one.
+export type LeagueMatchReason = "zip" | "size" | "name";
+
+export type LeagueSuggestion = LeagueSummary & { matchReasons: LeagueMatchReason[] };
 
 export type LeagueDetail = LeagueSummary & {
   description: string | null;
@@ -165,13 +176,6 @@ export const rulesConfigFromTeamRules = (
     ...rulesConfigFromSpec(state.ruleset.spec),
     customInstructions: state.coachPreferences,
   };
-};
-
-export const describeTierWhen = (when: SpecTierWhen): string => {
-  const gender = when.gender === "female" ? "women" : when.gender === "male" ? "men" : when.gender;
-  if (when.eq !== undefined) return `exactly ${when.eq} ${gender}`;
-  if (when.gte !== undefined) return `${when.gte}+ ${gender}`;
-  return `${when.lte ?? 0} or fewer ${gender}`;
 };
 
 export const describeGender = (gender: string, count: number): string => {

@@ -1,8 +1,8 @@
 import { useEffect } from "react";
 import { StatusBar } from "expo-status-bar";
-import { SafeAreaView, StyleSheet } from "react-native";
+import { StyleSheet } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { SafeAreaProvider } from "react-native-safe-area-context";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { DarkTheme, NavigationContainer } from "@react-navigation/native";
 import ErrorBoundary from "./src/components/ErrorBoundary";
 import { ToastProvider } from "./src/components/ui";

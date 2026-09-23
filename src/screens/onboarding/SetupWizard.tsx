@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -9,46 +9,150 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Feather } from "../../icons";
-import RulesetStatusBanner from "../../components/rules/RulesetStatusBanner";
+import { Feather, IconName } from "../../icons";
 import {
+  AmbientBackground,
   AppPressable,
   AppText,
   Button,
   Card,
   Input,
+  ListGroup,
   Reveal,
+  Sheet,
+  SportPicker,
   useToast,
 } from "../../components/ui";
 import { backendClient } from "../../lib/backend/client";
+import { trace } from "../../lib/backend/trace";
 import { BackendSession } from "../../lib/backend/types";
 import { getSimilarLeaguesError, toError } from "../../lib/backend/utils";
+import PlaceSearch from "../../components/PlaceSearch";
+import { PlaceValue } from "../../lib/placeSearch";
+import { useRulesetStatus } from "../../lib/rulesetStatus/RulesetStatusProvider";
 import { navigateFromRef } from "../../navigation/navigationRef";
-import { theme, withAlpha } from "../../theme/colors";
-import { radius, space } from "../../theme/tokens";
-import { Gender, Player } from "../../types/lineup";
-import {
-  describeGender,
-  LeagueSummary,
-  rulesConfigFromTeamRules,
-  TeamRulesState,
-} from "../../types/rules";
-import { createPlayer } from "../../utils/lineupGenerator";
-import { LeagueRow } from "../leagues/LeaguesScreen";
+import { theme } from "../../theme/colors";
+import { motion, radius, space } from "../../theme/tokens";
+import { typeface } from "../../theme/typography";
+import { LeagueSuggestion, LeagueSummary, RulesetStatus } from "../../types/rules";
+import { digitsOnly, parseCount } from "../../utils/formNumbers";
+import LeagueRow, { describeMatchReasons } from "../leagues/LeagueRow";
 
 const WIZARD_KEY_PREFIX = "coachr_setup_wizard_v2.";
 
-type Step = "welcome" | "rules" | "roster" | "ready";
-const STEPS: Step[] = ["welcome", "rules", "roster", "ready"];
+// Rules is the only real step: players are added on the Roster tab afterwards,
+// while the lineup engine is being built.
+type Step = "welcome" | "rules";
+const STEPS: Step[] = ["welcome", "rules"];
 
-type RulesMode = "options" | "league" | "create" | "own";
+// Two-stage rules step: "search" only searches; "options" offers Create /
+// Own. Create is never shown alongside search results.
+type RulesMode = "search" | "options" | "create" | "own";
+
+type OwnRulesDraft = {
+  sport: string;
+  rulesText: string;
+  segmentCount: number;
+  playersOnField: number;
+};
+
+type CreateLeagueDraft = OwnRulesDraft & {
+  name: string;
+  city: string;
+  state: string;
+  zip: string;
+  confirmDistinct: boolean;
+};
+
+// What the sheet on the Roster tab tells the coach once the wizard hands off.
+type SetupNotice =
+  | { kind: "saving" }
+  | { kind: "rules"; status: RulesetStatus }
+  | { kind: "joined"; leagueName: string; status: RulesetStatus };
+
+const ADD_PLAYERS_THEN_GENERATE =
+  "Add your players, then generate your first lineup from the Lineup tab.";
+
+const noticeCopy = (notice: SetupNotice): { title: string; body: string } => {
+  if (notice.kind === "saving") {
+    return {
+      title: "Saving your rules",
+      body: "Add your players in the meantime. This updates the moment your rules are in.",
+    };
+  }
+  if (notice.kind === "joined") {
+    return {
+      title: `You joined ${notice.leagueName}`,
+      body:
+        notice.status === "active"
+          ? ADD_PLAYERS_THEN_GENERATE
+          : "Its lineup engine is still being set up. Add your players in the meantime.",
+    };
+  }
+  switch (notice.status) {
+    case "active":
+      return { title: "Your rules are live", body: ADD_PLAYERS_THEN_GENERATE };
+    case "baking":
+      return {
+        title: "Your lineup engine is being generated",
+        body: "This takes a few minutes. Add your players in the meantime and we'll let you know when it's ready.",
+      };
+    case "review":
+      return {
+        title: "Your rules need a quick review",
+        body: "We'll email you when they're ready. Add your players in the meantime.",
+      };
+    case "rejected":
+      return {
+        title: "These rules couldn't be supported",
+        body: "Adjust them from the Rules page. You can still add your players now.",
+      };
+  }
+};
 
 type Props = {
   session: BackendSession;
 };
 
-const capitalize = (value: string) =>
-  value.charAt(0).toUpperCase() + value.slice(1);
+const SEARCH_DEBOUNCE_MS = 250;
+const RULES_HINT =
+  "Simple rules go live instantly. Unusual ones get a custom engine built in a few minutes.";
+
+const WELCOME_ITEMS: Array<{ label: string; detail: string }> = [
+  { label: "Rules", detail: "Join or create your league, or write your own" },
+  { label: "Roster", detail: "Add your players on the Roster tab" },
+  { label: "Lineup", detail: "Generate a fair lineup instantly" },
+];
+
+// Glass row offering a way to get rules without joining a league.
+const OptionRow = ({
+  icon,
+  title,
+  detail,
+  onPress,
+}: {
+  icon: IconName;
+  title: string;
+  detail: string;
+  onPress: () => void;
+}) => (
+  <Card variant="glass" radius="lg" padding="sm" onPress={onPress} accessibilityLabel={title}>
+    <View style={styles.optionRow}>
+      <View style={styles.optionIcon}>
+        <Feather name={icon} size={16} color={theme.accent.base} />
+      </View>
+      <View style={styles.optionText}>
+        <AppText variant="bodyLg" family="heading">
+          {title}
+        </AppText>
+        <AppText variant="caption" color="secondary">
+          {detail}
+        </AppText>
+      </View>
+      <Feather name="chevron-right" size={18} color={theme.text.muted} />
+    </View>
+  </Card>
+);
 
 // First-run setup: shown once per account, straight after the first sign-in.
 // Walks the coach from zero to a generated lineup (rules -> roster -> generate).
@@ -57,30 +161,36 @@ const capitalize = (value: string) =>
 // toasts stay visible).
 const SetupWizard = ({ session }: Props) => {
   const toast = useToast();
+  const rulesetStatus = useRulesetStatus();
   const insets = useSafeAreaInsets();
   const wizardKey = WIZARD_KEY_PREFIX + session.user.id;
 
   const [visible, setVisible] = useState(false);
   const [step, setStep] = useState<Step>("welcome");
   const [teamId, setTeamId] = useState<string | null>(null);
-  const [rules, setRules] = useState<TeamRulesState | null>(null);
 
-  const [rulesMode, setRulesMode] = useState<RulesMode>("options");
+  const [rulesMode, setRulesMode] = useState<RulesMode>("search");
   const [leagueQuery, setLeagueQuery] = useState("");
   const [leagueResults, setLeagueResults] = useState<LeagueSummary[] | null>(null);
+  // null until the first check completes; false disables search entirely.
+  const [anyLeaguesExist, setAnyLeaguesExist] = useState<boolean | null>(null);
   const [joiningLeagueId, setJoiningLeagueId] = useState<string | null>(null);
-  const [sportDraft, setSportDraft] = useState("");
+  const [sportDraft, setSportDraft] = useState<string | null>(null);
   const [rulesDraft, setRulesDraft] = useState("");
   const [rulesError, setRulesError] = useState<string | null>(null);
   const [isSavingRules, setIsSavingRules] = useState(false);
+  // Sheet shown over the Roster tab after the wizard hands off. `noticeOpen`
+  // drives the sheet's exit animation; `notice` keeps the last copy.
+  const [notice, setNotice] = useState<SetupNotice | null>(null);
+  const [noticeOpen, setNoticeOpen] = useState(false);
+  const noticeOpenRef = useRef(false);
+  noticeOpenRef.current = noticeOpen;
   const [leagueNameDraft, setLeagueNameDraft] = useState("");
-  const [leagueRegionDraft, setLeagueRegionDraft] = useState("");
-  const [similarLeagues, setSimilarLeagues] = useState<LeagueSummary[] | null>(null);
+  const [leaguePlace, setLeaguePlace] = useState<PlaceValue | null>(null);
+  const [segmentCountDraft, setSegmentCountDraft] = useState("");
+  const [playersOnFieldDraft, setPlayersOnFieldDraft] = useState("");
+  const [similarLeagues, setSimilarLeagues] = useState<LeagueSuggestion[] | null>(null);
 
-  const [players, setPlayers] = useState<Player[]>([]);
-  const [nameDraft, setNameDraft] = useState("");
-  const [genderDraft, setGenderDraft] = useState<Gender>("male");
-  const [isAddingPlayer, setIsAddingPlayer] = useState(false);
 
   // Decide once whether this account needs the wizard. A roster with players
   // means the account is already set up (or migrated) - mark done and stay out
@@ -111,33 +221,31 @@ const SetupWizard = ({ session }: Props) => {
     };
   }, [session.user.id, wizardKey]);
 
-  const loadRules = useCallback(async () => {
-    if (!teamId) return;
-    try {
-      setRules(await backendClient.getTeamRules(teamId));
-    } catch (_err) {
-      // Non-fatal: joining a league or saving rules refreshes this anyway.
-    }
-  }, [teamId]);
+  const finish = useCallback(() => {
+    void AsyncStorage.setItem(wizardKey, "done");
+    setVisible(false);
+  }, [wizardKey]);
 
-  useEffect(() => {
-    if (visible) void loadRules();
-  }, [visible, loadRules]);
+  // Rules submitted (or saving): the wizard is over. The coach lands on the
+  // Roster tab to add players while the engine is built; the sheet says why.
+  const handOffToRoster = useCallback((next: SetupNotice) => {
+    setVisible(false);
+    setNotice(next);
+    setNoticeOpen(true);
+    navigateFromRef("Main", { screen: "RosterTab" });
+  }, []);
 
-  const finish = useCallback(
-    (generate: boolean) => {
+  // The server answered after the hand-off. Update the sheet if it is still
+  // up; otherwise a toast carries the same headline.
+  const announceResult = useCallback(
+    (next: SetupNotice) => {
       void AsyncStorage.setItem(wizardKey, "done");
-      setVisible(false);
-      if (generate) {
-        navigateFromRef("Main", {
-          screen: "LineupTab",
-          params: {
-            launch: { id: Date.now(), gameId: null, autoGenerate: true },
-          },
-        });
+      setNotice(next);
+      if (!noticeOpenRef.current) {
+        toast.show({ message: noticeCopy(next).title, type: "info" });
       }
     },
-    [wizardKey],
+    [toast, wizardKey],
   );
 
   const confirmSkip = useCallback(() => {
@@ -146,677 +254,645 @@ const SetupWizard = ({ session }: Props) => {
       "You can set rules from the Rules page and add players from the Roster tab anytime.",
       [
         { text: "Keep going", style: "cancel" },
-        { text: "Set up later", style: "destructive", onPress: () => finish(false) },
+        { text: "Set up later", style: "destructive", onPress: finish },
       ],
     );
   }, [finish]);
 
   // ── Rules step ────────────────────────────────────────────────────────────
 
-  const searchLeagues = useCallback(async () => {
-    try {
-      setLeagueResults(await backendClient.searchLeagues(leagueQuery.trim()));
-    } catch (err) {
-      toast.show({ message: toError(err).message, type: "error" });
-    }
-  }, [leagueQuery, toast]);
+  // An empty query returns the newest leagues, so this doubles as "are there
+  // any leagues at all?" without a dedicated endpoint.
+  useEffect(() => {
+    if (step !== "rules" || anyLeaguesExist !== null) return;
+    let cancelled = false;
+    backendClient
+      .searchLeagues("")
+      .then((leagues) => {
+        if (!cancelled) setAnyLeaguesExist(leagues.length > 0);
+      })
+      .catch(() => {
+        // Leave search enabled if the check fails; a real search surfaces the error.
+        if (!cancelled) setAnyLeaguesExist(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [anyLeaguesExist, step]);
+
+  // Nothing to search when Coachr has no leagues yet: skip straight to the
+  // Create / Own options.
+  useEffect(() => {
+    if (anyLeaguesExist === false && rulesMode === "search") setRulesMode("options");
+  }, [anyLeaguesExist, rulesMode]);
 
   useEffect(() => {
-    if (rulesMode !== "league") return;
-    const timer = setTimeout(() => void searchLeagues(), 250);
+    if (step === "rules") trace("wizard rules mode", { rulesMode, anyLeaguesExist });
+  }, [anyLeaguesExist, rulesMode, step]);
+
+  useEffect(() => {
+    if (rulesMode !== "search") return;
+    const term = leagueQuery.trim();
+    if (!term) {
+      setLeagueResults(null);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        setLeagueResults(await backendClient.searchLeagues(term));
+      } catch (err) {
+        toast.show({ message: toError(err).message, type: "error" });
+      }
+    }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [rulesMode, searchLeagues]);
+  }, [leagueQuery, rulesMode, toast]);
 
   const joinLeague = useCallback(
     async (league: LeagueSummary) => {
-      if (!teamId) return;
+      if (!teamId || joiningLeagueId) return;
       setJoiningLeagueId(league.id);
+      trace("wizard join league", { leagueId: league.id, name: league.name });
       try {
         const next = await backendClient.setTeamLeague(teamId, league.id);
-        setRules(next);
-        toast.show({ message: `Joined ${league.name}.`, type: "success" });
-        setStep("roster");
+        void rulesetStatus.refresh();
+        void AsyncStorage.setItem(wizardKey, "done");
+        handOffToRoster({
+          kind: "joined",
+          leagueName: league.name,
+          status: next.ruleset?.status ?? "baking",
+        });
       } catch (err) {
         toast.show({ message: toError(err).message, type: "error" });
       } finally {
         setJoiningLeagueId(null);
       }
     },
-    [teamId, toast],
+    [handOffToRoster, joiningLeagueId, rulesetStatus, teamId, toast, wizardKey],
   );
 
+  // Mirrors the server's validation so the buttons only enable for a payload
+  // that will pass it.
+  const parsedSegmentCount = parseCount(segmentCountDraft);
+  const parsedPlayersOnField = parseCount(playersOnFieldDraft);
+  const sizeValid = parsedSegmentCount !== null && parsedPlayersOnField !== null;
+  const createValid =
+    leagueNameDraft.trim().length >= 2 &&
+    sportDraft !== null &&
+    leaguePlace !== null &&
+    sizeValid &&
+    rulesDraft.trim().length >= 10;
+  const ownValid = sportDraft !== null && sizeValid && rulesDraft.trim().length >= 10;
+
+  // Both saves are optimistic: the wizard advances to the roster step at once
+  // and the request finishes in the background. A failure bounces the coach
+  // back to the same form with drafts intact and the error shown.
   const createLeague = useCallback(
     async (confirmDistinct: boolean) => {
-      const name = leagueNameDraft.trim();
-      const sport = sportDraft.trim();
-      const text = rulesDraft.trim();
-      if (name.length < 2) {
-        setRulesError("Give the league a name.");
+      if (
+        !teamId ||
+        !createValid ||
+        sportDraft === null ||
+        leaguePlace === null ||
+        parsedSegmentCount === null ||
+        parsedPlayersOnField === null
+      ) {
         return;
       }
-      if (sport.length < 2) {
-        setRulesError("Which sport is this league for?");
-        return;
-      }
-      if (text.length < 10) {
-        setRulesError("Describe the league rules in a few sentences.");
-        return;
-      }
-      if (!teamId) return;
+      const draft: CreateLeagueDraft = {
+        sport: sportDraft,
+        rulesText: rulesDraft.trim(),
+        name: leagueNameDraft.trim(),
+        city: leaguePlace.city,
+        state: leaguePlace.state,
+        zip: leaguePlace.zip,
+        segmentCount: parsedSegmentCount,
+        playersOnField: parsedPlayersOnField,
+        confirmDistinct,
+      };
       setRulesError(null);
+      setSimilarLeagues(null);
       setIsSavingRules(true);
+      handOffToRoster({ kind: "saving" });
+      trace("wizard create league submit", { ...draft, rulesText: draft.rulesText.length + " chars" });
       try {
         const league = await backendClient.createLeague({
-          name,
-          sport,
-          region: leagueRegionDraft.trim() || undefined,
-          rulesText: text,
-          confirmDistinct,
+          name: draft.name,
+          sport: draft.sport,
+          city: draft.city,
+          state: draft.state,
+          zip: draft.zip,
+          segmentCount: draft.segmentCount,
+          playersOnField: draft.playersOnField,
+          rulesText: draft.rulesText,
+          confirmDistinct: draft.confirmDistinct,
         });
-        setSimilarLeagues(null);
-        const next = await backendClient.setTeamLeague(teamId, league.id);
-        setRules(next);
-        toast.show({
-          message:
-            league.status === "active"
-              ? `${league.name} is live. Your team joined.`
-              : `${league.name} created — we'll email you when its rules are ready.`,
-          type: "success",
+        trace("wizard create league ok", {
+          leagueId: league.id,
+          status: league.status,
+          rulesetId: league.ruleset.id,
         });
-        setStep("roster");
+        await backendClient.setTeamLeague(teamId, league.id);
+        void rulesetStatus.refresh();
+        announceResult({ kind: "rules", status: league.status });
       } catch (err) {
+        // Bounce back: reopen the wizard on the form with drafts intact.
+        setNoticeOpen(false);
+        setVisible(true);
+        setStep("rules");
+        setRulesMode("create");
         const similar = getSimilarLeaguesError(err);
+        trace("wizard create league failed", {
+          similar: similar?.map((league) => ({ id: league.id, name: league.name, matchReasons: league.matchReasons })) ?? null,
+          error: similar ? null : toError(err).message,
+        });
         if (similar) {
           setSimilarLeagues(similar);
+          toast.show({
+            message: "Your league may already be on Coachr. Pick it or confirm yours is different.",
+            type: "info",
+          });
           return;
         }
         setRulesError(toError(err).message);
+        toast.show({ message: "We couldn't save your rules.", type: "error" });
       } finally {
         setIsSavingRules(false);
       }
     },
-    [leagueNameDraft, leagueRegionDraft, rulesDraft, sportDraft, teamId, toast],
+    [
+      announceResult,
+      createValid,
+      handOffToRoster,
+      leagueNameDraft,
+      leaguePlace,
+      parsedPlayersOnField,
+      parsedSegmentCount,
+      rulesDraft,
+      rulesetStatus,
+      sportDraft,
+      teamId,
+      toast,
+    ],
   );
 
   const saveOwnRules = useCallback(async () => {
-    const text = rulesDraft.trim();
-    if (!text) {
-      setRulesError("Describe your rules before saving.");
+    if (
+      !teamId ||
+      !ownValid ||
+      sportDraft === null ||
+      parsedSegmentCount === null ||
+      parsedPlayersOnField === null
+    ) {
       return;
     }
-    if (!teamId) return;
+    const draft: OwnRulesDraft = {
+      sport: sportDraft,
+      rulesText: rulesDraft.trim(),
+      segmentCount: parsedSegmentCount,
+      playersOnField: parsedPlayersOnField,
+    };
     setRulesError(null);
+    setSimilarLeagues(null);
     setIsSavingRules(true);
+    handOffToRoster({ kind: "saving" });
+    trace("wizard own rules submit", { ...draft, rulesText: draft.rulesText.length + " chars" });
     try {
       const next = await backendClient.upsertTeamRules(teamId, {
-        rulesText: text,
-        sport: sportDraft.trim() || undefined,
+        rulesText: draft.rulesText,
+        sport: draft.sport,
+        segmentCount: draft.segmentCount,
+        playersOnField: draft.playersOnField,
       });
-      setRules(next);
-      toast.show({
-        message:
-          next.ruleset?.status === "active"
-            ? "Rules are live."
-            : "Rules saved — we're building your lineup engine.",
-        type: next.ruleset?.status === "active" ? "success" : "info",
-      });
-      setStep("roster");
+      void rulesetStatus.refresh();
+      announceResult({ kind: "rules", status: next.ruleset?.status ?? "baking" });
     } catch (err) {
+      setNoticeOpen(false);
+      setVisible(true);
+      setStep("rules");
+      setRulesMode("own");
       setRulesError(toError(err).message);
+      toast.show({ message: "We couldn't save your rules.", type: "error" });
     } finally {
       setIsSavingRules(false);
     }
-  }, [rulesDraft, sportDraft, teamId, toast]);
+  }, [
+    announceResult,
+    handOffToRoster,
+    ownValid,
+    parsedPlayersOnField,
+    parsedSegmentCount,
+    rulesDraft,
+    rulesetStatus,
+    sportDraft,
+    teamId,
+    toast,
+  ]);
 
-  // ── Roster step ───────────────────────────────────────────────────────────
-
-  const rulesConfig = useMemo(() => rulesConfigFromTeamRules(rules), [rules]);
-  const requirements = rules?.ruleset?.spec.roster.requirements ?? [];
-
-  const genderCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    players.forEach((player) => {
-      counts.set(player.gender, (counts.get(player.gender) ?? 0) + 1);
-    });
-    return counts;
-  }, [players]);
-
-  const missing = useMemo(() => {
-    const items: string[] = [];
-    if (players.length < rulesConfig.minimumPlayers) {
-      items.push(`${rulesConfig.minimumPlayers - players.length} more players`);
-    }
-    requirements.forEach((entry) => {
-      const have = genderCounts.get(entry.gender) ?? 0;
-      if (have < entry.min) {
-        items.push(`${entry.min - have} more ${describeGender(entry.gender, entry.min - have)}`);
-      }
-    });
-    return items;
-  }, [genderCounts, players.length, requirements, rulesConfig.minimumPlayers]);
-
-  const addPlayer = useCallback(async () => {
-    const name = nameDraft.trim();
-    if (!name || !teamId) return;
-    if (players.some((player) => player.name.toLowerCase() === name.toLowerCase())) {
-      toast.show({ message: `${name} is already on the roster.`, type: "error" });
-      return;
-    }
-    setIsAddingPlayer(true);
-    try {
-      const player = createPlayer({ name, gender: genderDraft });
-      const { id } = await backendClient.saveTeamPlayer(teamId, player);
-      setPlayers((prev) => [...prev, { ...player, id }]);
-      setNameDraft("");
-    } catch (err) {
-      toast.show({ message: toError(err).message, type: "error" });
-    } finally {
-      setIsAddingPlayer(false);
-    }
-  }, [genderDraft, nameDraft, players, teamId, toast]);
-
-  const removePlayer = useCallback(
-    async (player: Player) => {
-      if (!teamId) return;
-      setPlayers((prev) => prev.filter((entry) => entry.id !== player.id));
-      try {
-        await backendClient.deleteTeamPlayer(teamId, player.id);
-      } catch (err) {
-        setPlayers((prev) => [...prev, player]);
-        toast.show({ message: toError(err).message, type: "error" });
-      }
-    },
-    [teamId, toast],
+  const noticeSheet = (
+    <Sheet
+      visible={noticeOpen && notice !== null}
+      onClose={() => setNoticeOpen(false)}
+      title={notice ? noticeCopy(notice).title : undefined}
+    >
+      {notice ? (
+        <AppText variant="body" color="secondary">
+          {noticeCopy(notice).body}
+        </AppText>
+      ) : null}
+      <Button
+        label="Add players"
+        icon="users"
+        size="lg"
+        fullWidth
+        onPress={() => setNoticeOpen(false)}
+        accessibilityLabel="Close and add players"
+      />
+    </Sheet>
   );
 
-  if (!visible) return null;
+  if (!visible) return noticeSheet;
 
   const stepIndex = STEPS.indexOf(step);
-  const ruleset = rules?.ruleset ?? null;
-  const rulesReady = ruleset?.status === "active";
-  const canGoBack = step === "rules" && rulesMode !== "options";
+  // With no leagues on Coachr the options stage is the root of the rules step.
+  const rulesRoot: RulesMode = anyLeaguesExist === false ? "options" : "search";
+  const inRulesSubMode = step === "rules" && rulesMode !== rulesRoot;
+  const canGoBack = inRulesSubMode || stepIndex > 0;
+
+  const goBack = () => {
+    if (inRulesSubMode) {
+      setSimilarLeagues(null);
+      setRulesError(null);
+      setRulesMode(rulesMode === "options" ? "search" : "options");
+      return;
+    }
+    setStep(STEPS[stepIndex - 1]);
+  };
+
+  const rulesTitles: Record<RulesMode, string> = {
+    search: "Which league do you play in?",
+    options: "Set up your rules",
+    create: "Start a shared league",
+    own: "Write your rules in plain English",
+  };
+  const rulesTitle = rulesTitles[rulesMode];
+
+  const footerPadding = { paddingBottom: Math.max(insets.bottom, space.md) };
 
   // The overlay is absolutely positioned, so the parent SafeAreaView's padding
   // doesn't reach it - it needs the top inset itself.
   return (
     <View style={[styles.root, { paddingTop: insets.top + space.sm }]}>
+      <AmbientBackground />
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           {canGoBack ? (
             <AppPressable
-              onPress={() => {
-                setSimilarLeagues(null);
-                setRulesMode("options");
-              }}
+              onPress={goBack}
               style={styles.backChevron}
+              pressScale={1}
               accessibilityRole="button"
-              accessibilityLabel="Back to rules options"
+              accessibilityLabel="Back"
             >
               <Feather name="chevron-left" size={22} color={theme.text.primary} />
             </AppPressable>
           ) : null}
-          <View style={styles.dots} accessibilityLabel={`Step ${stepIndex + 1} of ${STEPS.length}`}>
+          <View
+            style={styles.progress}
+            accessibilityLabel={`Step ${stepIndex + 1} of ${STEPS.length}`}
+          >
             {STEPS.map((name, index) => (
               <View
                 key={name}
-                style={[styles.dot, index <= stepIndex && styles.dotActive]}
+                style={[styles.progressBar, index <= stepIndex && styles.progressBarActive]}
               />
             ))}
           </View>
         </View>
-        {step !== "ready" ? (
-          <Button
-            label="Set up later"
-            variant="ghost"
-            size="sm"
-            onPress={confirmSkip}
-            accessibilityLabel="Finish setup later"
-          />
-        ) : null}
+        <Button
+          label="Set up later"
+          variant="secondary"
+          size="sm"
+          onPress={confirmSkip}
+          accessibilityLabel="Finish setup later"
+        />
       </View>
 
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
-      <ScrollView
-        style={styles.flex}
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-      >
-        {step === "welcome" ? (
-          <Reveal style={styles.stack}>
-            <AppText variant="caption" family="heading" color="accent" style={styles.eyebrow}>
-              Welcome to Coachr
-            </AppText>
-            <AppText variant="display" family="display">
-              Let's get your first lineup ready
-            </AppText>
-            <AppText variant="bodyLg" color="secondary">
-              Two quick things and you're generating: your rules, then your players.
-            </AppText>
-            <View style={styles.checklist}>
-              {[
-                { icon: "sliders" as const, label: "Rules", detail: "Join or create your league, or write your own" },
-                { icon: "users" as const, label: "Roster", detail: "Add your players" },
-                { icon: "zap" as const, label: "Lineup", detail: "Generate a fair lineup instantly" },
-              ].map((item) => (
-                <View key={item.label} style={styles.checkRow}>
-                  <View style={styles.checkIcon}>
-                    <Feather name={item.icon} size={15} color={theme.accent.base} />
+        <ScrollView
+          style={styles.flex}
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+        >
+          {step === "welcome" ? (
+            <Reveal style={styles.stack}>
+              <AppText variant="caption" family="heading" color="accent" style={styles.eyebrow}>
+                Welcome to Coachr
+              </AppText>
+              <AppText style={styles.heroTitle}>Let's get your first lineup ready</AppText>
+              <AppText variant="bodyLg" color="secondary">
+                One quick step: your rules. Then add your players and you're generating.
+              </AppText>
+              <View style={styles.checklist}>
+                {WELCOME_ITEMS.map((item, index) => (
+                  <View key={item.label} style={styles.checkRow}>
+                    <View style={styles.numberCircle}>
+                      <AppText variant="bodyLg" family="display" color="accent">
+                        {index + 1}
+                      </AppText>
+                    </View>
+                    <View style={styles.checkText}>
+                      <AppText variant="bodyLg" family="heading">
+                        {item.label}
+                      </AppText>
+                      <AppText variant="caption" color="secondary">
+                        {item.detail}
+                      </AppText>
+                    </View>
                   </View>
-                  <View style={styles.checkText}>
-                    <AppText variant="bodyLg" family="heading">
-                      {item.label}
-                    </AppText>
+                ))}
+              </View>
+            </Reveal>
+          ) : null}
+
+          {step === "rules" ? (
+            <Reveal key={rulesMode} style={styles.stack}>
+              <AppText variant="caption" family="heading" color="accent" style={styles.eyebrow}>
+                Rules
+              </AppText>
+              <AppText variant="display" family="display" style={styles.title}>
+                {rulesTitle}
+              </AppText>
+
+              {rulesMode === "search" ? (
+                <View style={styles.stack}>
+                  <Input
+                    value={leagueQuery}
+                    onChangeText={setLeagueQuery}
+                    placeholder="Search by league name or zip"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    returnKeyType="search"
+                    highlighted={leagueQuery.trim().length > 0}
+                    left={<Feather name="search" size={16} color={theme.accent.base} />}
+                    accessibilityLabel="Search leagues"
+                  />
+                  {leagueResults && leagueResults.length > 0 ? (
+                    <ListGroup>
+                      {leagueResults.slice(0, 6).map((league) => (
+                        <LeagueRow
+                          key={league.id}
+                          league={league}
+                          onPress={() => void joinLeague(league)}
+                          action={{ label: "Join", busy: joiningLeagueId === league.id }}
+                        />
+                      ))}
+                    </ListGroup>
+                  ) : null}
+                  {leagueResults && leagueResults.length === 0 ? (
                     <AppText variant="caption" color="secondary">
-                      {item.detail}
+                      No leagues match "{leagueQuery.trim()}" yet.
                     </AppText>
-                  </View>
+                  ) : null}
+                  {!leagueResults ? (
+                    <AppText variant="caption" color="secondary">
+                      If it's on Coachr, you get its rules instantly.
+                    </AppText>
+                  ) : null}
+
+                  <AppPressable
+                    onPress={() => {
+                      if (!leagueNameDraft && leagueQuery.trim()) {
+                        setLeagueNameDraft(leagueQuery.trim());
+                      }
+                      setRulesMode("options");
+                    }}
+                    pressScale={motion.pressScale}
+                    style={styles.linkRow}
+                    accessibilityRole="button"
+                    accessibilityLabel="League not here? Set up your rules another way"
+                  >
+                    <AppText variant="body" family="heading" color="accent">
+                      League not here?
+                    </AppText>
+                    <Feather name="chevron-right" size={16} color={theme.accent.base} />
+                  </AppPressable>
                 </View>
-              ))}
-            </View>
+              ) : null}
+
+              {rulesMode === "options" ? (
+                <View style={styles.stack}>
+                  <AppText variant="body" color="secondary">
+                    {anyLeaguesExist === false
+                      ? "Be the first league on Coachr."
+                      : "Create your league once so every team in it can join, or keep rules to your own team."}
+                  </AppText>
+                  <OptionRow
+                    icon="plus"
+                    title="Create a league"
+                    detail="Every team in it can use your rules"
+                    onPress={() => setRulesMode("create")}
+                  />
+                  <OptionRow
+                    icon="edit-3"
+                    title="Write my own rules"
+                    detail="Just your team, plain English"
+                    onPress={() => setRulesMode("own")}
+                  />
+                  {anyLeaguesExist !== false ? (
+                    <AppPressable
+                      onPress={() => setRulesMode("search")}
+                      pressScale={motion.pressScale}
+                      style={styles.linkRow}
+                      accessibilityRole="button"
+                      accessibilityLabel="Back to search"
+                    >
+                      <Feather name="chevron-left" size={16} color={theme.accent.base} />
+                      <AppText variant="body" family="heading" color="accent">
+                        Back to search
+                      </AppText>
+                    </AppPressable>
+                  ) : null}
+                </View>
+              ) : null}
+
+              {rulesMode === "create" ? (
+                <View style={styles.stack}>
+                  <Input
+                    label="League name"
+                    value={leagueNameDraft}
+                    onChangeText={(value) => {
+                      setLeagueNameDraft(value);
+                      setSimilarLeagues(null);
+                    }}
+                    placeholder="Austin Coed Softball"
+                    accessibilityLabel="League name"
+                  />
+                  <SportPicker
+                    value={sportDraft}
+                    onChange={(code) => {
+                      setSportDraft(code);
+                      setSimilarLeagues(null);
+                    }}
+                  />
+                  <PlaceSearch
+                    value={leaguePlace}
+                    onChange={(next) => {
+                      setLeaguePlace(next);
+                      setSimilarLeagues(null);
+                    }}
+                  />
+                  <View style={styles.fieldRow}>
+                    <Input
+                      label="Innings or periods"
+                      value={segmentCountDraft}
+                      onChangeText={(value) => setSegmentCountDraft(digitsOnly(value, 2))}
+                      placeholder="7"
+                      keyboardType="number-pad"
+                      maxLength={2}
+                      containerStyle={styles.flex}
+                      accessibilityLabel="Innings or periods"
+                    />
+                    <Input
+                      label="Players on field"
+                      value={playersOnFieldDraft}
+                      onChangeText={(value) => setPlayersOnFieldDraft(digitsOnly(value, 2))}
+                      placeholder="10"
+                      keyboardType="number-pad"
+                      maxLength={2}
+                      containerStyle={styles.flex}
+                      accessibilityLabel="Players on the field"
+                    />
+                  </View>
+                  <Input
+                    label="League rules"
+                    value={rulesDraft}
+                    onChangeText={(value) => {
+                      setRulesDraft(value);
+                      if (rulesError) setRulesError(null);
+                    }}
+                    placeholder="7 innings, 10 on the field, at least 3 women, nobody sits twice in a row…"
+                    multiline
+                    textAlignVertical="top"
+                    style={styles.textareaCreate}
+                    error={rulesError}
+                    hint={RULES_HINT}
+                    accessibilityLabel="League rules"
+                  />
+                  {similarLeagues ? (
+                    <View style={styles.stack}>
+                      <AppText variant="bodyLg" family="heading">
+                        Is your league one of these?
+                      </AppText>
+                      <AppText variant="caption" color="secondary">
+                        Same sport in your zip, or a similar name. Join it, or confirm
+                        yours is different.
+                      </AppText>
+                      <ListGroup>
+                        {similarLeagues.slice(0, 3).map((league) => (
+                          <LeagueRow
+                            key={league.id}
+                            league={league}
+                            tags={describeMatchReasons(league.matchReasons)}
+                            onPress={() => void joinLeague(league)}
+                            action={{ label: "Join", busy: joiningLeagueId === league.id }}
+                          />
+                        ))}
+                      </ListGroup>
+                      <Button
+                        label="Mine is different — create it"
+                        variant="secondary"
+                        loading={isSavingRules}
+                        onPress={() => void createLeague(true)}
+                        accessibilityLabel="Create the league anyway"
+                      />
+                    </View>
+                  ) : (
+                    <Button
+                      label="Create league"
+                      size="lg"
+                      fullWidth
+                      loading={isSavingRules}
+                      disabled={!createValid}
+                      onPress={() => void createLeague(false)}
+                      accessibilityLabel="Create league"
+                    />
+                  )}
+                </View>
+              ) : null}
+
+              {rulesMode === "own" ? (
+                <View style={styles.stack}>
+                  <SportPicker value={sportDraft} onChange={setSportDraft} />
+                  <View style={styles.fieldRow}>
+                    <Input
+                      label="Innings or periods"
+                      value={segmentCountDraft}
+                      onChangeText={(value) => setSegmentCountDraft(digitsOnly(value, 2))}
+                      placeholder="7"
+                      keyboardType="number-pad"
+                      maxLength={2}
+                      containerStyle={styles.flex}
+                      accessibilityLabel="Innings or periods"
+                    />
+                    <Input
+                      label="Players on field"
+                      value={playersOnFieldDraft}
+                      onChangeText={(value) => setPlayersOnFieldDraft(digitsOnly(value, 2))}
+                      placeholder="10"
+                      keyboardType="number-pad"
+                      maxLength={2}
+                      containerStyle={styles.flex}
+                      accessibilityLabel="Players on the field"
+                    />
+                  </View>
+                  <Input
+                    label="Rules"
+                    value={rulesDraft}
+                    onChangeText={(value) => {
+                      setRulesDraft(value);
+                      if (rulesError) setRulesError(null);
+                    }}
+                    placeholder="e.g. 6 innings, 9 on the field (P, C, 1B, 2B, 3B, SS, LF, CF, RF), nobody sits twice in a row."
+                    multiline
+                    textAlignVertical="top"
+                    style={styles.textareaOwn}
+                    error={rulesError}
+                    hint={RULES_HINT}
+                    accessibilityLabel="Team rules"
+                  />
+                  <Button
+                    label="Save rules"
+                    size="lg"
+                    fullWidth
+                    loading={isSavingRules}
+                    disabled={!ownValid}
+                    onPress={() => void saveOwnRules()}
+                    accessibilityLabel="Save rules"
+                  />
+                </View>
+              ) : null}
+            </Reveal>
+          ) : null}
+
+        </ScrollView>
+
+        {step === "welcome" ? (
+          <View style={[styles.footer, footerPadding]}>
             <Button
               label="Set up my team"
-              icon="arrow-right"
               size="lg"
               fullWidth
               onPress={() => setStep("rules")}
               accessibilityLabel="Start setup"
             />
-          </Reveal>
+          </View>
         ) : null}
 
-        {step === "rules" ? (
-          <Reveal style={styles.stack}>
-            <AppText variant="caption" family="heading" color="accent" style={styles.eyebrow}>
-              Step 1 · Rules
-            </AppText>
-            <AppText variant="title" family="display">
-              How does your team play?
-            </AppText>
-
-            {rulesMode === "options" ? (
-              <View style={styles.stack}>
-                <Card onPress={() => setRulesMode("league")} accessibilityLabel="Join my league">
-                  <View style={styles.optionRow}>
-                    <View style={styles.optionIcon}>
-                      <Feather name="search" size={17} color={theme.accent.base} />
-                    </View>
-                    <View style={styles.optionText}>
-                      <AppText variant="bodyLg" family="heading">
-                        Join my league
-                      </AppText>
-                      <AppText variant="caption" color="secondary">
-                        If it's on Coachr, you get its rules instantly.
-                      </AppText>
-                    </View>
-                    <Feather name="chevron-right" size={18} color={theme.text.secondary} />
-                  </View>
-                </Card>
-                <Card onPress={() => setRulesMode("create")} accessibilityLabel="Create my league">
-                  <View style={styles.optionRow}>
-                    <View style={styles.optionIcon}>
-                      <Feather name="plus-circle" size={17} color={theme.accent.base} />
-                    </View>
-                    <View style={styles.optionText}>
-                      <AppText variant="bodyLg" family="heading">
-                        Create my league
-                      </AppText>
-                      <AppText variant="caption" color="secondary">
-                        Set it up once — every team in your league can use it.
-                      </AppText>
-                    </View>
-                    <Feather name="chevron-right" size={18} color={theme.text.secondary} />
-                  </View>
-                </Card>
-                <Card onPress={() => setRulesMode("own")} accessibilityLabel="Write my own rules">
-                  <View style={styles.optionRow}>
-                    <View style={styles.optionIcon}>
-                      <Feather name="edit-3" size={17} color={theme.accent.base} />
-                    </View>
-                    <View style={styles.optionText}>
-                      <AppText variant="bodyLg" family="heading">
-                        Write my own rules
-                      </AppText>
-                      <AppText variant="caption" color="secondary">
-                        No league — just your team. Plain English rules.
-                      </AppText>
-                    </View>
-                    <Feather name="chevron-right" size={18} color={theme.text.secondary} />
-                  </View>
-                </Card>
-              </View>
-            ) : null}
-
-            {rulesMode === "league" ? (
-              <View style={styles.stack}>
-                <Input
-                  value={leagueQuery}
-                  onChangeText={setLeagueQuery}
-                  placeholder="Search by league name or region"
-                  autoFocus
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  left={<Feather name="search" size={16} color={theme.text.secondary} />}
-                  accessibilityLabel="Search leagues"
-                />
-                {leagueResults && leagueResults.length > 0
-                  ? leagueResults.slice(0, 6).map((league) => (
-                      <LeagueRow
-                        key={league.id}
-                        league={league}
-                        onPress={() => {
-                          if (!joiningLeagueId) void joinLeague(league);
-                        }}
-                      />
-                    ))
-                  : null}
-                {leagueResults && leagueResults.length === 0 ? (
-                  <AppText variant="body" color="secondary">
-                    No leagues match{leagueQuery.trim() ? ` "${leagueQuery.trim()}"` : ""} yet.
-                    Be the first — create it and every team in your league can join.
-                  </AppText>
-                ) : null}
-                <Button
-                  label="Create it instead"
-                  variant="secondary"
-                  size="sm"
-                  onPress={() => {
-                    if (leagueQuery.trim()) setLeagueNameDraft(leagueQuery.trim());
-                    setRulesMode("create");
-                  }}
-                  accessibilityLabel="Create this league instead"
-                />
-              </View>
-            ) : null}
-
-            {rulesMode === "create" ? (
-              <View style={styles.stack}>
-                <Input
-                  label="League name"
-                  value={leagueNameDraft}
-                  onChangeText={setLeagueNameDraft}
-                  placeholder="Austin Coed Kickball"
-                  accessibilityLabel="League name"
-                />
-                <Input
-                  label="Sport"
-                  value={sportDraft}
-                  onChangeText={setSportDraft}
-                  placeholder="softball, kickball, soccer…"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  accessibilityLabel="League sport"
-                />
-                <Input
-                  label="Region (optional)"
-                  value={leagueRegionDraft}
-                  onChangeText={setLeagueRegionDraft}
-                  placeholder="Austin, TX"
-                  accessibilityLabel="League region"
-                />
-                <Input
-                  label="League rules"
-                  value={rulesDraft}
-                  onChangeText={(value) => {
-                    setRulesDraft(value);
-                    if (rulesError) setRulesError(null);
-                  }}
-                  placeholder="e.g. 6 innings, 9 on the field (P, C, 1B, 2B, 3B, SS, LF, CF, RF), nobody sits twice in a row."
-                  multiline
-                  textAlignVertical="top"
-                  style={styles.textarea}
-                  error={rulesError}
-                  hint="Simple rules go live instantly. Unusual ones get a custom engine built in a few minutes."
-                  accessibilityLabel="League rules"
-                />
-                {similarLeagues ? (
-                  <View style={styles.stack}>
-                    <AppText variant="body" color="secondary">
-                      A league with a similar name already exists. Yours, or a
-                      different one?
-                    </AppText>
-                    {similarLeagues.slice(0, 3).map((league) => (
-                      <LeagueRow
-                        key={league.id}
-                        league={league}
-                        onPress={() => {
-                          if (!joiningLeagueId) void joinLeague(league);
-                        }}
-                      />
-                    ))}
-                    <Button
-                      label="Mine is different — create it"
-                      variant="secondary"
-                      loading={isSavingRules}
-                      onPress={() => void createLeague(true)}
-                      accessibilityLabel="Create the league anyway"
-                    />
-                  </View>
-                ) : (
-                  <Button
-                    label="Create league"
-                    icon="check"
-                    fullWidth
-                    loading={isSavingRules}
-                    onPress={() => void createLeague(false)}
-                    accessibilityLabel="Create league"
-                  />
-                )}
-              </View>
-            ) : null}
-
-            {rulesMode === "own" ? (
-              <View style={styles.stack}>
-                <Input
-                  label="Sport"
-                  value={sportDraft}
-                  onChangeText={setSportDraft}
-                  placeholder="softball, kickball, soccer…"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  accessibilityLabel="Sport"
-                />
-                <Input
-                  label="Rules"
-                  value={rulesDraft}
-                  onChangeText={(value) => {
-                    setRulesDraft(value);
-                    if (rulesError) setRulesError(null);
-                  }}
-                  placeholder="e.g. 6 innings, 9 on the field (P, C, 1B, 2B, 3B, SS, LF, CF, RF), nobody sits twice in a row."
-                  multiline
-                  textAlignVertical="top"
-                  style={styles.textarea}
-                  error={rulesError}
-                  hint="Simple rules go live instantly. Unusual ones get a custom engine built in a few minutes."
-                  accessibilityLabel="Team rules"
-                />
-                <Button
-                  label="Save rules"
-                  icon="check"
-                  fullWidth
-                  loading={isSavingRules}
-                  onPress={() => void saveOwnRules()}
-                  accessibilityLabel="Save rules"
-                />
-              </View>
-            ) : null}
-          </Reveal>
-        ) : null}
-
-        {step === "roster" ? (
-          <Reveal style={styles.stack}>
-            <AppText variant="caption" family="heading" color="accent" style={styles.eyebrow}>
-              Step 2 · Roster
-            </AppText>
-            <AppText variant="title" family="display">
-              Add your players
-            </AppText>
-            <AppText variant="body" color="secondary">
-              {missing.length > 0
-                ? `Your rules need ${missing.join(" and ")}.`
-                : "That's enough to generate. Add the rest whenever."}
-            </AppText>
-
-            <View style={styles.addRow}>
-              <Input
-                value={nameDraft}
-                onChangeText={setNameDraft}
-                placeholder="Player name"
-                containerStyle={styles.flex}
-                returnKeyType="done"
-                onSubmitEditing={() => void addPlayer()}
-                accessibilityLabel="Player name"
-              />
-              <View style={styles.genderToggle}>
-                {(["male", "female"] as const).map((gender) => (
-                  <AppPressable
-                    key={gender}
-                    onPress={() => setGenderDraft(gender)}
-                    style={[
-                      styles.genderOption,
-                      genderDraft === gender && styles.genderOptionActive,
-                    ]}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: genderDraft === gender }}
-                    accessibilityLabel={gender === "male" ? "Man" : "Woman"}
-                  >
-                    <AppText
-                      variant="caption"
-                      family="heading"
-                      color={genderDraft === gender ? "accent" : "secondary"}
-                    >
-                      {gender === "male" ? "M" : "W"}
-                    </AppText>
-                  </AppPressable>
-                ))}
-              </View>
-              <Button
-                label="Add"
-                onPress={() => void addPlayer()}
-                loading={isAddingPlayer}
-                disabled={!nameDraft.trim()}
-                accessibilityLabel="Add player"
-              />
-            </View>
-
-            <View style={styles.playerWrap}>
-              {players.map((player) => (
-                <AppPressable
-                  key={player.id}
-                  onPress={() => void removePlayer(player)}
-                  style={styles.playerChip}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Remove ${player.name}`}
-                >
-                  <View
-                    style={[
-                      styles.genderDot,
-                      { backgroundColor: player.gender === "female" ? "#c96f95" : theme.accent.base },
-                    ]}
-                  />
-                  <AppText variant="caption" family="heading">
-                    {player.name}
-                  </AppText>
-                  <Feather name="x" size={13} color={theme.text.secondary} />
-                </AppPressable>
-              ))}
-              {players.length === 0 ? (
-                <AppText variant="caption" color="muted">
-                  Nobody yet. You can also import a spreadsheet later from the Roster tab.
-                </AppText>
-              ) : null}
-            </View>
-
-            <Button
-              label={
-                missing.length > 0
-                  ? `${players.length} of ${rulesConfig.minimumPlayers} players`
-                  : "Continue"
-              }
-              icon={missing.length > 0 ? undefined : "arrow-right"}
-              size="lg"
-              fullWidth
-              disabled={missing.length > 0}
-              onPress={() => setStep("ready")}
-              accessibilityLabel="Continue to the last step"
-            />
-          </Reveal>
-        ) : null}
-
-        {step === "ready" ? (
-          <Reveal style={styles.stack}>
-            <AppText variant="caption" family="heading" color="accent" style={styles.eyebrow}>
-              Step 3 · Lineup
-            </AppText>
-            <AppText variant="display" family="display">
-              {rulesReady ? "You're ready" : "Almost there"}
-            </AppText>
-            <Card>
-              <View style={styles.summary}>
-                <View style={styles.summaryRow}>
-                  <Feather name="sliders" size={15} color={theme.text.secondary} />
-                  <AppText variant="body" style={styles.flex}>
-                    {rules?.league
-                      ? `${rules.league.name} rules`
-                      : ruleset
-                        ? `Your ${capitalize(ruleset.sport)} rules`
-                        : "Your rules"}
-                  </AppText>
-                  <AppText
-                    variant="caption"
-                    family="heading"
-                    color={rulesReady ? "success" : "accent"}
-                  >
-                    {rulesReady ? "Ready" : capitalize(ruleset?.status ?? "active")}
-                  </AppText>
-                </View>
-                <View style={styles.summaryRow}>
-                  <Feather name="users" size={15} color={theme.text.secondary} />
-                  <AppText variant="body" style={styles.flex}>
-                    {players.length} players on the roster
-                  </AppText>
-                  <AppText variant="caption" family="heading" color="success">
-                    Ready
-                  </AppText>
-                </View>
-              </View>
-            </Card>
-            {ruleset && ruleset.status !== "active" ? (
-              <RulesetStatusBanner status={ruleset.status} />
-            ) : null}
-            {rulesReady ? (
-              <Button
-                label="Generate my first lineup"
-                icon="zap"
-                size="lg"
-                fullWidth
-                onPress={() => finish(true)}
-                accessibilityLabel="Generate my first lineup"
-              />
-            ) : (
-              <Button
-                label="Finish setup"
-                icon="check"
-                size="lg"
-                fullWidth
-                onPress={() => finish(false)}
-                accessibilityLabel="Finish setup"
-              />
-            )}
-            <Button
-              label="I'll explore on my own"
-              variant="ghost"
-              size="sm"
-              onPress={() => finish(false)}
-              accessibilityLabel="Close setup"
-            />
-          </Reveal>
-        ) : null}
-      </ScrollView>
       </KeyboardAvoidingView>
+      {noticeSheet}
     </View>
   );
 };
@@ -849,41 +925,55 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  dots: {
+  progress: {
     flexDirection: "row",
     gap: space.xs,
   },
-  dot: {
+  progressBar: {
     width: 22,
     height: 4,
-    borderRadius: radius.pill,
+    borderRadius: 2,
     backgroundColor: theme.border.base,
   },
-  dotActive: {
+  progressBarActive: {
     backgroundColor: theme.accent.base,
   },
   content: {
     paddingHorizontal: space.md,
     paddingTop: space.lg,
-    paddingBottom: space.xl,
+    paddingBottom: space.lg,
+  },
+  footer: {
+    paddingHorizontal: space.md,
+    paddingTop: space.sm,
+    gap: space.xs,
   },
   stack: {
     gap: space.sm,
   },
   eyebrow: {
     textTransform: "uppercase",
-    letterSpacing: 1.2,
+    letterSpacing: 1.4,
+  },
+  title: {
+    letterSpacing: -0.2,
+  },
+  heroTitle: {
+    fontFamily: typeface.display,
+    fontSize: 32,
+    lineHeight: 38,
+    letterSpacing: -0.4,
   },
   checklist: {
-    gap: space.sm,
-    paddingVertical: space.sm,
+    gap: space.md,
+    paddingVertical: space.md,
   },
   checkRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: space.sm,
   },
-  checkIcon: {
+  numberCircle: {
     width: 36,
     height: 36,
     borderRadius: radius.pill,
@@ -894,6 +984,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   checkText: {
+    flex: 1,
     gap: 2,
   },
   optionRow: {
@@ -902,8 +993,8 @@ const styles = StyleSheet.create({
     gap: space.sm,
   },
   optionIcon: {
-    width: 36,
-    height: 36,
+    width: 34,
+    height: 34,
     borderRadius: radius.pill,
     backgroundColor: theme.accent.subtle,
     alignItems: "center",
@@ -913,58 +1004,23 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 2,
   },
-  textarea: {
-    minHeight: 110,
-  },
-  addRow: {
+  linkRow: {
     flexDirection: "row",
-    gap: space.xs,
-    alignItems: "flex-start",
-  },
-  genderToggle: {
-    flexDirection: "row",
-    borderWidth: 1,
-    borderColor: theme.border.base,
-    borderRadius: radius.md,
-    overflow: "hidden",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: space.xxs,
+    paddingVertical: space.xs,
     minHeight: 44,
   },
-  genderOption: {
-    paddingHorizontal: space.sm,
-    justifyContent: "center",
-  },
-  genderOptionActive: {
-    backgroundColor: theme.accent.subtle,
-  },
-  playerWrap: {
+  fieldRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: space.xs,
-    minHeight: 34,
-  },
-  playerChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: space.xxs,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: theme.border.base,
-    backgroundColor: theme.bg.raised,
-    paddingHorizontal: space.sm,
-    minHeight: 34,
-  },
-  genderDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-  },
-  summary: {
     gap: space.sm,
   },
-  summaryRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: space.sm,
+  textareaCreate: {
+    minHeight: 120,
+  },
+  textareaOwn: {
+    minHeight: 150,
   },
 });
 

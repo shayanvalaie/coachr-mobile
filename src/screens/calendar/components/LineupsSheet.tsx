@@ -12,8 +12,6 @@ import { radius, space } from "../../../theme/tokens";
 import { InningAssignment } from "../../../types/lineup";
 import { formatDateTime, normalizeLineupRows } from "../../../utils/lineupTransforms";
 
-const STATIC_EXPANDED_INNINGS = new Set<number>();
-
 type Props = {
   visible: boolean;
   onClose: () => void;
@@ -188,8 +186,6 @@ const LineupsSheet = ({
                         >
                           <LineUp
                             lineup={displayRows}
-                            expandedInnings={STATIC_EXPANDED_INNINGS}
-                            onToggleInning={() => {}}
                             editable={isEditing}
                             playerGenderByName={playerGenderByName}
                             onSetPlayerPosition={(inning, playerName, targetPosition) =>
@@ -260,7 +256,7 @@ const styles = StyleSheet.create({
   slide: {
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: theme.border.base,
+    borderColor: theme.border.subtle,
     backgroundColor: theme.bg.elevated,
     padding: space.sm,
     gap: space.xxs,

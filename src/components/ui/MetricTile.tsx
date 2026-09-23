@@ -1,30 +1,26 @@
-import { StyleSheet } from "react-native";
+import { StyleProp, StyleSheet, View, ViewStyle } from "react-native";
 import { theme } from "../../theme/colors";
-import { radius, space } from "../../theme/tokens";
+import { motion, radius, shadow, space } from "../../theme/tokens";
+import { typeface } from "../../theme/typography";
 import AppPressable from "./AppPressable";
 import AppText from "./AppText";
-import Card from "./Card";
 
 type Props = {
   label: string;
   value: string | number;
-  small?: boolean;
   onPress?: () => void;
+  accessibilityHint?: string;
+  style?: StyleProp<ViewStyle>;
 };
 
-const MetricTile = ({ label, value, small = false, onPress }: Props) => {
+// Big number, quiet label. Tappable tiles are shortcuts to the screen that
+// owns the number (roster count -> Roster, innings -> Rules).
+const MetricTile = ({ label, value, onPress, accessibilityHint, style }: Props) => {
   const inner = (
     <>
-      <AppText
-        variant="caption"
-        family="heading"
-        color="secondary"
-        style={styles.label}
-      >
+      <AppText style={styles.value}>{String(value)}</AppText>
+      <AppText color="secondary" style={styles.label}>
         {label}
-      </AppText>
-      <AppText variant={small ? "title" : "display"} family="display">
-        {String(value)}
       </AppText>
     </>
   );
@@ -35,19 +31,16 @@ const MetricTile = ({ label, value, small = false, onPress }: Props) => {
         onPress={onPress}
         accessibilityRole="button"
         accessibilityLabel={`${label}: ${value}`}
-        style={styles.tile}
-        pressScale={0.98}
+        accessibilityHint={accessibilityHint}
+        style={[styles.tile, style]}
+        pressScale={motion.pressScale}
       >
         {inner}
       </AppPressable>
     );
   }
 
-  return (
-    <Card variant="raised" padding="sm" style={styles.card}>
-      {inner}
-    </Card>
-  );
+  return <View style={[styles.tile, style]}>{inner}</View>;
 };
 
 const styles = StyleSheet.create({
@@ -55,18 +48,22 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.bg.raised,
     borderWidth: 1,
-    borderColor: theme.border.base,
+    borderColor: theme.border.subtle,
     borderRadius: radius.lg,
-    padding: space.sm,
-    gap: space.xxs,
+    paddingVertical: space.sm + 2,
+    paddingHorizontal: space.sm + 2,
+    gap: 2,
+    ...shadow.card,
   },
-  card: {
-    flex: 1,
-    gap: space.xxs,
+  value: {
+    fontFamily: typeface.display,
+    fontSize: 24,
+    lineHeight: 28,
+    letterSpacing: -0.2,
   },
   label: {
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
+    fontSize: 12,
+    lineHeight: 16,
   },
 });
 

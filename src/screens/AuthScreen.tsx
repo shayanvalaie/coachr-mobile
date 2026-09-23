@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Keyboard, StyleSheet, TouchableWithoutFeedback, View } from "react-native";
 import AuthForm from "../components/auth/AuthForm";
 import AuthHeader from "../components/auth/AuthHeader";
-import { Card, Reveal, ScreenContainer } from "../components/ui";
+import { Reveal, ScreenContainer } from "../components/ui";
 import { space } from "../theme/tokens";
 import { AuthMode } from "../types/auth";
 import { backendClient } from "../lib/backend/client";
@@ -163,14 +163,18 @@ const AuthScreen = () => {
   };
 
   return (
-    <ScreenContainer keyboard scroll contentStyle={styles.scrollContent}>
+    <ScreenContainer
+      keyboard
+      scroll
+      floatingTabBar={false}
+      contentStyle={styles.scrollContent}
+    >
       <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-        <View style={styles.centerWrap}>
-          {/* First thing shown after boot — ease the card in rather than
-              popping it. Mount-only, so mode/verification swaps stay still. */}
-          <Reveal>
-          <Card variant="elevated" padding="lg" style={styles.card}>
-            <AuthHeader mode={mode} />
+        <View style={styles.column}>
+          {/* First thing shown after boot - ease it in rather than popping.
+              Mount-only, so mode/verification swaps stay still. */}
+          <Reveal style={styles.stack}>
+            <AuthHeader />
             <AuthForm
               mode={mode}
               email={email}
@@ -190,7 +194,6 @@ const AuthScreen = () => {
               onCancelVerification={handleCancelVerification}
               onToggleMode={handleToggleMode}
             />
-          </Card>
           </Reveal>
         </View>
       </TouchableWithoutFeedback>
@@ -202,13 +205,19 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
   },
-  centerWrap: {
+  // Full-bleed, no card. Brand and form read as one centered column: the empty
+  // space frames it above and below rather than collecting in a gap between
+  // the two, and the group holds still when the form grows (sign-up's third
+  // input, the verification step) instead of shoving the wordmark around.
+  // Slightly more top padding than bottom keeps the CTA in easy thumb reach.
+  column: {
     flex: 1,
     justifyContent: "center",
-    paddingVertical: space.lg,
+    paddingTop: space.xl * 2,
+    paddingBottom: space.xl,
   },
-  card: {
-    gap: space.sm,
+  stack: {
+    gap: space.xl * 2,
   },
 });
 

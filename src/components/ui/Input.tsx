@@ -18,12 +18,30 @@ type Props = TextInputProps & {
   hint?: string;
   left?: ReactNode;
   right?: ReactNode;
+  // Keeps the accent border on while unfocused (e.g. a search field that
+  // currently has a query).
+  highlighted?: boolean;
   containerStyle?: StyleProp<ViewStyle>;
 };
 
-// Label above, error below, accent focus border. Never placeholder-as-label.
+// Recessed field: darker than the surface it sits on, accent border on focus.
 const Input = forwardRef<TextInput, Props>(
-  ({ label, error, hint, left, right, containerStyle, style, onFocus, onBlur, ...rest }, ref) => {
+  (
+    {
+      label,
+      error,
+      hint,
+      left,
+      right,
+      highlighted = false,
+      containerStyle,
+      style,
+      onFocus,
+      onBlur,
+      ...rest
+    },
+    ref,
+  ) => {
     const [focused, setFocused] = useState(false);
 
     return (
@@ -36,7 +54,7 @@ const Input = forwardRef<TextInput, Props>(
         <View
           style={[
             styles.field,
-            focused && styles.fieldFocused,
+            (focused || highlighted) && styles.fieldFocused,
             !!error && styles.fieldError,
           ]}
         >
@@ -80,12 +98,12 @@ const styles = StyleSheet.create({
   field: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: theme.bg.elevated,
+    backgroundColor: theme.bg.recessed,
     borderWidth: 1,
-    borderColor: theme.border.base,
+    borderColor: theme.border.glass,
     borderRadius: radius.md,
     paddingHorizontal: space.sm,
-    minHeight: 44,
+    minHeight: 46,
   },
   fieldFocused: {
     borderColor: theme.accent.subtleBorder,

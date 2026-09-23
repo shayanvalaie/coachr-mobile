@@ -18,7 +18,7 @@ type Props = {
 const EmptyState = ({ icon, title, body, action }: Props) => (
   <Reveal style={styles.container}>
     <View style={styles.iconWrap}>
-      <Feather name={icon} size={22} color={theme.text.secondary} />
+      <Feather name={icon} size={20} color={theme.text.secondary} />
     </View>
     <AppText variant="title" family="heading" style={styles.center}>
       {title}
@@ -39,17 +39,17 @@ const EmptyState = ({ icon, title, body, action }: Props) => (
 const styles = StyleSheet.create({
   container: {
     alignItems: "center",
-    paddingVertical: space.xl,
+    paddingVertical: space.lg,
     paddingHorizontal: space.lg,
     gap: space.xs,
   },
   iconWrap: {
-    width: 48,
-    height: 48,
+    width: 44,
+    height: 44,
     borderRadius: radius.pill,
-    backgroundColor: theme.bg.elevated,
+    backgroundColor: theme.accent.subtle,
     borderWidth: 1,
-    borderColor: theme.border.base,
+    borderColor: theme.accent.subtleBorder,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: space.xxs,
@@ -58,7 +58,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   action: {
-    marginTop: space.xs,
+    marginTop: space.xxs,
   },
 });
 

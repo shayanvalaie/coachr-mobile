@@ -26,9 +26,8 @@ import {
 
 // Minimum time the generating state (skeleton loaders) stays on screen. Server
 // generation is fast enough that without this floor the skeletons would flash
-// for a frame and the lineup would snap in. Holding for a beat makes
-// generation read as deliberate work and keeps the swap smooth.
-const MIN_GENERATING_MS = 2000;
+// for a frame and the lineup would snap in.
+const MIN_GENERATING_MS = 300;
 
 const wait = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -43,7 +42,7 @@ const holdMinGeneratingDuration = async (startedAt: number) => {
 };
 
 const INACTIVE_RULESET_MESSAGES: Record<Exclude<RulesetStatus, "active">, string> = {
-  baking: "Your rules are still being set up. We'll email you when they're ready.",
+  baking: "Your rules are still being set up. We'll let you know here when they're ready.",
   review: "Your rules are in review. We'll email you when they're approved.",
   rejected: "These rules could not be supported. Update your rules or request a change.",
 };
@@ -73,8 +72,8 @@ type Params = {
   setSaveLineupName: Dispatch<SetStateAction<string>>;
 };
 
-// Lineup generation flow, including the pre-generation interstitial ad gate
-// (the ad always runs before generation, never while a sheet is open) and the
+// Lineup generation flow, including the interstitial ad gate (the ad shows
+// while the server generates, never while a sheet is open) and the
 // auto-generate handoff from launch requests. The server engine is the only
 // generator; there is no offline fallback.
 export const useLineupGeneration = ({
@@ -197,8 +196,6 @@ export const useLineupGeneration = ({
           return;
         }
 
-        await presentLineupInterstitial(hasProSubscription);
-
         const payloadRoster = activePlayers.map((player) => ({
           id: player.id,
           name: player.name,
@@ -208,20 +205,25 @@ export const useLineupGeneration = ({
           lockInPosition: player.lockInPosition,
         }));
 
-        const data = await backendClient.generateLineup({
-          teamId: team,
-          sport: rulesConfig.sport,
-          roster: payloadRoster,
-          gameId: effectiveGameId,
-          gameTitle: (() => {
-            const game = games.find((entry) => entry.id === effectiveGameId);
-            if (!game) return null;
-            const baseTitle = game.title.trim() || game.opponentName.trim();
-            return baseTitle || formatGameLabel(game);
-          })(),
-          saveLineup: false,
-          lineupName: null,
-        });
+        // The ad and the server request run together so free users wait for
+        // whichever is longer, not the sum of both.
+        const [, data] = await Promise.all([
+          presentLineupInterstitial(hasProSubscription),
+          backendClient.generateLineup({
+            teamId: team,
+            sport: rulesConfig.sport,
+            roster: payloadRoster,
+            gameId: effectiveGameId,
+            gameTitle: (() => {
+              const game = games.find((entry) => entry.id === effectiveGameId);
+              if (!game) return null;
+              const baseTitle = game.title.trim() || game.opponentName.trim();
+              return baseTitle || formatGameLabel(game);
+            })(),
+            saveLineup: false,
+            lineupName: null,
+          }),
+        ]);
 
         const nextLineup = normalizeLineupRows(extractRowsFromResponse(data));
         if (nextLineup.length === 0) {

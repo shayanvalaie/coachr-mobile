@@ -1,23 +1,11 @@
 import { useCallback, useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { BackendGame, BackendSession } from "../../lib/backend/types";
-import {
-  AppPressable,
-  AppText,
-  Button,
-  Card,
-  LoadTransition,
-  ScreenContainer,
-  ScreenHeader,
-  Skeleton,
-} from "../../components/ui";
-import { Feather } from "../../icons";
-import { theme } from "../../theme/colors";
-import { radius, space } from "../../theme/tokens";
+import { IconButton, PageHeader, ScreenContainer } from "../../components/ui";
+import { space } from "../../theme/tokens";
 import { LineupLaunchRequestInput } from "../../types/lineupLaunch";
 import {
   dayKeyToMonthDate,
-  dayKeyToReadable,
   MONTH_NAMES,
   shiftDayKeyByMonths,
   toDayKeyFromDate,
@@ -37,8 +25,19 @@ type Props = {
   onRequirePro: (featureLabel: string) => void;
 };
 
-// Calendar workspace orchestrator: owns the month cursor and view mode, and
-// wires the data/form/carousel hooks into the grid, agenda, and sheets.
+const dayKeyToAgendaLabel = (dayKey: string) => {
+  const date = new Date(`${dayKey}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return dayKey;
+  return date.toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+};
+
+// Calendar workspace orchestrator: owns the selected day (which also drives
+// the month shown) and wires the data/form/carousel hooks into the grid,
+// agenda, and sheets.
 const CalendarScreen = ({
   session,
   onOpenLineupPage,
@@ -46,15 +45,11 @@ const CalendarScreen = ({
   onRequirePro,
 }: Props) => {
   const initialTodayKey = toDayKeyFromDate(new Date());
-
   const [selectedDateKey, setSelectedDateKey] = useState(initialTodayKey);
-  const [viewMode, setViewMode] = useState<"calendar" | "day">("calendar");
 
   const {
     ensureTeam,
-    games,
     gamesByDay,
-    upcomingCount,
     lineupsByGameId,
     playerGenderByName,
     isLoading,
@@ -66,7 +61,7 @@ const CalendarScreen = ({
     loadGames,
     selectedDateKey,
     setSelectedDateKey,
-    onSaved: () => setViewMode("day"),
+    onSaved: () => {},
   });
 
   const carousel = useLineupCarousel({ ensureTeam, loadGames, lineupsByGameId });
@@ -82,27 +77,14 @@ const CalendarScreen = ({
   );
   const calendarYear = calendarMonthDate.getFullYear();
   const calendarMonthIndex = calendarMonthDate.getMonth();
+  const monthTitle =
+    calendarYear === new Date().getFullYear()
+      ? MONTH_NAMES[calendarMonthIndex]
+      : `${MONTH_NAMES[calendarMonthIndex]} ${calendarYear}`;
 
   const moveMonth = useCallback((offset: number) => {
     setSelectedDateKey((prevDayKey) => shiftDayKeyByMonths(prevDayKey, offset));
   }, []);
-
-  const jumpToToday = useCallback(() => {
-    setSelectedDateKey(toDayKeyFromDate(new Date()));
-  }, []);
-
-  const handleDateCellPress = useCallback(
-    (dayKey: string) => {
-      const dayGameCount = gamesByDay.get(dayKey)?.length ?? 0;
-      if (dayGameCount > 0) {
-        setSelectedDateKey(dayKey);
-        setViewMode("day");
-        return;
-      }
-      gameForm.openCreateForDate(dayKey);
-    },
-    [gameForm, gamesByDay],
-  );
 
   const openLineupWorkspace = useCallback(
     (request: LineupLaunchRequestInput) => {
@@ -139,140 +121,48 @@ const CalendarScreen = ({
     [carousel, hasProSubscription, onRequirePro],
   );
 
-  const addGameButton = (
-    <AppPressable
-      onPress={() => gameForm.openCreateForDate(selectedDateKey)}
-      accessibilityRole="button"
-      accessibilityLabel={`Add game on ${dayKeyToReadable(selectedDateKey)}`}
-      style={styles.iconButton}
-      hitSlop={8}
-    >
-      <Feather name="plus" size={16} color={theme.text.primary} />
-    </AppPressable>
-  );
-
   return (
     <ScreenContainer scroll contentStyle={styles.content}>
-      <ScreenHeader title="Calendar" subtitle="Calendar Workspace" />
-
-      <Card variant="elevated">
-        <View style={styles.cardInner}>
-          <AppText variant="title" family="display">
-            Plan games and track outcomes
-          </AppText>
-          <LoadTransition
-            loading={isLoading}
-            skeleton={<Skeleton width={180} height={15} />}
-          >
-            <AppText variant="caption" color="secondary">
-              Total games: {games.length} | Upcoming: {upcomingCount}
-            </AppText>
-          </LoadTransition>
-        </View>
-      </Card>
-
-      {viewMode === "calendar" ? (
-        <Card>
-          <View style={styles.cardBody}>
-            <View style={styles.monthHeader}>
-              <AppText variant="bodyLg" family="heading">
-                Calendar
-              </AppText>
-              <View style={styles.monthActions}>
-                <AppPressable
-                  onPress={() => moveMonth(-1)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Previous month"
-                  style={styles.iconButton}
-                  hitSlop={8}
-                >
-                  <Feather name="chevron-left" size={16} color={theme.text.primary} />
-                </AppPressable>
-                <AppText variant="bodyLg" family="display" style={styles.monthLabel}>
-                  {MONTH_NAMES[calendarMonthIndex]} {calendarYear}
-                </AppText>
-                <AppPressable
-                  onPress={() => moveMonth(1)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Next month"
-                  style={styles.iconButton}
-                  hitSlop={8}
-                >
-                  <Feather name="chevron-right" size={16} color={theme.text.primary} />
-                </AppPressable>
-                <Button
-                  label="Today"
-                  variant="secondary"
-                  size="sm"
-                  onPress={jumpToToday}
-                  accessibilityLabel="Jump to today"
-                />
-              </View>
-            </View>
-
-            <View style={styles.selectedBar}>
-              <AppText variant="caption" color="secondary" style={styles.selectedText}>
-                Selected: {dayKeyToReadable(selectedDateKey)}
-              </AppText>
-              <View style={styles.selectedActions}>
-                <Button
-                  label="Open Games"
-                  variant="secondary"
-                  size="sm"
-                  onPress={() => setViewMode("day")}
-                  accessibilityLabel={`Open games on ${dayKeyToReadable(selectedDateKey)}`}
-                />
-                {addGameButton}
-              </View>
-            </View>
-
-            <MonthGrid
-              year={calendarYear}
-              monthIndex={calendarMonthIndex}
-              gamesByDay={gamesByDay}
-              todayKey={initialTodayKey}
-              selectedDateKey={selectedDateKey}
-              onPressDay={handleDateCellPress}
+      <PageHeader
+        eyebrow="Calendar"
+        title={monthTitle}
+        right={
+          <View style={styles.monthNav}>
+            <IconButton
+              icon="chevron-left"
+              size={36}
+              onPress={() => moveMonth(-1)}
+              accessibilityLabel="Previous month"
+            />
+            <IconButton
+              icon="chevron-right"
+              size={36}
+              onPress={() => moveMonth(1)}
+              accessibilityLabel="Next month"
             />
           </View>
-        </Card>
-      ) : (
-        <Card>
-          <View style={styles.cardBody}>
-            <View style={styles.monthHeader}>
-              <View style={styles.dayTitleBlock}>
-                <AppText variant="bodyLg" family="heading">
-                  Games
-                </AppText>
-                <AppText variant="caption" color="secondary">
-                  {dayKeyToReadable(selectedDateKey)}
-                </AppText>
-              </View>
-              <View style={styles.selectedActions}>
-                <Button
-                  label="Calendar"
-                  variant="secondary"
-                  size="sm"
-                  icon="calendar"
-                  onPress={() => setViewMode("calendar")}
-                  accessibilityLabel="Back to calendar"
-                />
-                {addGameButton}
-              </View>
-            </View>
+        }
+      />
 
-            <DayAgenda
-              games={selectedGames}
-              lineupsByGameId={lineupsByGameId}
-              isLoading={isLoading}
-              onAddGame={() => gameForm.openCreateForDate(selectedDateKey)}
-              onOpenLineups={handleOpenLineups}
-              onEditGame={gameForm.startEditingGame}
-              onDeleteGame={gameForm.deleteGame}
-            />
-          </View>
-        </Card>
-      )}
+      <MonthGrid
+        year={calendarYear}
+        monthIndex={calendarMonthIndex}
+        gamesByDay={gamesByDay}
+        todayKey={initialTodayKey}
+        selectedDateKey={selectedDateKey}
+        onPressDay={setSelectedDateKey}
+      />
+
+      <DayAgenda
+        dayLabel={dayKeyToAgendaLabel(selectedDateKey)}
+        games={selectedGames}
+        lineupsByGameId={lineupsByGameId}
+        isLoading={isLoading}
+        onAddGame={() => gameForm.openCreateForDate(selectedDateKey)}
+        onOpenLineups={handleOpenLineups}
+        onEditGame={gameForm.startEditingGame}
+        onDeleteGame={gameForm.deleteGame}
+      />
 
       <LineupsSheet
         visible={carousel.isOpen}
@@ -314,56 +204,11 @@ const CalendarScreen = ({
 
 const styles = StyleSheet.create({
   content: {
-    gap: space.sm,
+    gap: space.md,
   },
-  cardInner: {
-    gap: space.xxs,
-  },
-  cardBody: {
-    gap: space.sm,
-  },
-  iconButton: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: theme.border.base,
-    backgroundColor: theme.bg.elevated,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  monthHeader: {
+  monthNav: {
     flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
     gap: space.xs,
-    flexWrap: "wrap",
-  },
-  monthActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: space.xs,
-  },
-  monthLabel: {
-    minWidth: 96,
-    textAlign: "center",
-  },
-  selectedBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: space.xs,
-  },
-  selectedText: {
-    flex: 1,
-  },
-  selectedActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: space.xs,
-  },
-  dayTitleBlock: {
-    gap: 2,
   },
 });
 

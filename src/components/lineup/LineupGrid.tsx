@@ -8,7 +8,7 @@ import Sortable, {
   type SortableGridRenderItem,
 } from "react-native-sortables";
 import { theme, withAlpha } from "../../theme/colors";
-import { radius } from "../../theme/tokens";
+import { radius, shadow, space } from "../../theme/tokens";
 import { typeface } from "../../theme/typography";
 import { InningAssignment } from "../../types/lineup";
 import { normalizePlayerName } from "../../utils/playerNames";
@@ -16,8 +16,6 @@ import { AppText, Skeleton } from "../ui";
 
 type Props = {
   lineup: InningAssignment[] | null;
-  expandedInnings: Set<number>;
-  onToggleInning: (inning: number) => void;
   editable?: boolean;
   presentation?: "inline" | "editModal";
   onSetPlayerPosition?: (
@@ -33,7 +31,7 @@ type Props = {
 
 const BENCH_MARKER = "X";
 const EMPTY_MARKER = "-";
-const DEFAULT_ROW_HEIGHT = 44;
+const DEFAULT_ROW_HEIGHT = 40;
 // Vertical offset from a cell's row top to where its dropdown opens —
 // just under the cell, mirroring the old inline `top: 36` placement.
 const DROPDOWN_ROW_OFFSET = 36;
@@ -44,13 +42,6 @@ const DROPDOWN_ROW_OFFSET = 36;
 const DROPDOWN_OPTION_HEIGHT = 24;
 const DROPDOWN_MAX_SCROLL_HEIGHT = 130;
 const DROPDOWN_VERTICAL_PADDING = 8;
-
-// Off-palette rose used to tint grid rows for female players. Kept as a local
-// constant (not a semantic token): the tint is unique to the lineup grid
-// and must stay visually distinct from both accent (amber) and danger (red).
-// Semi-transparent so the tint stays subtle and the cell markers (incl. the
-// red X's) remain legible over it.
-const FEMALE_ROW_TINT = "rgba(201, 111, 149, 0.45)";
 
 const LineupGrid = ({
   lineup,
@@ -214,7 +205,7 @@ const LineupGrid = ({
               styles.playerCell,
               {
                 width: playerCellWidth,
-                paddingLeft: isEditModal ? 8 : 4,
+                paddingLeft: isEditModal ? 8 : 12,
                 paddingRight: isEditModal ? 4 : 0,
               },
             ]}
@@ -374,134 +365,138 @@ const LineupGrid = ({
     ? Math.max(cellRowTop + rowHeight - DROPDOWN_ROW_OFFSET - dropdownHeight, 0)
     : dropdownBelowTop;
 
-  return (
-    <View
-      style={[styles.lineupContainer, isEditModal && styles.lineupContainerModal]}
-      onLayout={isEditModal ? (e) => setContainerWidth(e.nativeEvent.layout.width) : undefined}
+  const table = (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      scrollEnabled={!isEditModal}
+      contentContainerStyle={styles.tableContent}
     >
-      {!isEditModal ? (
-        <AppText variant="title" family="heading" style={styles.title}>
-          Active players ({players.length})
-        </AppText>
-      ) : null}
-      {isEditModal && !gridReady ? (
-        <EditGridSkeleton
-          rowCount={players.length}
-          inningCount={inningCount}
-        />
-      ) : (
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        scrollEnabled={!isEditModal}
-      >
-        <View>
-          <View
-            style={[styles.row, styles.headerRow]}
-            onLayout={(e) => handleHeaderLayout(e.nativeEvent.layout.height)}
+      <View style={styles.tableInner}>
+        <View
+          style={[styles.row, styles.headerRow]}
+          onLayout={(e) => handleHeaderLayout(e.nativeEvent.layout.height)}
+        >
+          <Text
+            style={[
+              styles.headerCell,
+              styles.playerHeaderCell,
+              {
+                width: playerCellWidth,
+                paddingLeft: isEditModal ? 8 : 12,
+                paddingRight: isEditModal ? 4 : 0,
+              },
+            ]}
           >
+            PLAYER
+          </Text>
+          {innings.map(({ inningNumber }) => (
             <Text
+              key={`header-${inningNumber}`}
               style={[
                 styles.headerCell,
-                styles.playerHeaderCell,
-                {
-                  width: playerCellWidth,
-                  paddingLeft: isEditModal ? 8 : 4,
-                  paddingRight: isEditModal ? 4 : 0,
-                },
+                styles.inningCell,
+                styles.inningHeaderCell,
+                { width: inningCellWidth },
               ]}
             >
-              Player
+              {inningNumber}
             </Text>
-            {innings.map(({ inningNumber }) => (
-              <Text
-                key={`header-${inningNumber}`}
-                style={[
-                  styles.headerCell,
-                  styles.inningCell,
-                  { width: inningCellWidth },
-                ]}
-              >
-                {inningNumber}
-              </Text>
-            ))}
-          </View>
-
-          <Sortable.Grid
-            data={players}
-            renderItem={renderItem}
-            keyExtractor={(name) => name}
-            columns={1}
-            customHandle
-            activeItemScale={1.02}
-            activeItemShadowOpacity={0.15}
-            inactiveItemOpacity={1}
-            onDragStart={handleDragStart}
-            onOrderChange={handleOrderChange}
-            onDragEnd={handleDragEnd}
-            {...(scrollableRef ? { scrollableRef } : {})}
-          />
-
-          {dropdownVisible ? (
-            <View
-              style={[
-                styles.cellDropdown,
-                {
-                  left: playerCellWidth + openInningIndex * inningCellWidth,
-                  top: dropdownTop,
-                },
-              ]}
-            >
-              <ScrollView
-                nestedScrollEnabled
-                style={styles.cellDropdownScroll}
-                showsVerticalScrollIndicator={dropdownOptions.length > 5}
-              >
-                {dropdownOptions.map((option) => {
-                  const active = option === openValue;
-                  return (
-                    <Pressable
-                      key={`option-${option}`}
-                      style={[
-                        styles.cellDropdownOption,
-                        active && styles.cellDropdownOptionActive,
-                      ]}
-                      onPress={() => {
-                        if (openCell) {
-                          onSetPlayerPosition?.(
-                            openCell.inningNumber,
-                            openCell.playerName,
-                            option,
-                          );
-                        }
-                        setOpenCell(null);
-                      }}
-                      accessibilityRole="button"
-                      accessibilityLabel={option === BENCH_MARKER ? "Bench" : option}
-                      accessibilityState={{ selected: active }}
-                    >
-                      <Text
-                        style={[
-                          styles.cellDropdownOptionText,
-                          active && styles.cellDropdownOptionTextActive,
-                        ]}
-                      >
-                        {option}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            </View>
-          ) : null}
+          ))}
         </View>
-      </ScrollView>
-      )}
-      {!isEditModal ? (
-        <AppText variant="body" color="secondary">
-          X = benched during that inning.
-        </AppText>
-      ) : null}
+
+        <Sortable.Grid
+          data={players}
+          renderItem={renderItem}
+          keyExtractor={(name) => name}
+          columns={1}
+          customHandle
+          activeItemScale={1.02}
+          activeItemShadowOpacity={0.15}
+          inactiveItemOpacity={1}
+          onDragStart={handleDragStart}
+          onOrderChange={handleOrderChange}
+          onDragEnd={handleDragEnd}
+          {...(scrollableRef ? { scrollableRef } : {})}
+        />
+
+        {dropdownVisible ? (
+          <View
+            style={[
+              styles.cellDropdown,
+              {
+                left: playerCellWidth + openInningIndex * inningCellWidth,
+                top: dropdownTop,
+              },
+            ]}
+          >
+            <ScrollView
+              nestedScrollEnabled
+              style={styles.cellDropdownScroll}
+              showsVerticalScrollIndicator={dropdownOptions.length > 5}
+            >
+              {dropdownOptions.map((option) => {
+                const active = option === openValue;
+                return (
+                  <Pressable
+                    key={`option-${option}`}
+                    style={[
+                      styles.cellDropdownOption,
+                      active && styles.cellDropdownOptionActive,
+                    ]}
+                    onPress={() => {
+                      if (openCell) {
+                        onSetPlayerPosition?.(
+                          openCell.inningNumber,
+                          openCell.playerName,
+                          option,
+                        );
+                      }
+                      setOpenCell(null);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={option === BENCH_MARKER ? "Bench" : option}
+                    accessibilityState={{ selected: active }}
+                  >
+                    <Text
+                      style={[
+                        styles.cellDropdownOptionText,
+                        active && styles.cellDropdownOptionTextActive,
+                      ]}
+                    >
+                      {option}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+        ) : null}
+      </View>
+    </ScrollView>
+  );
+
+  if (isEditModal) {
+    return (
+      <View
+        style={styles.lineupContainerModal}
+        onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
+      >
+        {!gridReady ? (
+          <EditGridSkeleton rowCount={players.length} inningCount={inningCount} />
+        ) : (
+          table
+        )}
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.wrapper}>
+      <View style={styles.lineupContainer}>{table}</View>
+      <AppText variant="caption" color="muted">
+        X = benched that inning. Rose rows are women.
+      </AppText>
     </View>
   );
 };
@@ -555,22 +550,29 @@ const EditGridSkeleton = ({
 export default memo(LineupGrid);
 
 const styles = StyleSheet.create({
+  wrapper: {
+    gap: space.xs,
+  },
+  // The grid is the hero of the Lineup tab: a raised card with no inner
+  // padding so the header row runs edge to edge.
   lineupContainer: {
     borderWidth: 1,
-    borderColor: theme.border.base,
-    borderRadius: 14,
-    padding: 8,
-    gap: 8,
-    backgroundColor: theme.bg.elevated,
+    borderColor: theme.border.subtle,
+    borderRadius: radius.lg,
+    backgroundColor: theme.bg.raised,
+    overflow: "hidden",
+    ...shadow.card,
   },
   lineupContainerModal: {
-    borderWidth: 0,
-    borderRadius: 0,
-    padding: 0,
-    backgroundColor: "transparent",
+    alignSelf: "stretch",
   },
-  title: {
-    marginBottom: 2,
+  // When the table is narrower than the card, stretch it so the header band
+  // and row tints run edge to edge instead of stopping mid-card.
+  tableContent: {
+    flexGrow: 1,
+  },
+  tableInner: {
+    flexGrow: 1,
   },
   skeletonRoot: {
     alignSelf: "stretch",
@@ -599,40 +601,44 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderBottomWidth: 1,
     borderBottomColor: theme.border.subtle,
-    minHeight: 44,
+    minHeight: 40,
     overflow: "visible",
   },
   femaleRow: {
-    backgroundColor: FEMALE_ROW_TINT,
+    backgroundColor: theme.rose.rowTint,
   },
   headerRow: {
     backgroundColor: withAlpha(theme.text.primary, 0.04),
+    minHeight: 36,
   },
   headerCell: {
     color: theme.text.secondary,
     fontFamily: typeface.heading,
-    fontSize: 14,
+    fontSize: 11,
+    letterSpacing: 0.66,
+  },
+  inningHeaderCell: {
+    fontSize: 12,
+    letterSpacing: 0,
   },
   playerCell: {
-    minHeight: 44,
+    minHeight: 40,
     justifyContent: "center",
   },
   playerCellInner: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: 6,
   },
-  playerHeaderCell: {
-  },
+  playerHeaderCell: {},
   playerNumberBadge: {
-    minWidth: 22,
-    height: 22,
+    minWidth: 20,
+    height: 20,
     borderRadius: radius.pill,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: withAlpha(theme.text.primary, 0.16),
-    borderWidth: 1,
-    borderColor: withAlpha(theme.text.primary, 0.12),
+    backgroundColor: withAlpha(theme.text.primary, 0.14),
+    paddingHorizontal: 4,
   },
   playerNumberBadgeModal: {
     minWidth: 24,
@@ -647,12 +653,12 @@ const styles = StyleSheet.create({
     flex: 1,
     color: theme.text.primary,
     fontFamily: typeface.heading,
-    fontSize: 16,
+    fontSize: 13,
   },
   inningCell: {
     color: theme.text.primary,
     fontFamily: typeface.heading,
-    fontSize: 14,
+    fontSize: 12,
     textAlign: "center",
     paddingHorizontal: 0,
   },
@@ -676,7 +682,7 @@ const styles = StyleSheet.create({
   },
   editableCellText: {
     fontFamily: typeface.heading,
-    fontSize: 14,
+    fontSize: 13,
     textAlign: "center",
   },
   cellDropdown: {
@@ -684,13 +690,10 @@ const styles = StyleSheet.create({
     minWidth: 74,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: theme.border.base,
+    borderColor: theme.border.glass,
     backgroundColor: theme.bg.base,
     paddingVertical: 4,
-    shadowColor: "#000",
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
+    ...shadow.glass,
     elevation: 12,
     zIndex: 100,
   },
@@ -720,7 +723,7 @@ const styles = StyleSheet.create({
     color: theme.text.primary,
   },
   emptyCellText: {
-    color: withAlpha(theme.text.secondary, 0.8),
+    color: theme.text.muted,
   },
   benchCellText: {
     color: theme.danger.base,

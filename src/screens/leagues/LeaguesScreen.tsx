@@ -2,24 +2,32 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { Feather } from "../../icons";
 import {
-  AppPressable,
   AppText,
   Button,
   Card,
   EmptyState,
+  IconButton,
   Input,
+  ListGroup,
   LoadTransition,
+  PageHeader,
   ScreenContainer,
-  ScreenHeader,
   SkeletonListRows,
+  SportPicker,
   useToast,
 } from "../../components/ui";
 import { backendClient } from "../../lib/backend/client";
+import { trace } from "../../lib/backend/trace";
 import { BackendSession } from "../../lib/backend/types";
 import { getSimilarLeaguesError, toError } from "../../lib/backend/utils";
+import PlaceSearch from "../../components/PlaceSearch";
+import { PlaceValue } from "../../lib/placeSearch";
+import { useRulesetStatus } from "../../lib/rulesetStatus/RulesetStatusProvider";
 import { theme } from "../../theme/colors";
-import { radius, space } from "../../theme/tokens";
-import { LeagueSummary, RulesetStatus } from "../../types/rules";
+import { space } from "../../theme/tokens";
+import { LeagueSuggestion, LeagueSummary } from "../../types/rules";
+import { digitsOnly, parseCount } from "../../utils/formNumbers";
+import LeagueRow, { describeMatchReasons } from "./LeagueRow";
 
 type Props = {
   session: BackendSession;
@@ -29,54 +37,9 @@ type Props = {
 
 const SEARCH_DEBOUNCE_MS = 250;
 
-const capitalize = (value: string) =>
-  value.charAt(0).toUpperCase() + value.slice(1);
-
-const statusLabel: Record<RulesetStatus, string | null> = {
-  active: null,
-  baking: "Setting up",
-  review: "In review",
-  rejected: "Unavailable",
-};
-
-export const LeagueRow = ({
-  league,
-  onPress,
-}: {
-  league: LeagueSummary;
-  onPress: () => void;
-}) => {
-  const badge = statusLabel[league.status];
-  return (
-    <Card
-      onPress={onPress}
-      style={styles.row}
-      accessibilityLabel={`${league.name}. ${capitalize(league.sport)}${league.region ? `, ${league.region}` : ""}. ${league.teamCount} teams.`}
-    >
-      <View style={styles.rowText}>
-        <AppText variant="bodyLg" family="heading">
-          {league.name}
-        </AppText>
-        <AppText variant="caption" color="secondary">
-          {[capitalize(league.sport), league.region, `${league.teamCount} ${league.teamCount === 1 ? "team" : "teams"}`]
-            .filter(Boolean)
-            .join(" · ")}
-        </AppText>
-      </View>
-      {badge ? (
-        <View style={styles.badge}>
-          <AppText variant="caption" family="heading" color="accent">
-            {badge}
-          </AppText>
-        </View>
-      ) : null}
-      <Feather name="chevron-right" size={18} color={theme.text.secondary} />
-    </Card>
-  );
-};
-
 const LeaguesScreen = ({ session, onBack, onOpenLeague }: Props) => {
   const toast = useToast();
+  const rulesetStatus = useRulesetStatus();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<LeagueSummary[]>([]);
   const [isSearching, setIsSearching] = useState(true);
@@ -84,12 +47,26 @@ const LeaguesScreen = ({ session, onBack, onOpenLeague }: Props) => {
 
   const [showCreate, setShowCreate] = useState(false);
   const [name, setName] = useState("");
-  const [sport, setSport] = useState("");
-  const [region, setRegion] = useState("");
+  const [sport, setSport] = useState<string | null>(null);
+  const [place, setPlace] = useState<PlaceValue | null>(null);
+  const [segmentCount, setSegmentCount] = useState("");
+  const [playersOnField, setPlayersOnField] = useState("");
   const [rulesText, setRulesText] = useState("");
   const [createError, setCreateError] = useState<string | null>(null);
-  const [suggestions, setSuggestions] = useState<LeagueSummary[] | null>(null);
+  const [suggestions, setSuggestions] = useState<LeagueSuggestion[] | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+
+  // Mirrors the server's validation so the button only enables for a payload
+  // that will pass it.
+  const parsedSegmentCount = parseCount(segmentCount);
+  const parsedPlayersOnField = parseCount(playersOnField);
+  const formValid =
+    name.trim().length >= 2 &&
+    sport !== null &&
+    place !== null &&
+    parsedSegmentCount !== null &&
+    parsedPlayersOnField !== null &&
+    rulesText.trim().length >= 10;
 
   const latestSearch = useRef(0);
 
@@ -125,31 +102,36 @@ const LeaguesScreen = ({ session, onBack, onOpenLeague }: Props) => {
     if (!name && query.trim()) setName(query.trim());
   }, [name, query]);
 
+  const closeCreate = useCallback(() => {
+    setShowCreate(false);
+    setSuggestions(null);
+    setCreateError(null);
+  }, []);
+
   const createLeague = useCallback(
     async (confirmDistinct: boolean) => {
-      const trimmedName = name.trim();
-      const trimmedSport = sport.trim();
-      const trimmedRules = rulesText.trim();
-      if (trimmedName.length < 2) {
-        setCreateError("Give the league a name.");
-        return;
-      }
-      if (trimmedSport.length < 2) {
-        setCreateError("Which sport is this league for?");
-        return;
-      }
-      if (trimmedRules.length < 10) {
-        setCreateError("Describe the league rules in a few sentences.");
+      if (
+        !formValid ||
+        sport === null ||
+        place === null ||
+        parsedSegmentCount === null ||
+        parsedPlayersOnField === null
+      ) {
         return;
       }
       setCreateError(null);
       setIsCreating(true);
+      trace("leagues screen create submit", { name, sport, place, segmentCount, playersOnField, confirmDistinct });
       try {
         const league = await backendClient.createLeague({
-          name: trimmedName,
-          sport: trimmedSport,
-          region: region.trim() || undefined,
-          rulesText: trimmedRules,
+          name: name.trim(),
+          sport,
+          city: place.city,
+          state: place.state,
+          zip: place.zip,
+          segmentCount: parsedSegmentCount,
+          playersOnField: parsedPlayersOnField,
+          rulesText: rulesText.trim(),
           confirmDistinct,
         });
         setSuggestions(null);
@@ -158,6 +140,7 @@ const LeaguesScreen = ({ session, onBack, onOpenLeague }: Props) => {
         const teamId = await backendClient.getOrCreateTeam(session.user.id);
         if (teamId) {
           await backendClient.setTeamLeague(teamId, league.id);
+          void rulesetStatus.refresh();
         }
         toast.show({
           message:
@@ -168,12 +151,18 @@ const LeaguesScreen = ({ session, onBack, onOpenLeague }: Props) => {
         });
         setShowCreate(false);
         setName("");
-        setSport("");
-        setRegion("");
+        setSport(null);
+        setPlace(null);
+        setSegmentCount("");
+        setPlayersOnField("");
         setRulesText("");
         onOpenLeague(league.id);
       } catch (err) {
         const similar = getSimilarLeaguesError(err);
+        trace("leagues screen create failed", {
+          similar: similar?.map((league) => ({ id: league.id, name: league.name, matchReasons: league.matchReasons })) ?? null,
+          error: similar ? null : toError(err).message,
+        });
         if (similar) {
           setSuggestions(similar);
           return;
@@ -183,66 +172,33 @@ const LeaguesScreen = ({ session, onBack, onOpenLeague }: Props) => {
         setIsCreating(false);
       }
     },
-    [name, onOpenLeague, region, rulesText, session.user.id, sport, toast],
+    [
+      formValid,
+      name,
+      onOpenLeague,
+      parsedPlayersOnField,
+      parsedSegmentCount,
+      place,
+      rulesText,
+      rulesetStatus,
+      session.user.id,
+      sport,
+      toast,
+    ],
   );
 
-  return (
-    <ScreenContainer keyboard scroll contentStyle={styles.content}>
-      <AppPressable
-        onPress={onBack}
-        style={styles.backLink}
-        accessibilityRole="button"
-        accessibilityLabel="Back to rules"
-        pressScale={1}
-      >
-        <Feather name="chevron-left" size={18} color={theme.text.secondary} />
-        <AppText variant="body" color="secondary">
-          Rules
-        </AppText>
-      </AppPressable>
+  if (showCreate) {
+    return (
+      <ScreenContainer keyboard scroll contentStyle={styles.content}>
+        <PageHeader
+          back={{ label: "Leagues", onPress: closeCreate }}
+          eyebrow="New league"
+          title="Start a shared league"
+          subtitle="Every team that joins plays by these rules. Changes go through a request so nobody's lineups break."
+        />
 
-      <ScreenHeader
-        title="Leagues"
-        subtitle="Join a league to share its rules, or start one for your area."
-        right={
-          showCreate ? null : (
-            <Button
-              label="New league"
-              size="sm"
-              icon="plus"
-              onPress={openCreate}
-              accessibilityLabel="Create a new league"
-            />
-          )
-        }
-      />
-
-      {showCreate ? (
-        <Card variant="elevated">
+        <Card>
           <View style={styles.cardInner}>
-            <View style={styles.rowBetween}>
-              <AppText variant="caption" family="heading" color="accent" style={styles.eyebrow}>
-                New league
-              </AppText>
-              <Button
-                label="Cancel"
-                variant="ghost"
-                size="sm"
-                onPress={() => {
-                  setShowCreate(false);
-                  setSuggestions(null);
-                  setCreateError(null);
-                }}
-                accessibilityLabel="Cancel creating a league"
-              />
-            </View>
-            <AppText variant="title" family="heading">
-              Start a shared league
-            </AppText>
-            <AppText variant="body" color="secondary">
-              Every team that joins plays by these rules. Rules can't be edited after
-              creation — changes go through a request so nobody's lineups break.
-            </AppText>
             <Input
               label="League name"
               value={name}
@@ -253,24 +209,40 @@ const LeaguesScreen = ({ session, onBack, onOpenLeague }: Props) => {
               placeholder="Austin Coed Softball"
               accessibilityLabel="League name"
             />
+            <SportPicker
+              value={sport}
+              onChange={(code) => {
+                setSport(code);
+                setSuggestions(null);
+              }}
+            />
+            <PlaceSearch
+              value={place}
+              onChange={(next) => {
+                setPlace(next);
+                setSuggestions(null);
+              }}
+            />
             <View style={styles.fieldRow}>
               <Input
-                label="Sport"
-                value={sport}
-                onChangeText={setSport}
-                placeholder="softball"
-                autoCapitalize="none"
-                autoCorrect={false}
+                label="Innings or periods"
+                value={segmentCount}
+                onChangeText={(value) => setSegmentCount(digitsOnly(value, 2))}
+                placeholder="7"
+                keyboardType="number-pad"
+                maxLength={2}
                 containerStyle={styles.field}
-                accessibilityLabel="Sport"
+                accessibilityLabel="Innings or periods"
               />
               <Input
-                label="Region (optional)"
-                value={region}
-                onChangeText={setRegion}
-                placeholder="Austin, TX"
+                label="Players on field"
+                value={playersOnField}
+                onChangeText={(value) => setPlayersOnField(digitsOnly(value, 2))}
+                placeholder="10"
+                keyboardType="number-pad"
+                maxLength={2}
                 containerStyle={styles.field}
-                accessibilityLabel="Region"
+                accessibilityLabel="Players on the field"
               />
             </View>
             <Input
@@ -282,30 +254,35 @@ const LeaguesScreen = ({ session, onBack, onOpenLeague }: Props) => {
               textAlignVertical="top"
               style={styles.textarea}
               error={createError}
+              hint="Simple rules go live instantly. Unusual ones get a custom engine built in a few minutes."
               accessibilityLabel="League rules"
             />
 
             {suggestions ? (
               <View style={styles.suggestions}>
                 <AppText variant="bodyLg" family="heading">
-                  Did you mean one of these?
+                  Is your league one of these?
                 </AppText>
                 <AppText variant="caption" color="secondary">
-                  A league with a similar name already exists. Join it instead, or
-                  create yours anyway.
+                  Same sport in your zip, or a similar name. Join it, or confirm yours
+                  is different.
                 </AppText>
-                {suggestions.map((league) => (
-                  <LeagueRow
-                    key={league.id}
-                    league={league}
-                    onPress={() => onOpenLeague(league.id)}
-                  />
-                ))}
+                <ListGroup>
+                  {suggestions.map((league) => (
+                    <LeagueRow
+                      key={league.id}
+                      league={league}
+                      tags={describeMatchReasons(league.matchReasons)}
+                      onPress={() => onOpenLeague(league.id)}
+                    />
+                  ))}
+                </ListGroup>
                 <Button
                   label="Create anyway"
                   variant="secondary"
                   onPress={() => void createLeague(true)}
                   loading={isCreating}
+                  disabled={!formValid}
                   fullWidth
                   accessibilityLabel="Create this league anyway"
                 />
@@ -313,39 +290,64 @@ const LeaguesScreen = ({ session, onBack, onOpenLeague }: Props) => {
             ) : (
               <Button
                 label="Create league"
-                icon="check"
+                size="lg"
                 onPress={() => void createLeague(false)}
                 loading={isCreating}
+                disabled={!formValid}
                 fullWidth
                 accessibilityLabel="Create league"
               />
             )}
           </View>
         </Card>
-      ) : null}
+      </ScreenContainer>
+    );
+  }
+
+  return (
+    <ScreenContainer keyboard scroll contentStyle={styles.content}>
+      <PageHeader
+        back={{ label: "Rules", onPress: onBack }}
+        eyebrow="Leagues"
+        title="Find yours"
+        right={
+          <IconButton
+            icon="plus"
+            variant="accent"
+            onPress={openCreate}
+            accessibilityLabel="Create a new league"
+          />
+        }
+      />
 
       <Input
         value={query}
         onChangeText={setQuery}
-        placeholder="Search by league name or region"
+        placeholder="Search by name, city, or zip"
         autoCapitalize="none"
         autoCorrect={false}
         returnKeyType="search"
-        left={<Feather name="search" size={16} color={theme.text.secondary} />}
+        highlighted={query.trim().length > 0}
+        left={<Feather name="search" size={16} color={theme.accent.base} />}
         accessibilityLabel="Search leagues"
       />
 
       <LoadTransition
         loading={isSearching && !hasSearched}
-        style={styles.results}
-        skeleton={<SkeletonListRows count={4} />}
+        skeleton={<SkeletonListRows count={4} height={60} />}
       >
         {results.length > 0 ? (
-          results.map((league) => (
-            <LeagueRow key={league.id} league={league} onPress={() => onOpenLeague(league.id)} />
-          ))
+          <ListGroup>
+            {results.map((league) => (
+              <LeagueRow
+                key={league.id}
+                league={league}
+                onPress={() => onOpenLeague(league.id)}
+              />
+            ))}
+          </ListGroup>
         ) : (
-          <Card variant="outline" padding="xxs">
+          <Card padding="xxs">
             <EmptyState
               icon="users"
               title={query.trim() ? "No leagues match" : "No leagues yet"}
@@ -354,7 +356,7 @@ const LeaguesScreen = ({ session, onBack, onOpenLeague }: Props) => {
                   ? "Try a shorter name, or be the first to create it."
                   : "Be the first to set up a league for your area."
               }
-              action={showCreate ? undefined : { label: "Create a league", onPress: openCreate }}
+              action={{ label: "Create a league", onPress: openCreate }}
             />
           </Card>
         )}
@@ -365,26 +367,10 @@ const LeaguesScreen = ({ session, onBack, onOpenLeague }: Props) => {
 
 const styles = StyleSheet.create({
   content: {
-    gap: space.sm,
-  },
-  backLink: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "flex-start",
-    gap: space.xxs,
-    minHeight: 32,
+    gap: space.md,
   },
   cardInner: {
     gap: space.sm,
-  },
-  eyebrow: {
-    textTransform: "uppercase",
-    letterSpacing: 1,
-  },
-  rowBetween: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
   },
   fieldRow: {
     flexDirection: "row",
@@ -394,34 +380,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   textarea: {
-    minHeight: 110,
+    minHeight: 120,
   },
   suggestions: {
     gap: space.xs,
     borderTopWidth: 1,
     borderTopColor: theme.border.subtle,
     paddingTop: space.sm,
-  },
-  results: {
-    gap: space.xs,
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: space.sm,
-  },
-  rowText: {
-    flex: 1,
-    gap: 2,
-  },
-  badge: {
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: theme.accent.subtleBorder,
-    backgroundColor: theme.accent.subtle,
-    paddingHorizontal: space.xs,
-    minHeight: 24,
-    justifyContent: "center",
   },
 });
 

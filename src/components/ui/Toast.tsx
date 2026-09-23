@@ -20,7 +20,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather, IconName } from "../../icons";
 import { useReducedMotion } from "../../hooks/useReducedMotion";
 import { notifyError, notifySuccess } from "../../lib/haptics";
-import { theme, withAlpha } from "../../theme/colors";
+import { theme } from "../../theme/colors";
 import { motion, radius, shadow, space } from "../../theme/tokens";
 import AppText from "./AppText";
 
@@ -58,29 +58,18 @@ const iconByType: Record<ToastType, IconName> = {
   error: "alert-circle",
 };
 
-const colorByType: Record<ToastType, string> = {
-  info: theme.accent.base,
-  success: theme.success.base,
-  error: theme.danger.base,
+// The toast is a cream pill with dark text, so the type tints are the deep
+// versions of the palette colours - legible on light, still recognisable.
+const iconColorByType: Record<ToastType, string> = {
+  info: "#a8641a",
+  success: "#2f7a4f",
+  error: "#c8412f",
 };
 
-// Tinted surface per type so the toast reads as a colored alert, not a neutral
-// pill. Each is a semi-transparent wash of the type color over the dark base
-// plus a brighter same-color border, so it stays legible while clearly popping.
-const surfaceByType: Record<ToastType, { bg: string; border: string }> = {
-  info: {
-    bg: withAlpha(theme.accent.base, 0.18),
-    border: withAlpha(theme.accent.base, 0.55),
-  },
-  success: {
-    bg: withAlpha(theme.success.base, 0.2),
-    border: withAlpha(theme.success.base, 0.6),
-  },
-  error: {
-    bg: withAlpha(theme.danger.base, 0.2),
-    border: withAlpha(theme.danger.base, 0.6),
-  },
-};
+const TOAST_SURFACE = "rgba(246, 241, 231, 0.9)";
+const TOAST_TEXT = theme.text.onAccent;
+// Clears the floating tab bar with room to spare.
+const TOAST_BOTTOM_OFFSET = 110;
 
 type ActiveToast = ToastOptions & { id: number };
 
@@ -155,10 +144,11 @@ export const ToastProvider = ({ children }: { children: ReactNode }) => {
 
   const value = useMemo(() => ({ show }), [show]);
 
+  // Rises from the bottom edge and settles above the tab bar.
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: progress.value,
     transform: [
-      { translateY: reduceMotion ? 0 : (1 - progress.value) * -12 },
+      { translateY: reduceMotion ? 0 : (1 - progress.value) * 12 },
       { scale: reduceMotion ? 1 : 0.97 + progress.value * 0.03 },
     ],
   }));
@@ -169,7 +159,7 @@ export const ToastProvider = ({ children }: { children: ReactNode }) => {
       {active ? (
         <View
           pointerEvents="box-none"
-          style={[styles.host, { top: insets.top + space.xs }]}
+          style={[styles.host, { bottom: insets.bottom + TOAST_BOTTOM_OFFSET }]}
         >
           <Animated.View
             pointerEvents={active.onPress ? "auto" : "none"}
@@ -186,35 +176,27 @@ export const ToastProvider = ({ children }: { children: ReactNode }) => {
               }
               style={({ pressed }) => [
                 styles.toast,
-                {
-                  backgroundColor: surfaceByType[active.type ?? "info"].bg,
-                  borderColor: surfaceByType[active.type ?? "info"].border,
-                  borderRadius: active.actionLabel ? radius.lg : radius.pill,
-                },
+                { borderRadius: active.actionLabel ? radius.lg : radius.pill },
                 pressed && active.onPress && styles.toastPressed,
               ]}
             >
               <Feather
                 name={iconByType[active.type ?? "info"]}
                 size={18}
-                color={colorByType[active.type ?? "info"]}
+                color={iconColorByType[active.type ?? "info"]}
               />
               <View style={styles.messageColumn}>
                 <AppText variant="body" family="heading" style={styles.message}>
                   {active.message}
                 </AppText>
                 {active.actionLabel ? (
-                  <AppText variant="caption" color="secondary">
+                  <AppText variant="caption" style={styles.actionLabel}>
                     {active.actionLabel}
                   </AppText>
                 ) : null}
               </View>
               {active.onPress ? (
-                <Feather
-                  name="chevron-right"
-                  size={18}
-                  color={colorByType[active.type ?? "info"]}
-                />
+                <Feather name="chevron-right" size={18} color={TOAST_TEXT} />
               ) : null}
             </Pressable>
           </Animated.View>
@@ -235,11 +217,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: space.sm,
-    borderWidth: 1.5,
+    backgroundColor: TOAST_SURFACE,
     paddingHorizontal: space.md,
     paddingVertical: space.sm,
     maxWidth: 480,
-    ...shadow.float,
+    ...shadow.glass,
   },
   toastPressed: {
     opacity: 0.9,
@@ -250,5 +232,9 @@ const styles = StyleSheet.create({
   },
   message: {
     flexShrink: 1,
+    color: TOAST_TEXT,
+  },
+  actionLabel: {
+    color: "rgba(28, 18, 5, 0.7)",
   },
 });

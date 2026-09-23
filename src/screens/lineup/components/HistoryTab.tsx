@@ -2,7 +2,6 @@ import { ReactNode, useCallback } from "react";
 import { ActivityIndicator, FlatList, StyleSheet, View } from "react-native";
 import {
   AppText,
-  Button,
   EmptyState,
   LoadTransition,
   Reveal,
@@ -13,37 +12,31 @@ import {
   BackendLineupVersionSummary,
 } from "../../../lib/backend/types";
 import { theme } from "../../../theme/colors";
-import { motion, space } from "../../../theme/tokens";
+import { motion, space, TAB_BAR_CLEARANCE } from "../../../theme/tokens";
 import GameContextCard from "./GameContextCard";
 
 type Props = {
   hasProSubscription: boolean;
   games: BackendGame[];
-  selectedGame: BackendGame | null;
   selectedGameId: string | null;
   onSelectGame: (gameId: string | null) => void;
   lineupHistory: BackendLineupVersionSummary[];
   historyLoading: boolean;
   historyError: string | null;
-  isGenerating: boolean;
-  onGenerate: () => void;
   renderVersion: (version: BackendLineupVersionSummary) => ReactNode;
 };
 
-// History tab: the FlatList owns scrolling. The screen header + tab switcher
-// are pinned by the parent screen; the generate button and game context ride
-// along as the list header.
+// Saved tab: the FlatList owns scrolling. The screen header + segmented
+// control are pinned by the parent screen; the game chips ride along as the
+// list header.
 const HistoryTab = ({
   hasProSubscription,
   games,
-  selectedGame,
   selectedGameId,
   onSelectGame,
   lineupHistory,
   historyLoading,
   historyError,
-  isGenerating,
-  onGenerate,
   renderVersion,
 }: Props) => {
   // Opacity-only fade per row mount. On load, all rows mount in one commit and
@@ -59,6 +52,9 @@ const HistoryTab = ({
     [renderVersion],
   );
 
+  const showChips = hasProSubscription && games.length > 0;
+  const showHeader = showChips || historyError || (historyLoading && lineupHistory.length > 0);
+
   return (
     <FlatList
       // Keep the previous rows on screen while a reload is in flight (the
@@ -70,56 +66,46 @@ const HistoryTab = ({
       keyboardShouldPersistTaps="handled"
       contentContainerStyle={styles.listContent}
       ListHeaderComponent={
-        <View style={styles.listHeader}>
-          <Button
-            label="Generate"
-            icon="zap"
-            onPress={onGenerate}
-            loading={isGenerating}
-            disabled={isGenerating}
-            accessibilityLabel="Generate a new lineup"
-          />
-          {hasProSubscription && (
-            <GameContextCard
-              games={games}
-              selectedGame={selectedGame}
-              selectedGameId={selectedGameId}
-              onSelectGame={onSelectGame}
-            />
-          )}
-          <View style={styles.sectionRow}>
-            <AppText variant="bodyLg" family="heading">
-              Lineup History
-            </AppText>
-            {historyLoading ? (
+        showHeader ? (
+          <View style={styles.listHeader}>
+            {showChips ? (
+              <GameContextCard
+                games={games}
+                selectedGameId={selectedGameId}
+                onSelectGame={onSelectGame}
+              />
+            ) : null}
+            {historyLoading && lineupHistory.length > 0 ? (
               <ActivityIndicator color={theme.accent.base} size="small" />
             ) : null}
+            {historyError ? (
+              <AppText variant="caption" color="danger">
+                {historyError}
+              </AppText>
+            ) : null}
           </View>
-          {historyError ? (
-            <AppText variant="caption" color="danger">
-              {historyError}
-            </AppText>
-          ) : null}
-          {lineupHistory.length > 0 ? (
-            <AppText variant="caption" color="secondary">
-              Tap to open • Long-press to delete
-            </AppText>
-          ) : null}
-        </View>
+        ) : null
       }
       ListEmptyComponent={
         historyError ? null : (
           <LoadTransition
             loading={historyLoading}
-            skeleton={<SkeletonListRows count={5} />}
+            skeleton={<SkeletonListRows count={5} height={66} />}
           >
             <EmptyState
               icon="layers"
               title="No saved lineups yet"
-              body="No saved versions yet for this context."
+              body="Generate a lineup and save it to see it here."
             />
           </LoadTransition>
         )
+      }
+      ListFooterComponent={
+        lineupHistory.length > 0 ? (
+          <AppText variant="caption" color="muted" style={styles.footer}>
+            Long-press a lineup to delete. Export to Excel or PDF from inside.
+          </AppText>
+        ) : null
       }
     />
   );
@@ -127,19 +113,18 @@ const HistoryTab = ({
 
 const styles = StyleSheet.create({
   listContent: {
-    padding: space.md,
-    paddingBottom: space.lg,
+    paddingHorizontal: space.md,
+    paddingTop: space.xxs,
+    paddingBottom: TAB_BAR_CLEARANCE,
     gap: space.xs,
   },
   listHeader: {
     gap: space.sm,
     marginBottom: space.xxs,
   },
-  sectionRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: space.xs,
+  footer: {
+    textAlign: "center",
+    paddingTop: space.sm,
   },
 });
 

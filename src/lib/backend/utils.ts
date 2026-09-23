@@ -1,4 +1,5 @@
-import { LeagueSummary } from "../../types/rules";
+import { LeagueSuggestion } from "../../types/rules";
+import { mapLeagueSuggestion } from "./leagueMappers";
 import { BackendSession } from "./types";
 
 const extractValidationMessage = (detail: unknown): string | null => {
@@ -152,10 +153,10 @@ export const shouldRefreshSession = (session: BackendSession | null): boolean =>
   return session.expiresAt - now < 60;
 };
 
-// Creating a league whose name closely matches an existing one (same sport)
-// is rejected with a 409 carrying `similar_leagues` and the candidates, unless
-// the client confirms the new league is distinct.
-export const getSimilarLeaguesError = (err: unknown): LeagueSummary[] | null => {
+// Creating a league that looks like an existing one (same sport in the same
+// zip, or a close name) is rejected with a 409 carrying `similar_leagues` and
+// the ranked candidates, unless the client confirms the new league is distinct.
+export const getSimilarLeaguesError = (err: unknown): LeagueSuggestion[] | null => {
   if (!hasHttpStatus(err, 409)) return null;
 
   const context = (err as { context?: unknown }).context;
@@ -178,12 +179,5 @@ export const getSimilarLeaguesError = (err: unknown): LeagueSummary[] | null => 
 
   const suggestions = (detail as { suggestions?: unknown }).suggestions;
   if (!Array.isArray(suggestions)) return [];
-  return suggestions.map((raw) => ({
-    id: String(raw?.id ?? ""),
-    name: typeof raw?.name === "string" ? raw.name : "",
-    sport: typeof raw?.sport === "string" ? raw.sport : "",
-    region: typeof raw?.region === "string" ? raw.region : null,
-    status: raw?.status ?? "active",
-    teamCount: typeof raw?.teamCount === "number" ? raw.teamCount : 0,
-  }));
+  return suggestions.map(mapLeagueSuggestion);
 };

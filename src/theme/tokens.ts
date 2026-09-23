@@ -14,6 +14,7 @@ export const radius = {
   sm: 8,
   md: 12,
   lg: 16,
+  tab: 18,
   xl: 20,
   pill: 999,
 } as const;
@@ -27,11 +28,20 @@ export const type = {
 } as const;
 
 // Shadows are tinted toward the app's green-black background, not pure black.
+// `card` is the barely-there lift under solid content cards; `glass` is the
+// deeper drop under chrome (tab bar, hero cards, icon buttons).
 export const shadow = {
   card: {
     shadowColor: "#04120b",
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+  },
+  glass: {
+    shadowColor: "#04120b",
+    shadowOpacity: 0.22,
+    shadowRadius: 16,
     shadowOffset: { width: 0, height: 4 },
     elevation: 3,
   },
@@ -45,11 +55,15 @@ export const shadow = {
 } as const;
 
 export const motion = {
-  pressScale: 0.97,
+  pressScale: 0.99,
   fast: 120, // exits, fades
   base: 160, // press feedback, enters
   slow: 240, // sheets, layout shifts
 } as const;
+
+// The tab bar floats over content, so every scroll view needs this much
+// bottom padding for its last row to clear the pill.
+export const TAB_BAR_CLEARANCE = space.xl * 4;
 
 export type SpaceKey = keyof typeof space;
 export type RadiusKey = keyof typeof radius;

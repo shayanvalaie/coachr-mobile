@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@500;600;700&family=Manrope:wght@500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700&family=Outfit:wght@500;600&display=swap" rel="stylesheet">
+<style>body{margin:0;background:#0a1410;color:#f6f1e7;font-family:'Avenir Next','Nunito Sans',system-ui,sans-serif}a{color:#f2a63b}a:hover{color:#ffbf63}</style>
+</helmet>
+<div style="padding:40px;display:flex;flex-direction:column;gap:24px">
+  <div style="font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#f2a63b;font-weight:700">Primary button options</div>
+  <div style="display:grid;grid-template-columns:repeat(3,353px);gap:24px">
+
+    <div id="1a" style="background:#0f1f18;border-radius:20px;padding:24px;display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;gap:8px;align-items:baseline"><span style="background:#f2a63b;color:#14231e;font-weight:800;font-size:11px;padding:2px 7px;border-radius:5px">1a</span><span style="font-size:13px;color:#a9b5ad">Manrope 600, 15px</span></div>
+      <div style="background:#f2a63b;color:#1c1205;border-radius:14px;padding:15px;text-align:center;font-family:'Manrope',sans-serif;font-weight:600;font-size:15px;display:flex;justify-content:center;gap:8px;align-items:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="#1c1205" stroke="#1c1205" stroke-width="1.5" stroke-linejoin="round" style="opacity:.8"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path></svg>Generate lineup</div>
+    </div>
+
+    <div id="1b" style="background:#0f1f18;border-radius:20px;padding:24px;display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;gap:8px;align-items:baseline"><span style="background:#f2a63b;color:#14231e;font-weight:800;font-size:11px;padding:2px 7px;border-radius:5px">1b</span><span style="font-size:13px;color:#a9b5ad">Plus Jakarta 600, no icon</span></div>
+      <div style="background:#f2a63b;color:#1c1205;border-radius:14px;padding:15px;text-align:center;font-family:'Plus Jakarta Sans',sans-serif;font-weight:600;font-size:15px">Generate lineup</div>
+    </div>
+
+    <div id="1c" style="background:#0f1f18;border-radius:20px;padding:24px;display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;gap:8px;align-items:baseline"><span style="background:#f2a63b;color:#14231e;font-weight:800;font-size:11px;padding:2px 7px;border-radius:5px">1c</span><span style="font-size:13px;color:#a9b5ad">Outfit 500, softer amber</span></div>
+      <div style="background:#eaa444;color:#1a1204;border-radius:14px;padding:15px;text-align:center;font-family:'Outfit',sans-serif;font-weight:500;font-size:16px;letter-spacing:.01em">Generate lineup</div>
+    </div>
+
+    <div id="1d" style="background:#0f1f18;border-radius:20px;padding:24px;display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;gap:8px;align-items:baseline"><span style="background:#f2a63b;color:#14231e;font-weight:800;font-size:11px;padding:2px 7px;border-radius:5px">1d</span><span style="font-size:13px;color:#a9b5ad">Dark glass, amber text</span></div>
+      <div style="background:rgba(30,59,49,.55);backdrop-filter:blur(14px);border:1px solid rgba(242,166,59,.45);color:#f2a63b;border-radius:14px;padding:15px;text-align:center;font-family:'Manrope',sans-serif;font-weight:600;font-size:15px;display:flex;justify-content:center;gap:8px;align-items:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="#f2a63b" stroke="#f2a63b" stroke-width="1.5" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path></svg>Generate lineup</div>
+    </div>
+
+    <div id="1e" style="background:#0f1f18;border-radius:20px;padding:24px;display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;gap:8px;align-items:baseline"><span style="background:#f2a63b;color:#14231e;font-weight:800;font-size:11px;padding:2px 7px;border-radius:5px">1e</span><span style="font-size:13px;color:#a9b5ad">Cream on amber-tinted dark</span></div>
+      <div style="background:#2a3d2b;border:1px solid rgba(242,166,59,.3);color:#f6f1e7;border-radius:14px;padding:15px;text-align:center;font-family:'Manrope',sans-serif;font-weight:600;font-size:15px;display:flex;justify-content:center;gap:8px;align-items:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="#f2a63b" stroke="#f2a63b" stroke-width="1.5" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path></svg>Generate lineup</div>
+    </div>
+
+    <div id="1f" style="background:#0f1f18;border-radius:20px;padding:24px;display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;gap:8px;align-items:baseline"><span style="background:#f2a63b;color:#14231e;font-weight:800;font-size:11px;padding:2px 7px;border-radius:5px">1f</span><span style="font-size:13px;color:#a9b5ad">Pill, uppercase label</span></div>
+      <div style="background:#f2a63b;color:#1c1205;border-radius:999px;padding:15px;text-align:center;font-family:'Manrope',sans-serif;font-weight:700;font-size:12px;letter-spacing:.14em;text-transform:uppercase">Generate lineup</div>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

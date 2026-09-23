@@ -1,10 +1,11 @@
 import { StyleSheet, View } from "react-native";
 import { BackendGame, BackendLineupVersionSummary } from "../../../lib/backend/types";
-import { EmptyState, SkeletonListRows } from "../../../components/ui";
-import { space } from "../../../theme/tokens";
+import { AppPressable, AppText, Card, Skeleton } from "../../../components/ui";
+import { radius, space } from "../../../theme/tokens";
 import GameCard from "./GameCard";
 
 type Props = {
+  dayLabel: string;
   games: BackendGame[];
   lineupsByGameId: Map<string, BackendLineupVersionSummary[]>;
   isLoading: boolean;
@@ -14,9 +15,10 @@ type Props = {
   onDeleteGame: (gameId: string) => void;
 };
 
-// The selected day's games. Lives inside the screen's single scroll container,
-// so it renders cards directly rather than owning its own list scroller.
+// The selected day, rendered under the grid: a hero per game, or a dashed
+// placeholder with the one way to add one.
 const DayAgenda = ({
+  dayLabel,
   games,
   lineupsByGameId,
   isLoading,
@@ -26,17 +28,33 @@ const DayAgenda = ({
   onDeleteGame,
 }: Props) => {
   if (isLoading) {
-    return <SkeletonListRows count={3} />;
+    return <Skeleton height={196} radius={radius.tab} />;
   }
 
   if (games.length === 0) {
     return (
-      <EmptyState
-        icon="calendar"
-        title="No games on this date yet"
-        body="Add a game to start planning lineups for it."
-        action={{ label: "Add game", onPress: onAddGame }}
-      />
+      <Card variant="outline" radius="tab" padding="none">
+        <View style={styles.emptyInner}>
+          <AppText variant="caption" family="heading" color="accent" style={styles.eyebrow}>
+            {dayLabel}
+          </AppText>
+          <AppText variant="title" family="heading">
+            No game scheduled
+          </AppText>
+          <AppPressable
+            onPress={onAddGame}
+            pressScale={1}
+            hitSlop={8}
+            style={styles.addLink}
+            accessibilityRole="button"
+            accessibilityLabel={`Add a game on ${dayLabel}`}
+          >
+            <AppText variant="body" family="heading" color="accent">
+              + Add game
+            </AppText>
+          </AppPressable>
+        </View>
+      </Card>
     );
   }
 
@@ -58,7 +76,21 @@ const DayAgenda = ({
 
 const styles = StyleSheet.create({
   list: {
+    gap: space.sm,
+  },
+  emptyInner: {
+    padding: space.md + 2,
     gap: space.xs,
+  },
+  eyebrow: {
+    textTransform: "uppercase",
+    letterSpacing: 1.4,
+  },
+  addLink: {
+    alignSelf: "flex-start",
+    marginTop: space.xxs,
+    minHeight: 28,
+    justifyContent: "center",
   },
 });
 

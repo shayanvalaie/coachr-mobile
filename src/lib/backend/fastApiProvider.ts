@@ -1,14 +1,9 @@
 import { secureStorage } from "../secureStorage";
+import { trace, setTraceBaseUrl } from "./trace";
 import Constants from "expo-constants";
 import { NativeModules } from "react-native";
 import { Player } from "../../types/lineup";
-import {
-  LeagueDetail,
-  LeagueSummary,
-  RulesetPayload,
-  RulesetStatus,
-  TeamRulesState,
-} from "../../types/rules";
+import { LeagueDetail, RulesetPayload, TeamRulesState } from "../../types/rules";
 import { parsePositions } from "../../utils/lineupGenerator";
 import {
   BackendAuthEvent,
@@ -26,6 +21,8 @@ import {
   BackendSubscriptionStatus,
   BackendVerifySubscriptionRequest,
 } from "./types";
+import { cachedRead, clearReads, invalidateReads } from "./cache";
+import { mapLeagueSummary, mapRulesetStatus } from "./leagueMappers";
 import { hasHttpStatus, shouldRefreshSession, toApiError, toError } from "./utils";
 
 const FASTAPI_BASE_URL = (process.env.EXPO_PUBLIC_FASTAPI_BASE_URL ?? "").replace(
@@ -185,7 +182,16 @@ const persistSession = async (
   session: BackendSession | null,
   event: BackendAuthEvent,
 ) => {
+  trace(`session ${event}`, {
+    event,
+    userId: session?.user.id ?? null,
+    email: session?.user.email ?? null,
+    accessToken: session?.accessToken,
+    refreshToken: session?.refreshToken,
+  });
   cachedSession = session;
+  // Cached reads belong to the previous session's user.
+  clearReads();
 
   if (session) {
     await secureStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
@@ -225,6 +231,14 @@ const requestJson = async (
   let lastNetworkError: unknown = null;
   for (const baseUrl of FASTAPI_BASE_URL_CANDIDATES) {
     try {
+      setTraceBaseUrl(baseUrl);
+      trace(`request ${init.method ?? "GET"} ${path}`, {
+        path,
+        method: init.method ?? "GET",
+        authorization: (init.headers as Record<string, string>)?.Authorization,
+        body: typeof init.body === "string" ? JSON.parse(init.body) : undefined,
+      });
+
       const res = await fetch(`${baseUrl}${path}`, {
         ...init,
         headers: {
@@ -234,10 +248,22 @@ const requestJson = async (
       });
 
       if (!res.ok) {
-        throw await toApiError(res, fallbackErrorMessage);
+        const apiError = await toApiError(res, fallbackErrorMessage);
+        trace(`response ${init.method ?? "GET"} ${path}`, {
+          path,
+          status: res.status,
+          error: apiError.message,
+        });
+        throw apiError;
       }
 
-      return parseJson(res);
+      const parsed = await parseJson(res);
+      trace(`response ${init.method ?? "GET"} ${path}`, {
+        path,
+        status: res.status,
+        body: parsed,
+      });
+      return parsed;
     } catch (err) {
       const message = toError(err).message.toLowerCase();
       const networkFailed =
@@ -405,11 +431,6 @@ const mapLineupExport = (raw: any): BackendLineupExport => ({
   base64Data: typeof raw?.base64Data === "string" ? raw.base64Data : "",
 });
 
-const RULESET_STATUSES: RulesetStatus[] = ["active", "baking", "review", "rejected"];
-
-const mapRulesetStatus = (raw: unknown): RulesetStatus =>
-  RULESET_STATUSES.includes(raw as RulesetStatus) ? (raw as RulesetStatus) : "review";
-
 const mapRuleset = (raw: any): RulesetPayload => {
   if (!raw?.id || !raw?.spec) {
     throw new Error("Ruleset payload is missing id or spec.");
@@ -424,19 +445,13 @@ const mapRuleset = (raw: any): RulesetPayload => {
     unexpressedRules: Array.isArray(raw.unexpressedRules)
       ? raw.unexpressedRules.filter((rule: unknown) => typeof rule === "string")
       : [],
+    summaryRules: Array.isArray(raw.summaryRules)
+      ? raw.summaryRules.filter((rule: unknown) => typeof rule === "string")
+      : [],
     createdAt: typeof raw.createdAt === "string" ? raw.createdAt : new Date().toISOString(),
     activatedAt: typeof raw.activatedAt === "string" ? raw.activatedAt : null,
   };
 };
-
-const mapLeagueSummary = (raw: any): LeagueSummary => ({
-  id: String(raw?.id ?? ""),
-  name: typeof raw?.name === "string" ? raw.name : "",
-  sport: typeof raw?.sport === "string" ? raw.sport : "",
-  region: typeof raw?.region === "string" ? raw.region : null,
-  status: mapRulesetStatus(raw?.status),
-  teamCount: typeof raw?.teamCount === "number" ? raw.teamCount : 0,
-});
 
 const mapLeagueDetail = (raw: any): LeagueDetail => ({
   ...mapLeagueSummary(raw),
@@ -505,29 +520,31 @@ export const fastApiBackendClient: BackendClient = {
     signOut: async (options) => {
       await ensureLoaded();
 
-      if (options?.scope === "local") {
-        await persistSession(null, "SIGNED_OUT");
+      const revoked = cachedSession;
+
+      // The local session is cleared first so signing out always succeeds.
+      // Revoking the refresh token server-side is best effort: an unreachable
+      // or failing backend must not strand the user in a signed-in app.
+      await persistSession(null, "SIGNED_OUT");
+
+      if (options?.scope === "local" || !revoked) {
         return { error: null };
       }
 
       try {
-        if (cachedSession?.accessToken) {
-          await requestJson(
-            "/auth/signout",
-            {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${cachedSession.accessToken}`,
-              },
-              body: JSON.stringify({
-                refreshToken: cachedSession.refreshToken,
-              }),
+        await requestJson(
+          "/auth/signout",
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${revoked.accessToken}`,
             },
-            "Failed to sign out",
-          );
-        }
-
-        await persistSession(null, "SIGNED_OUT");
+            body: JSON.stringify({
+              refreshToken: revoked.refreshToken,
+            }),
+          },
+          "Failed to sign out",
+        );
         return { error: null };
       } catch (err) {
         return { error: toError(err) };
@@ -607,28 +624,34 @@ export const fastApiBackendClient: BackendClient = {
       };
     },
   },
+  getMyTeam: async () =>
+    cachedRead("team", async () => {
+      const payload = (await authedRequest(
+        "/teams/me",
+        { method: "GET" },
+        "Unable to load team",
+      )) as { id?: string; name?: string } | null;
+
+      if (!payload?.id) {
+        throw new Error("Team payload missing id.");
+      }
+
+      return { id: payload.id, name: payload.name?.trim() || "My Team" };
+    }),
   getOrCreateTeam: async (_userId: string) => {
-    const payload = (await authedRequest(
-      "/teams/me",
-      { method: "GET" },
-      "Unable to load team",
-    )) as { id?: string } | null;
-
-    if (!payload?.id) {
-      throw new Error("Team payload missing id.");
-    }
-
-    return payload.id;
+    const team = await fastApiBackendClient.getMyTeam();
+    return team.id;
   },
-  getTeamRules: async (teamId: string) => {
-    const payload = await authedRequest(
-      `/teams/${teamId}/rules`,
-      { method: "GET" },
-      "Unable to load team rules",
-    );
+  getTeamRules: async (teamId: string) =>
+    cachedRead(`rules:${teamId}`, async () => {
+      const payload = await authedRequest(
+        `/teams/${teamId}/rules`,
+        { method: "GET" },
+        "Unable to load team rules",
+      );
 
-    return mapTeamRules(payload);
-  },
+      return mapTeamRules(payload);
+    }),
   upsertTeamRules: async (teamId: string, input: BackendTeamRulesInput) => {
     const payload = await authedRequest(
       `/teams/${teamId}/rules`,
@@ -639,6 +662,7 @@ export const fastApiBackendClient: BackendClient = {
       "Unable to save team rules",
     );
 
+    invalidateReads(`rules:${teamId}`);
     return mapTeamRules(payload);
   },
   setTeamLeague: async (teamId: string, leagueId: string | null) => {
@@ -651,6 +675,7 @@ export const fastApiBackendClient: BackendClient = {
       "Unable to update league membership",
     );
 
+    invalidateReads(`rules:${teamId}`);
     return mapTeamRules(payload);
   },
   searchLeagues: async (query: string, sport?: string) => {
@@ -704,15 +729,16 @@ export const fastApiBackendClient: BackendClient = {
 
     return mapRuleset(payload);
   },
-  getTeamRoster: async (teamId: string) => {
-    const payload = (await authedRequest(
-      `/teams/${teamId}/players`,
-      { method: "GET" },
-      "Unable to load roster",
-    )) as { players?: any[] } | null;
+  getTeamRoster: async (teamId: string) =>
+    cachedRead(`roster:${teamId}`, async () => {
+      const payload = (await authedRequest(
+        `/teams/${teamId}/players`,
+        { method: "GET" },
+        "Unable to load roster",
+      )) as { players?: any[] } | null;
 
-    return (payload?.players ?? []).map(mapPlayer);
-  },
+      return (payload?.players ?? []).map(mapPlayer);
+    }),
   saveTeamPlayer: async (teamId: string, player: Player) => {
     const payload = (await authedRequest(
       `/teams/${teamId}/players`,
@@ -723,6 +749,7 @@ export const fastApiBackendClient: BackendClient = {
       "Unable to save player",
     )) as { id?: string } | null;
 
+    invalidateReads(`roster:${teamId}`);
     if (!payload?.id) {
       throw new Error("Save player response did not include an id.");
     }
@@ -735,16 +762,18 @@ export const fastApiBackendClient: BackendClient = {
       { method: "DELETE" },
       "Unable to delete player",
     );
+    invalidateReads(`roster:${teamId}`);
   },
-  getTeamGames: async (teamId: string) => {
-    const payload = (await authedRequest(
-      `/teams/${teamId}/games`,
-      { method: "GET" },
-      "Unable to load games",
-    )) as { games?: any[] } | null;
+  getTeamGames: async (teamId: string) =>
+    cachedRead(`games:${teamId}`, async () => {
+      const payload = (await authedRequest(
+        `/teams/${teamId}/games`,
+        { method: "GET" },
+        "Unable to load games",
+      )) as { games?: any[] } | null;
 
-    return (payload?.games ?? []).map(mapGame);
-  },
+      return (payload?.games ?? []).map(mapGame);
+    }),
   saveTeamGame: async (teamId: string, game: BackendGame) => {
     const payload = (await authedRequest(
       `/teams/${teamId}/games`,
@@ -755,6 +784,8 @@ export const fastApiBackendClient: BackendClient = {
       "Unable to save game",
     )) as { id?: string } | null;
 
+    invalidateReads(`games:${teamId}`);
+    invalidateReads(`lineups:${teamId}`);
     if (!payload?.id) {
       throw new Error("Save game response did not include an id.");
     }
@@ -767,16 +798,21 @@ export const fastApiBackendClient: BackendClient = {
       { method: "DELETE" },
       "Unable to delete game",
     );
+    invalidateReads(`games:${teamId}`);
+    invalidateReads(`lineups:${teamId}`);
   },
-  generateLineup: async (payload: BackendLineupRequest) =>
-    authedRequest(
+  generateLineup: async (payload: BackendLineupRequest) => {
+    const result = await authedRequest(
       "/lineups/generate",
       {
         method: "POST",
         body: JSON.stringify(payload),
       },
       "Unable to generate lineup",
-    ),
+    );
+    if (payload.saveLineup) invalidateReads(`lineups:${payload.teamId}`);
+    return result;
+  },
   saveLineupVersion: async (payload: BackendSaveLineupRequest) => {
     const parsed = (await authedRequest(
       "/lineups/save",
@@ -787,6 +823,7 @@ export const fastApiBackendClient: BackendClient = {
       "Unable to save lineup version",
     )) as any;
 
+    invalidateReads(`lineups:${payload.teamId}`);
     return mapLineupVersionSummary(parsed);
   },
   getLineupVersions: async (teamId: string, gameId?: string | null) => {
@@ -794,29 +831,34 @@ export const fastApiBackendClient: BackendClient = {
       gameId === undefined
         ? ""
         : `?gameId=${encodeURIComponent(gameId ?? "__none__")}`;
-    const payload = (await authedRequest(
-      `/teams/${teamId}/lineups${query}`,
-      { method: "GET" },
-      "Unable to load lineup history",
-    )) as { lineups?: any[] } | null;
+    return cachedRead(`lineups:${teamId}:${query}`, async () => {
+      const payload = (await authedRequest(
+        `/teams/${teamId}/lineups${query}`,
+        { method: "GET" },
+        "Unable to load lineup history",
+      )) as { lineups?: any[] } | null;
 
-    return (payload?.lineups ?? []).map(mapLineupVersionSummary);
+      return (payload?.lineups ?? []).map(mapLineupVersionSummary);
+    });
   },
-  getLineupVersion: async (teamId: string, lineupId: string) => {
-    const payload = (await authedRequest(
-      `/teams/${teamId}/lineups/${lineupId}`,
-      { method: "GET" },
-      "Unable to load lineup version",
-    )) as any;
+  getLineupVersion: async (teamId: string, lineupId: string) =>
+    cachedRead(`lineup:${teamId}:${lineupId}`, async () => {
+      const payload = (await authedRequest(
+        `/teams/${teamId}/lineups/${lineupId}`,
+        { method: "GET" },
+        "Unable to load lineup version",
+      )) as any;
 
-    return mapLineupVersionDetail(payload);
-  },
+      return mapLineupVersionDetail(payload);
+    }),
   deleteLineupVersion: async (teamId: string, lineupId: string) => {
     await authedRequest(
       `/teams/${teamId}/lineups/${lineupId}`,
       { method: "DELETE" },
       "Unable to delete lineup",
     );
+    invalidateReads(`lineups:${teamId}`);
+    invalidateReads(`lineup:${teamId}:${lineupId}`);
   },
   exportLineupVersion: async (
     teamId: string,
@@ -841,17 +883,19 @@ export const fastApiBackendClient: BackendClient = {
       "Unable to verify subscription",
     )) as any;
 
+    invalidateReads("subscription");
     return mapSubscriptionStatus(payload);
   },
-  getSubscriptionStatus: async () => {
-    const payload = (await authedRequest(
-      "/subscriptions/status",
-      { method: "GET" },
-      "Unable to fetch subscription status",
-    )) as any;
+  getSubscriptionStatus: async () =>
+    cachedRead("subscription", async () => {
+      const payload = (await authedRequest(
+        "/subscriptions/status",
+        { method: "GET" },
+        "Unable to fetch subscription status",
+      )) as any;
 
-    return mapSubscriptionStatus(payload);
-  },
+      return mapSubscriptionStatus(payload);
+    }),
   setProAccess: async (enabled: boolean | null) => {
     const payload = (await authedRequest(
       "/subscriptions/pro-access",
@@ -862,6 +906,7 @@ export const fastApiBackendClient: BackendClient = {
       "Unable to update Pro access",
     )) as any;
 
+    invalidateReads("subscription");
     return mapSubscriptionStatus(payload);
   },
 };

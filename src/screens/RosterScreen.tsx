@@ -8,56 +8,40 @@ import {
   View,
 } from "react-native";
 import Animated, { useAnimatedRef } from "react-native-reanimated";
-import * as DocumentPicker from "expo-document-picker";
-import * as XLSX from "xlsx";
 import DraggablePlayerList from "../components/DraggablePlayerList";
 import {
   AppText,
-  Button,
-  Card,
   EmptyState,
+  IconButton,
   LoadTransition,
-  MetricTile,
+  PageHeader,
   ScreenContainer,
-  ScreenHeader,
   SkeletonListRows,
-  SkeletonMetricRow,
   useToast,
 } from "../components/ui";
 import { backendClient } from "../lib/backend/client";
 import { BackendSession } from "../lib/backend/types";
-import { theme } from "../theme/colors";
-import { space } from "../theme/tokens";
+import { space, TAB_BAR_CLEARANCE } from "../theme/tokens";
 import { Player } from "../types/lineup";
 import { defaultTeamRulesConfig, rulesConfigFromTeamRules } from "../types/rules";
-import { buildPlayersFromRows, createPlayer } from "../utils/lineupGenerator";
+import { createPlayer } from "../utils/lineupGenerator";
 import {
   findDuplicatePlayerNames,
   normalizePlayerName,
 } from "../utils/playerNames";
+import { pickRosterFromSpreadsheet } from "../utils/rosterImport";
 
-const FileSystem = require("expo-file-system/legacy") as {
-  readAsStringAsync: (
-    uri: string,
-    options: {
-      encoding: string;
-    },
-  ) => Promise<string>;
-};
+// Imported players are saved a few at a time: parallel enough to be quick,
+// bounded so a 30-player sheet does not open 30 connections at once.
+const IMPORT_BATCH_SIZE = 5;
 
 type Props = {
   session: BackendSession;
-  onOpenLineupPage: () => void;
   hasProSubscription: boolean;
   onRequirePro: (featureLabel: string) => void;
 };
 
-const RosterScreen = ({
-  session,
-  onOpenLineupPage,
-  hasProSubscription,
-  onRequirePro,
-}: Props) => {
+const RosterScreen = ({ session, hasProSubscription, onRequirePro }: Props) => {
   const toast = useToast();
   const [teamId, setTeamId] = useState<string | null>(null);
   const [roster, setRoster] = useState<Player[]>([]);
@@ -73,6 +57,12 @@ const RosterScreen = ({
   const hasLoadedRef = useRef(false);
   // Transient progress copy only (importing/saving); outcomes go to toasts.
   const [status, setStatus] = useState("");
+  // Per-player handlers read the roster through this ref so their identity
+  // does not change on every keystroke, which would re-render every card.
+  const rosterRef = useRef(roster);
+  useEffect(() => {
+    rosterRef.current = roster;
+  }, [roster]);
 
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
 
@@ -132,9 +122,9 @@ const RosterScreen = ({
     }
   }, []);
 
-  const activeCount = useMemo(
-    () => roster.filter((player) => activeIds.has(player.id)).length,
-    [roster, activeIds],
+  const playerCountLabel = useMemo(
+    () => `${roster.length} ${roster.length === 1 ? "player" : "players"}`,
+    [roster.length],
   );
 
   const handleAddPlayer = useCallback(() => {
@@ -205,7 +195,7 @@ const RosterScreen = ({
 
   const handleToggleActive = useCallback(
     async (id: string, checked: boolean) => {
-      const target = roster.find((p) => p.id === id);
+      const target = rosterRef.current.find((p) => p.id === id);
       if (!target) return;
       const updated: Player = { ...target, benched: !checked };
 
@@ -228,59 +218,62 @@ const RosterScreen = ({
         showError("Failed to update bench status.");
       }
     },
-    [roster, ensureTeam, showError],
+    [ensureTeam, showError],
   );
 
   const handleReorderPlayers = useCallback((nextPlayers: Player[]) => {
     setRoster(nextPlayers);
   }, []);
 
-  const savePlayer = useCallback(
+  // Persists one player and reconciles a server-assigned id for new rows.
+  const persistPlayer = useCallback(
     async (player: Player) => {
       const team = await ensureTeam();
       if (!team) {
-        showError("Unable to ensure team for saving.");
-        return;
+        throw new Error("Unable to ensure team for saving.");
       }
 
       const { id: idToUse } = await backendClient.saveTeamPlayer(team, player);
+      if (idToUse === player.id) return idToUse;
 
-      if (idToUse !== player.id) {
-        setRoster((prev) =>
-          prev.map((p) =>
-            p.id === player.id ? { ...player, id: idToUse } : p,
-          ),
-        );
-        setActiveIds((prev) => {
-          const next = new Set(prev);
-          next.delete(player.id);
-          next.add(idToUse);
-          return next;
-        });
-      }
-
-      // Collapse the card once the player is saved.
-      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-      setExpandedPlayers((prev) => {
-        if (!prev.has(player.id) && !prev.has(idToUse)) return prev;
+      setRoster((prev) =>
+        prev.map((p) => (p.id === player.id ? { ...player, id: idToUse } : p)),
+      );
+      setActiveIds((prev) => {
         const next = new Set(prev);
         next.delete(player.id);
-        next.delete(idToUse);
+        next.add(idToUse);
         return next;
       });
+      setExpandedPlayers((prev) => {
+        if (!prev.has(player.id)) return prev;
+        const next = new Set(prev);
+        next.delete(player.id);
+        next.add(idToUse);
+        return next;
+      });
+      return idToUse;
     },
-    [ensureTeam, showError],
+    [ensureTeam],
   );
 
   const handleSavePlayer = useCallback(
     async (id: string) => {
-      const player = roster.find((p) => p.id === id);
+      const player = rosterRef.current.find((p) => p.id === id);
       if (!player) return;
 
       setIsSaving(true);
       setStatus("");
       try {
-        await savePlayer(player);
+        const savedId = await persistPlayer(player);
+        // Collapse the card once the player is saved.
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        setExpandedPlayers((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          next.delete(savedId);
+          return next;
+        });
         toast.show({ message: "Player saved.", type: "success" });
       } catch (_err) {
         showError("Failed to save player.");
@@ -288,24 +281,22 @@ const RosterScreen = ({
         setIsSaving(false);
       }
     },
-    [roster, savePlayer, showError, toast],
+    [persistPlayer, showError, toast],
   );
 
-  const handleSaveAll = useCallback(async () => {
-    setIsSaving(true);
-    setStatus("");
-    try {
-      for (const player of roster) {
-        // eslint-disable-next-line no-await-in-loop
-        await savePlayer(player);
+  // Name edits persist when the field blurs, without collapsing the card.
+  const handleAutoSavePlayer = useCallback(
+    async (id: string) => {
+      const player = rosterRef.current.find((p) => p.id === id);
+      if (!player || !player.name.trim()) return;
+      try {
+        await persistPlayer(player);
+      } catch (_err) {
+        showError("Failed to save player.");
       }
-      toast.show({ message: "Roster saved.", type: "success" });
-    } catch (_err) {
-      showError("Failed to save all players.");
-    } finally {
-      setIsSaving(false);
-    }
-  }, [roster, savePlayer, showError, toast]);
+    },
+    [persistPlayer, showError],
+  );
 
   const handleRemoveAll = useCallback(() => {
     if (roster.length === 0) return;
@@ -350,55 +341,31 @@ const RosterScreen = ({
     );
   }, [roster, ensureTeam, loadRoster, showError, toast]);
 
+  // Bulk actions hide behind a long-press on the add button; the header
+  // keeps one visible amber action.
+  const handleRosterActions = useCallback(() => {
+    Alert.alert("Roster", undefined, [
+      {
+        text: "Delete all players",
+        style: "destructive",
+        onPress: handleRemoveAll,
+      },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  }, [handleRemoveAll]);
+
   const handleImportRoster = useCallback(async () => {
     setStatus("Importing roster...");
 
-    // --- Parse phase ---
-    let importedPlayers;
+    let importedPlayers: Player[] | null;
     try {
-      const result = await DocumentPicker.getDocumentAsync({
-        copyToCacheDirectory: true,
-        type: [
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-          "application/vnd.ms-excel",
-          "application/octet-stream",
-        ],
-      });
-      if (result.canceled || !result.assets?.length) {
-        setStatus("");
-        return;
-      }
-
-      const asset = result.assets[0];
-      const fileBase64 = await FileSystem.readAsStringAsync(asset.uri, {
-        encoding: "base64",
-      });
-      const workbook = XLSX.read(fileBase64, { type: "base64" });
-      const firstSheet = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[firstSheet];
-      const rows = XLSX.utils.sheet_to_json(worksheet, {
-        header: 1,
-      }) as any[][];
-      importedPlayers = buildPlayersFromRows(rows);
-    } catch (_err) {
-      showError(
-        "Unable to read the file. Make sure it is a valid Excel spreadsheet.",
-      );
+      importedPlayers = await pickRosterFromSpreadsheet();
+    } catch (err) {
+      showError(err instanceof Error ? err.message : "Unable to read the file.");
       setStatus("");
       return;
     }
-
-    if (importedPlayers.length === 0) {
-      showError("No players found in the uploaded file.");
-      setStatus("");
-      return;
-    }
-
-    const duplicateNames = findDuplicatePlayerNames(importedPlayers);
-    if (duplicateNames.length > 0) {
-      showError(
-        `Duplicate player names found in sheet: ${duplicateNames.join(", ")}.`,
-      );
+    if (!importedPlayers) {
       setStatus("");
       return;
     }
@@ -465,16 +432,16 @@ const RosterScreen = ({
     }
 
     setStatus(`Saving ${playersToCreate.length} players...`);
-    const savedIds = new Set<string>();
     const failedNames: string[] = [];
-    for (const player of playersToCreate) {
-      try {
-        // eslint-disable-next-line no-await-in-loop
-        const saved = await backendClient.saveTeamPlayer(team, player);
-        savedIds.add(saved.id);
-      } catch (_err) {
-        failedNames.push(player.name);
-      }
+    for (let start = 0; start < playersToCreate.length; start += IMPORT_BATCH_SIZE) {
+      const batch = playersToCreate.slice(start, start + IMPORT_BATCH_SIZE);
+      // eslint-disable-next-line no-await-in-loop
+      const results = await Promise.allSettled(
+        batch.map((player) => backendClient.saveTeamPlayer(team, player)),
+      );
+      results.forEach((result, index) => {
+        if (result.status === "rejected") failedNames.push(batch[index].name);
+      });
     }
 
     const nextRoster = await backendClient.getTeamRoster(team);
@@ -482,9 +449,6 @@ const RosterScreen = ({
     setActiveIds(
       new Set(nextRoster.filter((p) => !p.benched).map((p) => p.id)),
     );
-    // Only expand the newly saved players so users can review them.
-    // Pre-existing players stay collapsed and the "Save player" buttons
-    // on new cards are not shown until the user explicitly expands them.
     setExpandedPlayers(new Set());
 
     const savedCount = playersToCreate.length - failedNames.length;
@@ -530,72 +494,30 @@ const RosterScreen = ({
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
-        <ScreenHeader
-          title="Roster Builder"
-          subtitle="Manage players and keep your game-day list ready."
-        />
-
-        <LoadTransition
-          loading={isLoading}
-          skeleton={<SkeletonMetricRow count={2} height={67} />}
-        >
-          <View style={styles.metricsRow}>
-            <MetricTile label="Total players" value={roster.length} small />
-            <MetricTile label="Active" value={activeCount} small />
-          </View>
-        </LoadTransition>
-
-        <Card padding="sm" style={styles.actionsCard}>
-          <View style={styles.actionsRow}>
-            <View style={styles.actionItem}>
-              <Button
-                label="Import"
-                variant="secondary"
-                size="sm"
+        <PageHeader
+          eyebrow="Roster"
+          title={playerCountLabel}
+          right={
+            <>
+              <IconButton
                 icon="upload"
                 onPress={handleImportPress}
+                accessibilityLabel="Import roster from a spreadsheet"
               />
-            </View>
-            <View style={styles.actionItem}>
-              <Button
-                label="Save all"
-                variant="secondary"
-                size="sm"
-                icon="save"
-                onPress={handleSaveAll}
-                loading={isSaving}
-              />
-            </View>
-            <View style={styles.actionItem}>
-              <Button
-                label="Add player"
-                variant="secondary"
-                size="sm"
+              <IconButton
                 icon="plus"
+                variant="accent"
                 onPress={handleAddPlayer}
+                onLongPress={handleRosterActions}
+                accessibilityLabel="Add player"
+                accessibilityHint="Press and hold for more roster actions"
               />
-            </View>
-          </View>
-          <View style={styles.actionsRow}>
-            <View style={styles.actionItem}>
-              <Button
-                label="Delete all"
-                variant="danger"
-                icon="trash-2"
-                onPress={handleRemoveAll}
-                disabled={roster.length === 0}
-              />
-            </View>
-            <View style={styles.actionItemWide}>
-              <Button
-                label="Generate"
-                variant="primary"
-                icon="zap"
-                onPress={onOpenLineupPage}
-              />
-            </View>
-          </View>
-        </Card>
+            </>
+          }
+        />
+        <AppText variant="caption" color="secondary">
+          Tap a chip to bench a player for the next lineup. Tap a name for positions.
+        </AppText>
 
         {status ? (
           <AppText variant="caption" color="secondary">
@@ -605,7 +527,7 @@ const RosterScreen = ({
 
         <LoadTransition
           loading={isLoading}
-          skeleton={<SkeletonListRows count={5} />}
+          skeleton={<SkeletonListRows count={6} height={66} />}
         >
           {roster.length === 0 ? (
             <EmptyState
@@ -628,6 +550,7 @@ const RosterScreen = ({
               onUpdatePlayer={updatePlayer}
               onRemovePlayer={removePlayer}
               onSavePlayer={handleSavePlayer}
+              onAutoSavePlayer={handleAutoSavePlayer}
             />
           )}
         </LoadTransition>
@@ -642,25 +565,8 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: space.md,
-    paddingBottom: space.lg,
+    paddingBottom: TAB_BAR_CLEARANCE,
     gap: space.sm,
-  },
-  metricsRow: {
-    flexDirection: "row",
-    gap: space.xs,
-  },
-  actionsCard: {
-    gap: space.xs,
-  },
-  actionsRow: {
-    flexDirection: "row",
-    gap: space.xs,
-  },
-  actionItem: {
-    flex: 1,
-  },
-  actionItemWide: {
-    flex: 2,
   },
 });
 

@@ -3,11 +3,13 @@ import {
   createBottomTabNavigator,
 } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { StyleSheet, View } from "react-native";
 import BottomTabBar, { MainTabKey } from "../components/BottomTabBar";
+import RulesetBakingBar from "../components/rules/RulesetBakingBar";
 import { useReducedMotion } from "../hooks/useReducedMotion";
 import { useProGate } from "../lib/proGate";
+import { useRulesetStatus } from "../lib/rulesetStatus/RulesetStatusProvider";
 import { BackendSession } from "../lib/backend/types";
-import AllLineupsScreen from "../screens/AllLineupsScreen";
 import CalendarScreen from "../screens/calendar/CalendarScreen";
 import HomeScreen from "../screens/HomeScreen";
 import LeagueDetailScreen from "../screens/leagues/LeagueDetailScreen";
@@ -88,7 +90,7 @@ const HomeStackNavigator = ({ session }: SessionProps) => {
       }}
     >
       <HomeStack.Screen name="Home">
-        {({ navigation }) => (
+        {({ navigation, route }) => (
           <HomeScreen
             session={session}
             onOpenRulesPage={() => navigation.navigate("Rules")}
@@ -108,7 +110,17 @@ const HomeStackNavigator = ({ session }: SessionProps) => {
               }
               navigation.navigate("CalendarTab");
             }}
-            onOpenLineupsPage={() => navigation.navigate("AllLineups")}
+            onOpenSavedLineups={() => navigation.navigate("LineupTab")}
+            onOpenLineup={(version) =>
+              navigation.navigate("LineupTab", {
+                launch: buildLaunchRequest({
+                  gameId: version.gameId,
+                  lineupVersionId: version.id,
+                }),
+              })
+            }
+            replayTourRequested={!!route.params?.replayTour}
+            onTourHandled={() => navigation.setParams({ replayTour: undefined })}
           />
         )}
       </HomeStack.Screen>
@@ -116,6 +128,7 @@ const HomeStackNavigator = ({ session }: SessionProps) => {
         {({ navigation }) => (
           <RulesScreen
             session={session}
+            onBack={() => navigation.goBack()}
             onOpenLeagues={() => navigation.navigate("Leagues")}
           />
         )}
@@ -141,23 +154,6 @@ const HomeStackNavigator = ({ session }: SessionProps) => {
           />
         )}
       </HomeStack.Screen>
-      <HomeStack.Screen name="AllLineups">
-        {({ navigation }) => (
-          <AllLineupsScreen
-            session={session}
-            onGenerateLineup={() =>
-              navigation.navigate("LineupTab", {
-                launch: buildLaunchRequest({
-                  gameId: null,
-                  autoGenerate: true,
-                }),
-              })
-            }
-            hasProSubscription={proGate.isPro}
-            onRequirePro={proGate.open}
-          />
-        )}
-      </HomeStack.Screen>
     </HomeStack.Navigator>
   );
 };
@@ -165,8 +161,11 @@ const HomeStackNavigator = ({ session }: SessionProps) => {
 const MainTabs = ({ session }: SessionProps) => {
   const proGate = useProGate();
   const reducedMotion = useReducedMotion();
+  const rulesetStatus = useRulesetStatus();
 
   return (
+    <View style={styles.flex}>
+      {rulesetStatus.status === "baking" ? <RulesetBakingBar /> : null}
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
@@ -181,14 +180,6 @@ const MainTabs = ({ session }: SessionProps) => {
         {({ navigation }) => (
           <RosterScreen
             session={session}
-            onOpenLineupPage={() =>
-              navigation.navigate("LineupTab", {
-                launch: buildLaunchRequest({
-                  gameId: null,
-                  autoGenerate: true,
-                }),
-              })
-            }
             hasProSubscription={proGate.isPro}
             onRequirePro={proGate.open}
           />
@@ -199,9 +190,6 @@ const MainTabs = ({ session }: SessionProps) => {
           <LineupScreen
             session={session}
             onOpenRoster={() => navigation.navigate("RosterTab")}
-            onOpenRules={() =>
-              navigation.navigate("HomeTab", { screen: "Rules" })
-            }
             launchRequest={route.params?.launch ?? null}
             hasProSubscription={proGate.isPro}
             onRequirePro={proGate.open}
@@ -245,11 +233,25 @@ const MainTabs = ({ session }: SessionProps) => {
           <ProfileScreen
             session={session}
             onOpenSubscribe={() => navigation.navigate("Subscribe")}
+            onOpenRules={() => navigation.navigate("HomeTab", { screen: "Rules" })}
+            onReplayTour={() =>
+              navigation.navigate("HomeTab", {
+                screen: "Home",
+                params: { replayTour: true },
+              })
+            }
           />
         )}
       </Tab.Screen>
     </Tab.Navigator>
+    </View>
   );
 };
+
+const styles = StyleSheet.create({
+  flex: {
+    flex: 1,
+  },
+});
 
 export default MainTabs;

@@ -76,15 +76,6 @@ export const useCalendarData = ({ session }: Params) => {
     return map;
   }, [games]);
 
-  const upcomingCount = useMemo(
-    () =>
-      games.filter((game) => {
-        const when = new Date(game.scheduledAt).getTime();
-        return Number.isFinite(when) && when >= Date.now();
-      }).length,
-    [games],
-  );
-
   const lineupsByGameId = useMemo(() => {
     const grouped = new Map<string, BackendLineupVersionSummary[]>();
     lineupHistory.forEach((version) => {
@@ -106,7 +97,6 @@ export const useCalendarData = ({ session }: Params) => {
     ensureTeam,
     games,
     gamesByDay,
-    upcomingCount,
     lineupsByGameId,
     playerGenderByName,
     isLoading,

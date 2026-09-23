@@ -26,6 +26,7 @@ type Props = {
   onUpdatePlayer: (id: string, patch: Partial<Player>) => void;
   onRemovePlayer: (id: string) => void;
   onSavePlayer: (id: string) => void;
+  onAutoSavePlayer: (id: string) => void;
 };
 
 const DraggablePlayerList = ({
@@ -41,6 +42,7 @@ const DraggablePlayerList = ({
   onUpdatePlayer,
   onRemovePlayer,
   onSavePlayer,
+  onAutoSavePlayer,
 }: Props) => {
   // Only drives PlayerCard's raised border styling; the drag itself (item
   // positions, neighbor shifts, lift scale/shadow) runs on the UI thread
@@ -73,11 +75,12 @@ const DraggablePlayerList = ({
         isActive={activeIds.has(item.id)}
         isDragging={draggingId === item.id}
         lineupSlots={lineupSlots}
-        onToggleExpand={() => onToggleExpand(item.id)}
-        onToggleActive={(active) => onToggleActive(item.id, active)}
-        onUpdate={(patch) => onUpdatePlayer(item.id, patch)}
-        onRemove={() => onRemovePlayer(item.id)}
-        onSave={() => onSavePlayer(item.id)}
+        onToggleExpand={onToggleExpand}
+        onToggleActive={onToggleActive}
+        onUpdate={onUpdatePlayer}
+        onRemove={onRemovePlayer}
+        onSave={onSavePlayer}
+        onAutoSave={onAutoSavePlayer}
         isSaving={isSaving}
       />
     ),
@@ -92,6 +95,7 @@ const DraggablePlayerList = ({
       onUpdatePlayer,
       onRemovePlayer,
       onSavePlayer,
+      onAutoSavePlayer,
     ],
   );
 
@@ -101,7 +105,7 @@ const DraggablePlayerList = ({
       renderItem={renderItem}
       keyExtractor={(player) => player.id}
       columns={1}
-      rowGap={space.sm}
+      rowGap={space.xs + 2}
       // Drag starts from the Sortable.Handle inside PlayerCard (the
       // avatar + name area), so the expanded card's inputs, switch and
       // buttons never fight the drag gesture.

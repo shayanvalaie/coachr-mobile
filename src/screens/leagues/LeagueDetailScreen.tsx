@@ -4,21 +4,25 @@ import { Feather } from "../../icons";
 import RulesSummary from "../../components/rules/RulesSummary";
 import RulesetStatusBanner from "../../components/rules/RulesetStatusBanner";
 import {
-  AppPressable,
   AppText,
   Button,
   Card,
   LoadTransition,
+  PageHeader,
   ScreenContainer,
+  SectionLabel,
   Skeleton,
+  SkeletonMetricRow,
   useToast,
 } from "../../components/ui";
 import { backendClient } from "../../lib/backend/client";
 import { BackendSession } from "../../lib/backend/types";
 import { toError } from "../../lib/backend/utils";
+import { useRulesetStatus } from "../../lib/rulesetStatus/RulesetStatusProvider";
 import { theme } from "../../theme/colors";
 import { radius, space } from "../../theme/tokens";
 import { LeagueDetail } from "../../types/rules";
+import { describeLeague } from "./LeagueRow";
 
 type Props = {
   session: BackendSession;
@@ -28,11 +32,9 @@ type Props = {
   onJoined: () => void;
 };
 
-const capitalize = (value: string) =>
-  value.charAt(0).toUpperCase() + value.slice(1);
-
 const LeagueDetailScreen = ({ session, leagueId, onBack, onJoined }: Props) => {
   const toast = useToast();
+  const rulesetStatus = useRulesetStatus();
   const [league, setLeague] = useState<LeagueDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -59,8 +61,9 @@ const LeagueDetailScreen = ({ session, leagueId, onBack, onJoined }: Props) => {
         const teamId = await backendClient.getOrCreateTeam(session.user.id);
         if (!teamId) throw new Error("Unable to load your team.");
         await backendClient.setTeamLeague(teamId, join ? league.id : null);
+        void rulesetStatus.refresh();
         if (join) {
-          toast.show({ message: `Your team joined ${league.name}.`, type: "success" });
+          toast.show({ message: `Joined ${league.name}.`, type: "success" });
           onJoined();
           return;
         }
@@ -72,7 +75,7 @@ const LeagueDetailScreen = ({ session, leagueId, onBack, onJoined }: Props) => {
         setIsUpdating(false);
       }
     },
-    [league, load, onJoined, session.user.id, toast],
+    [league, load, onJoined, rulesetStatus, session.user.id, toast],
   );
 
   const confirmLeave = useCallback(() => {
@@ -89,96 +92,71 @@ const LeagueDetailScreen = ({ session, leagueId, onBack, onJoined }: Props) => {
 
   return (
     <ScreenContainer scroll contentStyle={styles.content}>
-      <AppPressable
-        onPress={onBack}
-        style={styles.backLink}
-        accessibilityRole="button"
-        accessibilityLabel="Back to leagues"
-        pressScale={1}
-      >
-        <Feather name="chevron-left" size={18} color={theme.text.secondary} />
-        <AppText variant="body" color="secondary">
-          Leagues
-        </AppText>
-      </AppPressable>
+      <PageHeader
+        back={{ label: "Leagues", onPress: onBack }}
+        eyebrow="League"
+        title={league?.name ?? " "}
+        subtitle={league ? describeLeague(league) : undefined}
+      />
 
       <LoadTransition
         loading={isLoading}
         style={styles.stack}
         skeleton={
           <>
-            <Skeleton height={190} radius={radius.lg} />
-            <Skeleton height={320} radius={radius.lg} />
+            <Skeleton height={52} radius={radius.lg} />
+            <SkeletonMetricRow count={2} />
+            <SkeletonMetricRow count={2} />
+            <Skeleton height={140} radius={radius.lg} delay={120} />
           </>
         }
       >
         {league ? (
           <>
-            <Card variant="elevated">
-              <View style={styles.cardInner}>
-                <AppText variant="caption" family="heading" color="accent" style={styles.eyebrow}>
-                  League
-                </AppText>
-                <AppText variant="display" family="display">
-                  {league.name}
-                </AppText>
-                <AppText variant="body" color="secondary">
-                  {[
-                    capitalize(league.sport),
-                    league.region,
-                    `${league.teamCount} ${league.teamCount === 1 ? "team" : "teams"}`,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </AppText>
-                {league.description ? (
-                  <AppText variant="body">{league.description}</AppText>
-                ) : null}
-                {league.joined ? (
-                  <View style={styles.memberRow}>
-                    <View style={styles.memberBadge}>
-                      <Feather name="check" size={13} color={theme.success.base} />
-                      <AppText variant="caption" family="heading" color="success">
-                        Your team plays here
-                      </AppText>
-                    </View>
-                    <Button
-                      label="Leave"
-                      variant="danger"
-                      size="sm"
-                      loading={isUpdating}
-                      onPress={confirmLeave}
-                      accessibilityLabel="Leave this league"
-                    />
-                  </View>
-                ) : (
-                  <Button
-                    label="Join this league"
-                    icon="log-in"
-                    loading={isUpdating}
-                    onPress={() => void setMembership(true)}
-                    fullWidth
-                    accessibilityLabel={`Join ${league.name}`}
-                  />
-                )}
+            {league.description ? (
+              <AppText variant="body" color="secondary">
+                {league.description}
+              </AppText>
+            ) : null}
+
+            {league.joined ? (
+              <View style={styles.memberRow}>
+                <View style={styles.memberBadge}>
+                  <Feather name="check" size={13} color={theme.success.base} />
+                  <AppText variant="caption" family="heading" color="success">
+                    Your team plays here
+                  </AppText>
+                </View>
+                <Button
+                  label="Leave"
+                  variant="danger"
+                  size="sm"
+                  loading={isUpdating}
+                  onPress={confirmLeave}
+                  accessibilityLabel="Leave this league"
+                />
               </View>
-            </Card>
+            ) : (
+              <Button
+                label="Join this league"
+                icon="log-in"
+                size="lg"
+                loading={isUpdating}
+                onPress={() => void setMembership(true)}
+                fullWidth
+                accessibilityLabel={`Join ${league.name}`}
+              />
+            )}
 
             {league.status !== "active" ? (
               <RulesetStatusBanner status={league.status} />
             ) : null}
 
-            <RulesSummary
-              spec={league.ruleset.spec}
-              unexpressedRules={league.ruleset.unexpressedRules}
-              eyebrow="League rules"
-            />
+            <RulesSummary ruleset={league.ruleset} />
 
             <Card>
               <View style={styles.cardInner}>
-                <AppText variant="caption" family="heading" color="secondary">
-                  As written by the league
-                </AppText>
+                <SectionLabel>As written by the league</SectionLabel>
                 <AppText variant="body">{league.rulesText}</AppText>
               </View>
             </Card>
@@ -191,24 +169,13 @@ const LeagueDetailScreen = ({ session, leagueId, onBack, onJoined }: Props) => {
 
 const styles = StyleSheet.create({
   content: {
-    gap: space.sm,
+    gap: space.md,
   },
   stack: {
-    gap: space.sm,
-  },
-  backLink: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "flex-start",
-    gap: space.xxs,
-    minHeight: 32,
+    gap: space.md,
   },
   cardInner: {
-    gap: space.sm,
-  },
-  eyebrow: {
-    textTransform: "uppercase",
-    letterSpacing: 1,
+    gap: space.xs,
   },
   memberRow: {
     flexDirection: "row",
