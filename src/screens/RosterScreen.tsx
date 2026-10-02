@@ -44,7 +44,7 @@ type Props = {
 const RosterScreen = ({ session, hasProSubscription, onRequirePro }: Props) => {
   const toast = useToast();
   const [teamId, setTeamId] = useState<string | null>(null);
-  const [roster, setRoster] = useState<Player[]>([]);
+  const [roster, setRosterState] = useState<Player[]>([]);
   const [lineupSlots, setLineupSlots] = useState<string[]>(
     defaultTeamRulesConfig.lineupSlots,
   );
@@ -60,9 +60,11 @@ const RosterScreen = ({ session, hasProSubscription, onRequirePro }: Props) => {
   // Per-player handlers read the roster through this ref so their identity
   // does not change on every keystroke, which would re-render every card.
   const rosterRef = useRef(roster);
-  useEffect(() => {
-    rosterRef.current = roster;
-  }, [roster]);
+  const setRoster = useCallback((update: Player[] | ((players: Player[]) => Player[])) => {
+    const next = typeof update === "function" ? update(rosterRef.current) : update;
+    rosterRef.current = next;
+    setRosterState(next);
+  }, []);
 
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
 
@@ -135,23 +137,6 @@ const RosterScreen = ({ session, hasProSubscription, onRequirePro }: Props) => {
     setExpandedPlayers((prev) => new Set(prev).add(newPlayer.id));
   }, []);
 
-  const updatePlayer = useCallback((id: string, patch: Partial<Player>) => {
-    setRoster((prev) =>
-      prev.map((player) =>
-        player.id === id
-          ? {
-              ...player,
-              ...patch,
-              lockInPosition:
-                (patch.lockInPosition ?? player.lockInPosition) &&
-                (patch.desiredPositions ?? player.desiredPositions).length ===
-                  1,
-            }
-          : player,
-      ),
-    );
-  }, []);
-
   const removePlayer = useCallback(
     async (id: string) => {
       // Optimistically remove from local state for a responsive UI.
@@ -193,6 +178,60 @@ const RosterScreen = ({ session, hasProSubscription, onRequirePro }: Props) => {
     });
   }, []);
 
+  const handleReorderPlayers = useCallback((nextPlayers: Player[]) => {
+    setRoster(nextPlayers);
+  }, []);
+
+  // Persists one player and reconciles a server-assigned id for new rows.
+  const persistPlayer = useCallback(
+    async (player: Player) => {
+      const team = await ensureTeam();
+      if (!team) {
+        throw new Error("Unable to ensure team for saving.");
+      }
+
+      const { id: idToUse } = await backendClient.saveTeamPlayer(team, player);
+      if (idToUse === player.id) return idToUse;
+
+      setRoster((prev) =>
+        prev.map((p) => (p.id === player.id ? { ...p, id: idToUse } : p)),
+      );
+      setActiveIds((prev) => {
+        const next = new Set(prev);
+        if (next.delete(player.id)) next.add(idToUse);
+        return next;
+      });
+      setExpandedPlayers((prev) => {
+        if (!prev.has(player.id)) return prev;
+        const next = new Set(prev);
+        next.delete(player.id);
+        next.add(idToUse);
+        return next;
+      });
+      return idToUse;
+    },
+    [ensureTeam],
+  );
+
+  const updatePlayer = useCallback((id: string, patch: Partial<Player>) => {
+    const player = rosterRef.current.find((entry) => entry.id === id);
+    if (!player) return;
+    const updated: Player = {
+      ...player,
+      ...patch,
+      lockInPosition:
+        (patch.lockInPosition ?? player.lockInPosition) &&
+        (patch.desiredPositions ?? player.desiredPositions).length === 1,
+    };
+    setRoster((prev) => prev.map((entry) => entry.id === id ? updated : entry));
+    // Text is saved on blur. Discrete selections save immediately once named.
+    if (patch.name === undefined && updated.name.trim()) {
+      void persistPlayer(updated).catch(() => {
+        showError("Player changes weren't saved. Check your connection and tap Save player to retry.");
+      });
+    }
+  }, [persistPlayer, setRoster, showError]);
+
   const handleToggleActive = useCallback(
     async (id: string, checked: boolean) => {
       const target = rosterRef.current.find((p) => p.id === id);
@@ -210,51 +249,14 @@ const RosterScreen = ({ session, hasProSubscription, onRequirePro }: Props) => {
 
       // Persist so the bench choice survives reloads and is honored by
       // lineup generation (the Lineup screen loads its active set from here).
+      if (!updated.name.trim()) return;
       try {
-        const team = await ensureTeam();
-        if (!team) return;
-        await backendClient.saveTeamPlayer(team, updated);
+        await persistPlayer(updated);
       } catch (_err) {
         showError("Failed to update bench status.");
       }
     },
-    [ensureTeam, showError],
-  );
-
-  const handleReorderPlayers = useCallback((nextPlayers: Player[]) => {
-    setRoster(nextPlayers);
-  }, []);
-
-  // Persists one player and reconciles a server-assigned id for new rows.
-  const persistPlayer = useCallback(
-    async (player: Player) => {
-      const team = await ensureTeam();
-      if (!team) {
-        throw new Error("Unable to ensure team for saving.");
-      }
-
-      const { id: idToUse } = await backendClient.saveTeamPlayer(team, player);
-      if (idToUse === player.id) return idToUse;
-
-      setRoster((prev) =>
-        prev.map((p) => (p.id === player.id ? { ...player, id: idToUse } : p)),
-      );
-      setActiveIds((prev) => {
-        const next = new Set(prev);
-        next.delete(player.id);
-        next.add(idToUse);
-        return next;
-      });
-      setExpandedPlayers((prev) => {
-        if (!prev.has(player.id)) return prev;
-        const next = new Set(prev);
-        next.delete(player.id);
-        next.add(idToUse);
-        return next;
-      });
-      return idToUse;
-    },
-    [ensureTeam],
+    [persistPlayer, showError],
   );
 
   const handleSavePlayer = useCallback(

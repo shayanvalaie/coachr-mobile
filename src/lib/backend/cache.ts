@@ -21,22 +21,26 @@ export const cachedRead = <T>(key: string, fetcher: () => Promise<T>): Promise<T
 
   const request = fetcher()
     .then((value) => {
-      entries.set(key, { value, fetchedAt: Date.now() });
+      if (inFlight.get(key) === request) entries.set(key, { value, fetchedAt: Date.now() });
       return value;
     })
     .finally(() => {
-      inFlight.delete(key);
+      if (inFlight.get(key) === request) inFlight.delete(key);
     });
   inFlight.set(key, request);
   return request;
 };
 
 export const invalidateReads = (prefix: string) => {
+  for (const key of inFlight.keys()) {
+    if (key.startsWith(prefix)) inFlight.delete(key);
+  }
   for (const key of entries.keys()) {
     if (key.startsWith(prefix)) entries.delete(key);
   }
 };
 
 export const clearReads = () => {
+  inFlight.clear();
   entries.clear();
 };

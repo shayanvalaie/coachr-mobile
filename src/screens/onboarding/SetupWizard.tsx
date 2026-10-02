@@ -1,3 +1,4 @@
+import { useLeagueValidation } from "../../hooks/useLeagueValidation";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -34,7 +35,11 @@ import { navigateFromRef } from "../../navigation/navigationRef";
 import { theme } from "../../theme/colors";
 import { motion, radius, space } from "../../theme/tokens";
 import { typeface } from "../../theme/typography";
-import { LeagueSuggestion, LeagueSummary, RulesetStatus } from "../../types/rules";
+import {
+  LeagueSuggestion,
+  LeagueSummary,
+  RulesetStatus,
+} from "../../types/rules";
 import { digitsOnly, parseCount } from "../../utils/formNumbers";
 import LeagueRow, { describeMatchReasons } from "../leagues/LeagueRow";
 
@@ -136,7 +141,13 @@ const OptionRow = ({
   detail: string;
   onPress: () => void;
 }) => (
-  <Card variant="glass" radius="lg" padding="sm" onPress={onPress} accessibilityLabel={title}>
+  <Card
+    variant="glass"
+    radius="lg"
+    padding="sm"
+    onPress={onPress}
+    accessibilityLabel={title}
+  >
     <View style={styles.optionRow}>
       <View style={styles.optionIcon}>
         <Feather name={icon} size={16} color={theme.accent.base} />
@@ -171,7 +182,9 @@ const SetupWizard = ({ session }: Props) => {
 
   const [rulesMode, setRulesMode] = useState<RulesMode>("search");
   const [leagueQuery, setLeagueQuery] = useState("");
-  const [leagueResults, setLeagueResults] = useState<LeagueSummary[] | null>(null);
+  const [leagueResults, setLeagueResults] = useState<LeagueSummary[] | null>(
+    null,
+  );
   // null until the first check completes; false disables search entirely.
   const [anyLeaguesExist, setAnyLeaguesExist] = useState<boolean | null>(null);
   const [joiningLeagueId, setJoiningLeagueId] = useState<string | null>(null);
@@ -189,8 +202,9 @@ const SetupWizard = ({ session }: Props) => {
   const [leaguePlace, setLeaguePlace] = useState<PlaceValue | null>(null);
   const [segmentCountDraft, setSegmentCountDraft] = useState("");
   const [playersOnFieldDraft, setPlayersOnFieldDraft] = useState("");
-  const [similarLeagues, setSimilarLeagues] = useState<LeagueSuggestion[] | null>(null);
-
+  const [similarLeagues, setSimilarLeagues] = useState<
+    LeagueSuggestion[] | null
+  >(null);
 
   // Decide once whether this account needs the wizard. A roster with players
   // means the account is already set up (or migrated) - mark done and stay out
@@ -283,11 +297,13 @@ const SetupWizard = ({ session }: Props) => {
   // Nothing to search when Coachr has no leagues yet: skip straight to the
   // Create / Own options.
   useEffect(() => {
-    if (anyLeaguesExist === false && rulesMode === "search") setRulesMode("options");
+    if (anyLeaguesExist === false && rulesMode === "search")
+      setRulesMode("options");
   }, [anyLeaguesExist, rulesMode]);
 
   useEffect(() => {
-    if (step === "rules") trace("wizard rules mode", { rulesMode, anyLeaguesExist });
+    if (step === "rules")
+      trace("wizard rules mode", { rulesMode, anyLeaguesExist });
   }, [anyLeaguesExist, rulesMode, step]);
 
   useEffect(() => {
@@ -330,24 +346,34 @@ const SetupWizard = ({ session }: Props) => {
     [handOffToRoster, joiningLeagueId, rulesetStatus, teamId, toast, wizardKey],
   );
 
-  // Mirrors the server's validation so the buttons only enable for a payload
-  // that will pass it.
+  // League errors appear on submit beside the incomplete fields.
+  const validation = useLeagueValidation({
+    name: leagueNameDraft,
+    sport: sportDraft,
+    place: leaguePlace,
+    segments: segmentCountDraft,
+    players: playersOnFieldDraft,
+    rules: rulesDraft,
+  });
   const parsedSegmentCount = parseCount(segmentCountDraft);
   const parsedPlayersOnField = parseCount(playersOnFieldDraft);
-  const sizeValid = parsedSegmentCount !== null && parsedPlayersOnField !== null;
+  const sizeValid =
+    parsedSegmentCount !== null && parsedPlayersOnField !== null;
   const createValid =
     leagueNameDraft.trim().length >= 2 &&
     sportDraft !== null &&
     leaguePlace !== null &&
     sizeValid &&
     rulesDraft.trim().length >= 10;
-  const ownValid = sportDraft !== null && sizeValid && rulesDraft.trim().length >= 10;
+  const ownValid =
+    sportDraft !== null && sizeValid && rulesDraft.trim().length >= 10;
 
   // Both saves are optimistic: the wizard advances to the roster step at once
   // and the request finishes in the background. A failure bounces the coach
   // back to the same form with drafts intact and the error shown.
   const createLeague = useCallback(
     async (confirmDistinct: boolean) => {
+      if (!validation.validate()) return;
       if (
         !teamId ||
         !createValid ||
@@ -373,7 +399,10 @@ const SetupWizard = ({ session }: Props) => {
       setSimilarLeagues(null);
       setIsSavingRules(true);
       handOffToRoster({ kind: "saving" });
-      trace("wizard create league submit", { ...draft, rulesText: draft.rulesText.length + " chars" });
+      trace("wizard create league submit", {
+        ...draft,
+        rulesText: draft.rulesText.length + " chars",
+      });
       try {
         const league = await backendClient.createLeague({
           name: draft.name,
@@ -402,13 +431,19 @@ const SetupWizard = ({ session }: Props) => {
         setRulesMode("create");
         const similar = getSimilarLeaguesError(err);
         trace("wizard create league failed", {
-          similar: similar?.map((league) => ({ id: league.id, name: league.name, matchReasons: league.matchReasons })) ?? null,
+          similar:
+            similar?.map((league) => ({
+              id: league.id,
+              name: league.name,
+              matchReasons: league.matchReasons,
+            })) ?? null,
           error: similar ? null : toError(err).message,
         });
         if (similar) {
           setSimilarLeagues(similar);
           toast.show({
-            message: "Your league may already be on Coachr. Pick it or confirm yours is different.",
+            message:
+              "Your league may already be on Coachr. Pick it or confirm yours is different.",
             type: "info",
           });
           return;
@@ -421,6 +456,7 @@ const SetupWizard = ({ session }: Props) => {
     },
     [
       announceResult,
+      validation,
       createValid,
       handOffToRoster,
       leagueNameDraft,
@@ -455,7 +491,10 @@ const SetupWizard = ({ session }: Props) => {
     setSimilarLeagues(null);
     setIsSavingRules(true);
     handOffToRoster({ kind: "saving" });
-    trace("wizard own rules submit", { ...draft, rulesText: draft.rulesText.length + " chars" });
+    trace("wizard own rules submit", {
+      ...draft,
+      rulesText: draft.rulesText.length + " chars",
+    });
     try {
       const next = await backendClient.upsertTeamRules(teamId, {
         rulesText: draft.rulesText,
@@ -464,7 +503,10 @@ const SetupWizard = ({ session }: Props) => {
         playersOnField: draft.playersOnField,
       });
       void rulesetStatus.refresh();
-      announceResult({ kind: "rules", status: next.ruleset?.status ?? "baking" });
+      announceResult({
+        kind: "rules",
+        status: next.ruleset?.status ?? "baking",
+      });
     } catch (err) {
       setNoticeOpen(false);
       setVisible(true);
@@ -553,7 +595,11 @@ const SetupWizard = ({ session }: Props) => {
               accessibilityRole="button"
               accessibilityLabel="Back"
             >
-              <Feather name="chevron-left" size={22} color={theme.text.primary} />
+              <Feather
+                name="chevron-left"
+                size={22}
+                color={theme.text.primary}
+              />
             </AppPressable>
           ) : null}
           <View
@@ -563,7 +609,10 @@ const SetupWizard = ({ session }: Props) => {
             {STEPS.map((name, index) => (
               <View
                 key={name}
-                style={[styles.progressBar, index <= stepIndex && styles.progressBarActive]}
+                style={[
+                  styles.progressBar,
+                  index <= stepIndex && styles.progressBarActive,
+                ]}
               />
             ))}
           </View>
@@ -582,18 +631,27 @@ const SetupWizard = ({ session }: Props) => {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <ScrollView
+          ref={validation.scrollRef}
           style={styles.flex}
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
         >
           {step === "welcome" ? (
             <Reveal style={styles.stack}>
-              <AppText variant="caption" family="heading" color="accent" style={styles.eyebrow}>
+              <AppText
+                variant="caption"
+                family="heading"
+                color="accent"
+                style={styles.eyebrow}
+              >
                 Welcome to Coachr
               </AppText>
-              <AppText style={styles.heroTitle}>Let's get your first lineup ready</AppText>
+              <AppText style={styles.heroTitle}>
+                Let's get your first lineup ready
+              </AppText>
               <AppText variant="bodyLg" color="secondary">
-                One quick step: your rules. Then add your players and you're generating.
+                One quick step: your rules. Then add your players and you're
+                generating.
               </AppText>
               <View style={styles.checklist}>
                 {WELCOME_ITEMS.map((item, index) => (
@@ -619,7 +677,12 @@ const SetupWizard = ({ session }: Props) => {
 
           {step === "rules" ? (
             <Reveal key={rulesMode} style={styles.stack}>
-              <AppText variant="caption" family="heading" color="accent" style={styles.eyebrow}>
+              <AppText
+                variant="caption"
+                family="heading"
+                color="accent"
+                style={styles.eyebrow}
+              >
                 Rules
               </AppText>
               <AppText variant="display" family="display" style={styles.title}>
@@ -636,7 +699,13 @@ const SetupWizard = ({ session }: Props) => {
                     autoCorrect={false}
                     returnKeyType="search"
                     highlighted={leagueQuery.trim().length > 0}
-                    left={<Feather name="search" size={16} color={theme.accent.base} />}
+                    left={
+                      <Feather
+                        name="search"
+                        size={16}
+                        color={theme.accent.base}
+                      />
+                    }
                     accessibilityLabel="Search leagues"
                   />
                   {leagueResults && leagueResults.length > 0 ? (
@@ -646,7 +715,10 @@ const SetupWizard = ({ session }: Props) => {
                           key={league.id}
                           league={league}
                           onPress={() => void joinLeague(league)}
-                          action={{ label: "Join", busy: joiningLeagueId === league.id }}
+                          action={{
+                            label: "Join",
+                            busy: joiningLeagueId === league.id,
+                          }}
                         />
                       ))}
                     </ListGroup>
@@ -677,7 +749,11 @@ const SetupWizard = ({ session }: Props) => {
                     <AppText variant="body" family="heading" color="accent">
                       League not here?
                     </AppText>
-                    <Feather name="chevron-right" size={16} color={theme.accent.base} />
+                    <Feather
+                      name="chevron-right"
+                      size={16}
+                      color={theme.accent.base}
+                    />
                   </AppPressable>
                 </View>
               ) : null}
@@ -709,7 +785,11 @@ const SetupWizard = ({ session }: Props) => {
                       accessibilityRole="button"
                       accessibilityLabel="Back to search"
                     >
-                      <Feather name="chevron-left" size={16} color={theme.accent.base} />
+                      <Feather
+                        name="chevron-left"
+                        size={16}
+                        color={theme.accent.base}
+                      />
                       <AppText variant="body" family="heading" color="accent">
                         Back to search
                       </AppText>
@@ -720,75 +800,135 @@ const SetupWizard = ({ session }: Props) => {
 
               {rulesMode === "create" ? (
                 <View style={styles.stack}>
-                  <Input
-                    label="League name"
-                    value={leagueNameDraft}
-                    onChangeText={(value) => {
-                      setLeagueNameDraft(value);
-                      setSimilarLeagues(null);
+                  <View
+                    collapsable={false}
+                    ref={(node) => {
+                      validation.fields.current.name = node;
                     }}
-                    placeholder="Austin Coed Softball"
-                    accessibilityLabel="League name"
-                  />
-                  <SportPicker
-                    value={sportDraft}
-                    onChange={(code) => {
-                      setSportDraft(code);
-                      setSimilarLeagues(null);
-                    }}
-                  />
-                  <PlaceSearch
-                    value={leaguePlace}
-                    onChange={(next) => {
-                      setLeaguePlace(next);
-                      setSimilarLeagues(null);
-                    }}
-                  />
-                  <View style={styles.fieldRow}>
+                  >
                     <Input
-                      label="Innings or periods"
-                      value={segmentCountDraft}
-                      onChangeText={(value) => setSegmentCountDraft(digitsOnly(value, 2))}
-                      placeholder="7"
-                      keyboardType="number-pad"
-                      maxLength={2}
-                      containerStyle={styles.flex}
-                      accessibilityLabel="Innings or periods"
+                      label="League name"
+                      value={leagueNameDraft}
+                      onChangeText={(value) => {
+                        setLeagueNameDraft(value);
+                        setSimilarLeagues(null);
+                      }}
+                      placeholder="Austin Coed Softball"
+                      accessibilityLabel="League name"
                     />
-                    <Input
-                      label="Players on field"
-                      value={playersOnFieldDraft}
-                      onChangeText={(value) => setPlayersOnFieldDraft(digitsOnly(value, 2))}
-                      placeholder="10"
-                      keyboardType="number-pad"
-                      maxLength={2}
-                      containerStyle={styles.flex}
-                      accessibilityLabel="Players on the field"
+                    {validation.errors.name ? (
+                      <AppText color="danger" accessibilityRole="alert">
+                        {validation.errors.name}
+                      </AppText>
+                    ) : null}
+                  </View>
+                  <View
+                    collapsable={false}
+                    ref={(node) => {
+                      validation.fields.current.sport = node;
+                    }}
+                  >
+                    <SportPicker
+                      value={sportDraft}
+                      onChange={(code) => {
+                        setSportDraft(code);
+                        setSimilarLeagues(null);
+                      }}
+                    />
+                    {validation.errors.sport ? (
+                      <AppText color="danger" accessibilityRole="alert">
+                        {validation.errors.sport}
+                      </AppText>
+                    ) : null}
+                  </View>
+                  <View
+                    collapsable={false}
+                    ref={(node) => {
+                      validation.fields.current.place = node;
+                    }}
+                  >
+                    <PlaceSearch
+                      error={validation.errors.place}
+                      value={leaguePlace}
+                      onChange={(next) => {
+                        setLeaguePlace(next);
+                        setSimilarLeagues(null);
+                      }}
                     />
                   </View>
-                  <Input
-                    label="League rules"
-                    value={rulesDraft}
-                    onChangeText={(value) => {
-                      setRulesDraft(value);
-                      if (rulesError) setRulesError(null);
+                  <View
+                    collapsable={false}
+                    ref={(node) => {
+                      validation.fields.current.size = node;
                     }}
-                    placeholder="7 innings, 10 on the field, at least 3 women, nobody sits twice in a row…"
-                    multiline
-                    textAlignVertical="top"
-                    style={styles.textareaCreate}
-                    error={rulesError}
-                    hint={RULES_HINT}
-                    accessibilityLabel="League rules"
-                  />
+                  >
+                    <View style={styles.fieldRow}>
+                      <Input
+                        label="Innings or periods"
+                        value={segmentCountDraft}
+                        onChangeText={(value) =>
+                          setSegmentCountDraft(digitsOnly(value, 2))
+                        }
+                        placeholder="7"
+                        keyboardType="number-pad"
+                        maxLength={2}
+                        containerStyle={styles.flex}
+                        accessibilityLabel="Innings or periods"
+                      />
+                      <Input
+                        label="Players on field"
+                        value={playersOnFieldDraft}
+                        onChangeText={(value) =>
+                          setPlayersOnFieldDraft(digitsOnly(value, 2))
+                        }
+                        placeholder="10"
+                        keyboardType="number-pad"
+                        maxLength={2}
+                        containerStyle={styles.flex}
+                        accessibilityLabel="Players on the field"
+                      />
+                    </View>
+                    {validation.errors.size ? (
+                      <AppText color="danger" accessibilityRole="alert">
+                        {validation.errors.size}
+                      </AppText>
+                    ) : null}
+                  </View>
+                  <View
+                    collapsable={false}
+                    ref={(node) => {
+                      validation.fields.current.rules = node;
+                    }}
+                  >
+                    <Input
+                      label="League rules"
+                      value={rulesDraft}
+                      onChangeText={(value) => {
+                        setRulesDraft(value);
+                        if (rulesError) setRulesError(null);
+                      }}
+                      placeholder="7 innings, 10 on the field, at least 3 women, nobody sits twice in a row…"
+                      multiline
+                      textAlignVertical="top"
+                      style={styles.textareaCreate}
+                      error={rulesError}
+                      hint={RULES_HINT}
+                      accessibilityLabel="League rules"
+                    />
+                    {validation.errors.rules ? (
+                      <AppText color="danger" accessibilityRole="alert">
+                        {validation.errors.rules}
+                      </AppText>
+                    ) : null}
+                  </View>
                   {similarLeagues ? (
                     <View style={styles.stack}>
                       <AppText variant="bodyLg" family="heading">
                         Is your league one of these?
                       </AppText>
                       <AppText variant="caption" color="secondary">
-                        Same sport in your zip, or a similar name. Join it, or confirm
-                        yours is different.
+                        Same sport in your zip, or a similar name. Join it, or
+                        confirm yours is different.
                       </AppText>
                       <ListGroup>
                         {similarLeagues.slice(0, 3).map((league) => (
@@ -797,7 +937,10 @@ const SetupWizard = ({ session }: Props) => {
                             league={league}
                             tags={describeMatchReasons(league.matchReasons)}
                             onPress={() => void joinLeague(league)}
-                            action={{ label: "Join", busy: joiningLeagueId === league.id }}
+                            action={{
+                              label: "Join",
+                              busy: joiningLeagueId === league.id,
+                            }}
                           />
                         ))}
                       </ListGroup>
@@ -815,7 +958,7 @@ const SetupWizard = ({ session }: Props) => {
                       size="lg"
                       fullWidth
                       loading={isSavingRules}
-                      disabled={!createValid}
+                      disabled={isSavingRules}
                       onPress={() => void createLeague(false)}
                       accessibilityLabel="Create league"
                     />
@@ -830,7 +973,9 @@ const SetupWizard = ({ session }: Props) => {
                     <Input
                       label="Innings or periods"
                       value={segmentCountDraft}
-                      onChangeText={(value) => setSegmentCountDraft(digitsOnly(value, 2))}
+                      onChangeText={(value) =>
+                        setSegmentCountDraft(digitsOnly(value, 2))
+                      }
                       placeholder="7"
                       keyboardType="number-pad"
                       maxLength={2}
@@ -840,7 +985,9 @@ const SetupWizard = ({ session }: Props) => {
                     <Input
                       label="Players on field"
                       value={playersOnFieldDraft}
-                      onChangeText={(value) => setPlayersOnFieldDraft(digitsOnly(value, 2))}
+                      onChangeText={(value) =>
+                        setPlayersOnFieldDraft(digitsOnly(value, 2))
+                      }
                       placeholder="10"
                       keyboardType="number-pad"
                       maxLength={2}
@@ -876,7 +1023,6 @@ const SetupWizard = ({ session }: Props) => {
               ) : null}
             </Reveal>
           ) : null}
-
         </ScrollView>
 
         {step === "welcome" ? (
@@ -890,7 +1036,6 @@ const SetupWizard = ({ session }: Props) => {
             />
           </View>
         ) : null}
-
       </KeyboardAvoidingView>
       {noticeSheet}
     </View>

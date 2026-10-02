@@ -186,17 +186,25 @@ export const useLineupGeneration = ({
           return;
         }
 
-        if (activePlayers.length < rulesConfig.minimumPlayers) {
+        const savedRoster = await backendClient.getTeamRoster(team, { requireSaved: true });
+        const savedById = new Map(savedRoster.map((player) => [player.id, player]));
+        const currentPlayers = activePlayers.map((player) => {
+          const saved = savedById.get(player.id);
+          if (!saved) throw new Error("Your roster changed. Reopen the Lineup tab and select your players again.");
+          return saved;
+        });
+
+        if (currentPlayers.length < rulesConfig.minimumPlayers) {
           setRosterRequirement({
             required: rulesConfig.minimumPlayers,
-            have: activePlayers.length,
+            have: currentPlayers.length,
             detail: `Your rules require at least ${rulesConfig.minimumPlayers} active players to generate a lineup.`,
           });
           setStatus("");
           return;
         }
 
-        const payloadRoster = activePlayers.map((player) => ({
+        const payloadRoster = currentPlayers.map((player) => ({
           id: player.id,
           name: player.name,
           gender: player.gender,

@@ -1,3 +1,4 @@
+import { writeRoster, waitForRosterWrites } from "./rosterWrites";
 import { secureStorage } from "../secureStorage";
 import { trace, setTraceBaseUrl } from "./trace";
 import Constants from "expo-constants";
@@ -19,6 +20,7 @@ import {
   BackendLineupRequest,
   BackendSession,
   BackendSubscriptionStatus,
+  BackendAdminAccount,
   BackendVerifySubscriptionRequest,
 } from "./types";
 import { cachedRead, clearReads, invalidateReads } from "./cache";
@@ -476,6 +478,7 @@ const mapSubscriptionStatus = (raw: any): BackendSubscriptionStatus => ({
   expiresAt: typeof raw?.expiresAt === "string" ? raw.expiresAt : null,
   proAccess: typeof raw?.proAccess === "boolean" ? raw.proAccess : null,
   isAdmin: !!raw?.isAdmin,
+  canManageAdmins: raw?.canManageAdmins === true,
 });
 
 export const fastApiBackendClient: BackendClient = {
@@ -512,6 +515,22 @@ export const fastApiBackendClient: BackendClient = {
           },
           "Failed to resend verification code",
         );
+        return { error: null };
+      } catch (err) {
+        return { error: toError(err) };
+      }
+    },
+    forgotPassword: async (input) => {
+      try {
+        await requestJson("/auth/forgot-password", { method: "POST", body: JSON.stringify(input) }, "Unable to send reset code");
+        return { error: null };
+      } catch (err) {
+        return { error: toError(err) };
+      }
+    },
+    resetPassword: async (input) => {
+      try {
+        await requestJson("/auth/reset-password", { method: "POST", body: JSON.stringify(input) }, "Unable to reset password");
         return { error: null };
       } catch (err) {
         return { error: toError(err) };
@@ -729,8 +748,9 @@ export const fastApiBackendClient: BackendClient = {
 
     return mapRuleset(payload);
   },
-  getTeamRoster: async (teamId: string) =>
-    cachedRead(`roster:${teamId}`, async () => {
+  getTeamRoster: async (teamId: string, options) => {
+    await waitForRosterWrites(teamId, options?.requireSaved === true);
+    return cachedRead(`roster:${teamId}`, async () => {
       const payload = (await authedRequest(
         `/teams/${teamId}/players`,
         { method: "GET" },
@@ -738,8 +758,9 @@ export const fastApiBackendClient: BackendClient = {
       )) as { players?: any[] } | null;
 
       return (payload?.players ?? []).map(mapPlayer);
-    }),
-  saveTeamPlayer: async (teamId: string, player: Player) => {
+    });
+  },
+  saveTeamPlayer: (teamId: string, player: Player) => writeRoster(teamId, player.id, async () => {
     const payload = (await authedRequest(
       `/teams/${teamId}/players`,
       {
@@ -755,15 +776,15 @@ export const fastApiBackendClient: BackendClient = {
     }
 
     return { id: payload.id };
-  },
-  deleteTeamPlayer: async (teamId: string, playerId: string) => {
+  }),
+  deleteTeamPlayer: (teamId: string, playerId: string) => writeRoster(teamId, playerId, async () => {
     await authedRequest(
       `/teams/${teamId}/players/${playerId}`,
       { method: "DELETE" },
       "Unable to delete player",
     );
     invalidateReads(`roster:${teamId}`);
-  },
+  }),
   getTeamGames: async (teamId: string) =>
     cachedRead(`games:${teamId}`, async () => {
       const payload = (await authedRequest(
@@ -896,6 +917,18 @@ export const fastApiBackendClient: BackendClient = {
 
       return mapSubscriptionStatus(payload);
     }),
+  lookupAdminAccount: async (email) =>
+    await authedRequest(
+      `/admin/accounts/lookup?email=${encodeURIComponent(email)}`,
+      { method: "GET" },
+      "Unable to look up account",
+    ) as BackendAdminAccount,
+  grantAdminAccount: async (email) =>
+    await authedRequest(
+      "/admin/accounts/grant",
+      { method: "POST", body: JSON.stringify({ email }) },
+      "Unable to grant admin access",
+    ) as BackendAdminAccount,
   setProAccess: async (enabled: boolean | null) => {
     const payload = (await authedRequest(
       "/subscriptions/pro-access",

@@ -1,5 +1,11 @@
 import { useState } from "react";
-import { Keyboard, StyleSheet, TouchableWithoutFeedback, View } from "react-native";
+import {
+  Keyboard,
+  StyleSheet,
+  TouchableWithoutFeedback,
+  View,
+} from "react-native";
+import PasswordResetForm from "../components/auth/PasswordResetForm";
 import AuthForm from "../components/auth/AuthForm";
 import AuthHeader from "../components/auth/AuthHeader";
 import { Reveal, ScreenContainer } from "../components/ui";
@@ -8,6 +14,7 @@ import { AuthMode } from "../types/auth";
 import { backendClient } from "../lib/backend/client";
 
 const AuthScreen = () => {
+  const [resettingPassword, setResettingPassword] = useState(false);
   const [mode, setMode] = useState<AuthMode>(AuthMode.SignIn);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -175,25 +182,45 @@ const AuthScreen = () => {
               Mount-only, so mode/verification swaps stay still. */}
           <Reveal style={styles.stack}>
             <AuthHeader />
-            <AuthForm
-              mode={mode}
-              email={email}
-              password={password}
-              confirm={confirm}
-              verificationEmail={verificationEmail}
-              verificationCode={verificationCode}
-              status={status}
-              error={error}
-              loading={loading}
-              onEmailChange={setEmail}
-              onPasswordChange={setPassword}
-              onConfirmChange={setConfirm}
-              onVerificationCodeChange={setVerificationCode}
-              onSubmit={handleSubmit}
-              onResendVerification={handleResendVerification}
-              onCancelVerification={handleCancelVerification}
-              onToggleMode={handleToggleMode}
-            />
+            {resettingPassword ? (
+              <PasswordResetForm
+                initialEmail={email}
+                onBack={(nextEmail, completed) => {
+                  setEmail(nextEmail);
+                  setPassword("");
+                  setConfirm("");
+                  setMode(AuthMode.SignIn);
+                  setResettingPassword(false);
+                  setError(null);
+                  setStatus(
+                    completed
+                      ? "Password updated. Sign in with your new password."
+                      : null,
+                  );
+                }}
+              />
+            ) : (
+              <AuthForm
+                onForgotPassword={() => setResettingPassword(true)}
+                mode={mode}
+                email={email}
+                password={password}
+                confirm={confirm}
+                verificationEmail={verificationEmail}
+                verificationCode={verificationCode}
+                status={status}
+                error={error}
+                loading={loading}
+                onEmailChange={setEmail}
+                onPasswordChange={setPassword}
+                onConfirmChange={setConfirm}
+                onVerificationCodeChange={setVerificationCode}
+                onSubmit={handleSubmit}
+                onResendVerification={handleResendVerification}
+                onCancelVerification={handleCancelVerification}
+                onToggleMode={handleToggleMode}
+              />
+            )}
           </Reveal>
         </View>
       </TouchableWithoutFeedback>

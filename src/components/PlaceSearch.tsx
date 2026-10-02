@@ -15,6 +15,7 @@ import { AppText, Input, ListGroup, ListRow } from "./ui";
 
 type Props = {
   value: PlaceValue | null;
+  error?: string;
   onChange: (place: PlaceValue | null) => void;
 };
 
@@ -29,7 +30,7 @@ type ZipListing =
 // The league's one address field. Typing a city suggests cities; picking one
 // lists that city's zips (narrowed by any digits typed after it); picking a zip
 // resolves the field to "City, ST 12345". Typing five digits resolves directly.
-const PlaceSearch = ({ value, onChange }: Props) => {
+const PlaceSearch = ({ value, onChange, error }: Props) => {
   const [text, setText] = useState(value ? placeLabel(value) : "");
   const [cityChoice, setCityChoice] = useState<CityChoice | null>(null);
   const [zipListing, setZipListing] = useState<ZipListing>({ status: "idle" });
@@ -90,7 +91,7 @@ const PlaceSearch = ({ value, onChange }: Props) => {
       ? zipListing.zips.filter((zip) => zip.startsWith(typedAfterCity ?? "")).slice(0, MAX_ZIP_ROWS)
       : [];
 
-  let hint = "Start typing a city, or a five-digit zip.";
+  let hint = "Required: select a city and ZIP code. Search by city or five-digit ZIP.";
   if (value) hint = "Leagues in the same zip playing the same sport are probably yours.";
   else if (stillChoosingZip && zipListing.status === "ready" && zipListing.zips.length === 0)
     hint = `We have no zips filed under ${cityLabel(cityChoice!)}. Try the five-digit zip instead.`;
@@ -105,7 +106,8 @@ const PlaceSearch = ({ value, onChange }: Props) => {
   return (
     <View style={styles.container}>
       <Input
-        label="Where do you play?"
+        label="City and ZIP code (required)"
+        error={error}
         value={text}
         onChangeText={edit}
         placeholder="City or zip"
@@ -122,7 +124,7 @@ const PlaceSearch = ({ value, onChange }: Props) => {
             <Feather name="check" size={16} color={theme.success.base} />
           ) : undefined
         }
-        accessibilityLabel="Where do you play, city or zip"
+        accessibilityLabel="City and ZIP code, required"
       />
 
       {!value && !stillChoosingZip && search.status === "ready" && search.zipPlace ? (

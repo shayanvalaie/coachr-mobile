@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { ReactNode, Ref } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -18,6 +18,7 @@ type Props = {
   // Wrap content in a ScrollView. Leave false when the screen's root is a
   // FlatList (the list owns scrolling).
   scroll?: boolean;
+  scrollRef?: Ref<ScrollView>;
   // Wrap in KeyboardAvoidingView. Use on any screen with text inputs.
   keyboard?: boolean;
   padded?: boolean;
@@ -33,6 +34,7 @@ type Props = {
 const ScreenContainer = ({
   children,
   scroll = false,
+  scrollRef,
   keyboard = false,
   padded = true,
   floatingTabBar = true,
@@ -45,6 +47,7 @@ const ScreenContainer = ({
   if (scroll) {
     content = (
       <ScrollView
+        ref={scrollRef}
         style={styles.flex}
         contentContainerStyle={[
           padded && styles.padded,

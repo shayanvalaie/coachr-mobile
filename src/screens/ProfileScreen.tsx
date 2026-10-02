@@ -1,3 +1,4 @@
+import AdminManagement from "../components/admin/AdminManagement";
 import { useCallback, useState } from "react";
 import { Alert, StyleSheet, Switch, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
@@ -47,6 +48,7 @@ const ProfileScreen = ({ session, onOpenSubscribe, onOpenRules, onReplayTour }: 
     adminProEnabled,
     setAdminProEnabled,
   } = useSubscription();
+  const [canManageAdmins, setCanManageAdmins] = useState(false);
   const [teamName, setTeamName] = useState("");
   const [rules, setRules] = useState<TeamRulesState | null>(null);
 
@@ -65,11 +67,16 @@ const ProfileScreen = ({ session, onOpenSubscribe, onOpenRules, onReplayTour }: 
           // Non-fatal: the rows fall back to neutral copy.
         }
       };
+      backendClient.getSubscriptionStatus().then((status) => {
+        if (!cancelled) setCanManageAdmins(status.canManageAdmins);
+      }).catch(() => {
+        if (!cancelled) setCanManageAdmins(false);
+      });
       void load();
       return () => {
         cancelled = true;
       };
-    }, []),
+    }, [session.user.id]),
   );
 
   // Admin status comes from the server (allowlist + DB flag), surfaced on the
@@ -106,7 +113,7 @@ const ProfileScreen = ({ session, onOpenSubscribe, onOpenRules, onReplayTour }: 
       : "Not set";
 
   return (
-    <ScreenContainer scroll contentStyle={styles.content}>
+    <ScreenContainer keyboard scroll contentStyle={styles.content}>
       <PageHeader eyebrow="Profile" title="Coach" />
 
       <Card padding="none">
@@ -176,6 +183,8 @@ const ProfileScreen = ({ session, onOpenSubscribe, onOpenRules, onReplayTour }: 
           }}
         />
       </ListGroup>
+
+      {canManageAdmins ? <AdminManagement key={session.user.id} /> : null}
 
       {isAdmin || (__DEV__ && isPro) ? (
         <ListGroup>

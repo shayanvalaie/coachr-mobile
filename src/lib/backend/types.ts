@@ -121,6 +121,7 @@ export type BackendSubscriptionStatus = {
   proAccess: boolean | null;
   /** Whether the signed-in user may set `proAccess` (server-authoritative admin). */
   isAdmin: boolean;
+  canManageAdmins: boolean;
 };
 
 export type BackendVerifySubscriptionRequest = {
@@ -153,7 +154,15 @@ export type BackendGame = {
   isPlayoff: boolean;
 };
 
+export type BackendAdminAccount = {
+  email: string;
+  isAdmin: boolean;
+  emailVerified: boolean;
+};
+
 export type BackendClient = {
+  lookupAdminAccount: (email: string) => Promise<BackendAdminAccount>;
+  grantAdminAccount: (email: string) => Promise<BackendAdminAccount>;
   provider: BackendProvider;
   auth: {
     signInWithPassword: (input: {
@@ -171,6 +180,8 @@ export type BackendClient = {
     resendVerification: (input: {
       email: string;
     }) => Promise<{ error: Error | null }>;
+    forgotPassword: (input: { email: string }) => Promise<{ error: Error | null }>;
+    resetPassword: (input: { email: string; code: string; password: string }) => Promise<{ error: Error | null }>;
     signOut: (options?: {
       scope?: "global" | "local";
     }) => Promise<{ error: Error | null }>;
@@ -193,7 +204,7 @@ export type BackendClient = {
   getLeague: (leagueId: string) => Promise<LeagueDetail>;
   createChangeRequest: (leagueId: string, message: string) => Promise<void>;
   getRuleset: (rulesetId: string) => Promise<RulesetPayload>;
-  getTeamRoster: (teamId: string) => Promise<Player[]>;
+  getTeamRoster: (teamId: string, options?: { requireSaved?: boolean }) => Promise<Player[]>;
   saveTeamPlayer: (teamId: string, player: Player) => Promise<{ id: string }>;
   deleteTeamPlayer: (teamId: string, playerId: string) => Promise<void>;
   getTeamGames: (teamId: string) => Promise<BackendGame[]>;

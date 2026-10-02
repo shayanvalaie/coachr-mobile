@@ -1,3 +1,4 @@
+import { useLeagueValidation } from "../../hooks/useLeagueValidation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { Feather } from "../../icons";
@@ -53,11 +54,20 @@ const LeaguesScreen = ({ session, onBack, onOpenLeague }: Props) => {
   const [playersOnField, setPlayersOnField] = useState("");
   const [rulesText, setRulesText] = useState("");
   const [createError, setCreateError] = useState<string | null>(null);
-  const [suggestions, setSuggestions] = useState<LeagueSuggestion[] | null>(null);
+  const [suggestions, setSuggestions] = useState<LeagueSuggestion[] | null>(
+    null,
+  );
   const [isCreating, setIsCreating] = useState(false);
 
-  // Mirrors the server's validation so the button only enables for a payload
-  // that will pass it.
+  // Validate on submit and reveal the first incomplete field.
+  const validation = useLeagueValidation({
+    name,
+    sport,
+    place,
+    segments: segmentCount,
+    players: playersOnField,
+    rules: rulesText,
+  });
   const parsedSegmentCount = parseCount(segmentCount);
   const parsedPlayersOnField = parseCount(playersOnField);
   const formValid =
@@ -70,28 +80,34 @@ const LeaguesScreen = ({ session, onBack, onOpenLeague }: Props) => {
 
   const latestSearch = useRef(0);
 
-  const runSearch = useCallback(async (term: string) => {
-    const requestId = ++latestSearch.current;
-    setIsSearching(true);
-    try {
-      const leagues = await backendClient.searchLeagues(term.trim());
-      if (requestId !== latestSearch.current) return;
-      setResults(leagues);
-    } catch (err) {
-      if (requestId !== latestSearch.current) return;
-      toast.show({ message: toError(err).message, type: "error" });
-    } finally {
-      if (requestId === latestSearch.current) {
-        setIsSearching(false);
-        setHasSearched(true);
+  const runSearch = useCallback(
+    async (term: string) => {
+      const requestId = ++latestSearch.current;
+      setIsSearching(true);
+      try {
+        const leagues = await backendClient.searchLeagues(term.trim());
+        if (requestId !== latestSearch.current) return;
+        setResults(leagues);
+      } catch (err) {
+        if (requestId !== latestSearch.current) return;
+        toast.show({ message: toError(err).message, type: "error" });
+      } finally {
+        if (requestId === latestSearch.current) {
+          setIsSearching(false);
+          setHasSearched(true);
+        }
       }
-    }
-  }, [toast]);
+    },
+    [toast],
+  );
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      void runSearch(query);
-    }, hasSearched ? SEARCH_DEBOUNCE_MS : 0);
+    const timer = setTimeout(
+      () => {
+        void runSearch(query);
+      },
+      hasSearched ? SEARCH_DEBOUNCE_MS : 0,
+    );
     return () => clearTimeout(timer);
     // Only the query should retrigger the search.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -110,6 +126,7 @@ const LeaguesScreen = ({ session, onBack, onOpenLeague }: Props) => {
 
   const createLeague = useCallback(
     async (confirmDistinct: boolean) => {
+      if (!validation.validate()) return;
       if (
         !formValid ||
         sport === null ||
@@ -121,7 +138,14 @@ const LeaguesScreen = ({ session, onBack, onOpenLeague }: Props) => {
       }
       setCreateError(null);
       setIsCreating(true);
-      trace("leagues screen create submit", { name, sport, place, segmentCount, playersOnField, confirmDistinct });
+      trace("leagues screen create submit", {
+        name,
+        sport,
+        place,
+        segmentCount,
+        playersOnField,
+        confirmDistinct,
+      });
       try {
         const league = await backendClient.createLeague({
           name: name.trim(),
@@ -160,7 +184,12 @@ const LeaguesScreen = ({ session, onBack, onOpenLeague }: Props) => {
       } catch (err) {
         const similar = getSimilarLeaguesError(err);
         trace("leagues screen create failed", {
-          similar: similar?.map((league) => ({ id: league.id, name: league.name, matchReasons: league.matchReasons })) ?? null,
+          similar:
+            similar?.map((league) => ({
+              id: league.id,
+              name: league.name,
+              matchReasons: league.matchReasons,
+            })) ?? null,
           error: similar ? null : toError(err).message,
         });
         if (similar) {
@@ -173,6 +202,7 @@ const LeaguesScreen = ({ session, onBack, onOpenLeague }: Props) => {
       }
     },
     [
+      validation,
       formValid,
       name,
       onOpenLeague,
@@ -189,7 +219,12 @@ const LeaguesScreen = ({ session, onBack, onOpenLeague }: Props) => {
 
   if (showCreate) {
     return (
-      <ScreenContainer keyboard scroll contentStyle={styles.content}>
+      <ScreenContainer
+        keyboard
+        scroll
+        scrollRef={validation.scrollRef}
+        contentStyle={styles.content}
+      >
         <PageHeader
           back={{ label: "Leagues", onPress: closeCreate }}
           eyebrow="New league"
@@ -199,64 +234,124 @@ const LeaguesScreen = ({ session, onBack, onOpenLeague }: Props) => {
 
         <Card>
           <View style={styles.cardInner}>
-            <Input
-              label="League name"
-              value={name}
-              onChangeText={(value) => {
-                setName(value);
-                setSuggestions(null);
+            <View
+              collapsable={false}
+              ref={(node) => {
+                validation.fields.current.name = node;
               }}
-              placeholder="Austin Coed Softball"
-              accessibilityLabel="League name"
-            />
-            <SportPicker
-              value={sport}
-              onChange={(code) => {
-                setSport(code);
-                setSuggestions(null);
-              }}
-            />
-            <PlaceSearch
-              value={place}
-              onChange={(next) => {
-                setPlace(next);
-                setSuggestions(null);
-              }}
-            />
-            <View style={styles.fieldRow}>
+            >
               <Input
-                label="Innings or periods"
-                value={segmentCount}
-                onChangeText={(value) => setSegmentCount(digitsOnly(value, 2))}
-                placeholder="7"
-                keyboardType="number-pad"
-                maxLength={2}
-                containerStyle={styles.field}
-                accessibilityLabel="Innings or periods"
+                label="League name"
+                value={name}
+                onChangeText={(value) => {
+                  setName(value);
+                  setSuggestions(null);
+                }}
+                placeholder="Austin Coed Softball"
+                accessibilityLabel="League name"
               />
-              <Input
-                label="Players on field"
-                value={playersOnField}
-                onChangeText={(value) => setPlayersOnField(digitsOnly(value, 2))}
-                placeholder="10"
-                keyboardType="number-pad"
-                maxLength={2}
-                containerStyle={styles.field}
-                accessibilityLabel="Players on the field"
+              {validation.errors.name ? (
+                <AppText color="danger" accessibilityRole="alert">
+                  {validation.errors.name}
+                </AppText>
+              ) : null}
+            </View>
+            <View
+              collapsable={false}
+              ref={(node) => {
+                validation.fields.current.sport = node;
+              }}
+            >
+              <SportPicker
+                value={sport}
+                onChange={(code) => {
+                  setSport(code);
+                  setSuggestions(null);
+                }}
+              />
+              {validation.errors.sport ? (
+                <AppText color="danger" accessibilityRole="alert">
+                  {validation.errors.sport}
+                </AppText>
+              ) : null}
+            </View>
+            <View
+              collapsable={false}
+              ref={(node) => {
+                validation.fields.current.place = node;
+              }}
+            >
+              <PlaceSearch
+                error={validation.errors.place}
+                value={place}
+                onChange={(next) => {
+                  setPlace(next);
+                  setSuggestions(null);
+                }}
               />
             </View>
-            <Input
-              label="League rules"
-              value={rulesText}
-              onChangeText={setRulesText}
-              placeholder="7 innings, 10 on the field, at least 3 women, nobody sits twice in a row…"
-              multiline
-              textAlignVertical="top"
-              style={styles.textarea}
-              error={createError}
-              hint="Simple rules go live instantly. Unusual ones get a custom engine built in a few minutes."
-              accessibilityLabel="League rules"
-            />
+            <View
+              collapsable={false}
+              ref={(node) => {
+                validation.fields.current.size = node;
+              }}
+            >
+              <View style={styles.fieldRow}>
+                <Input
+                  label="Innings or periods"
+                  value={segmentCount}
+                  onChangeText={(value) =>
+                    setSegmentCount(digitsOnly(value, 2))
+                  }
+                  placeholder="7"
+                  keyboardType="number-pad"
+                  maxLength={2}
+                  containerStyle={styles.field}
+                  accessibilityLabel="Innings or periods"
+                />
+                <Input
+                  label="Players on field"
+                  value={playersOnField}
+                  onChangeText={(value) =>
+                    setPlayersOnField(digitsOnly(value, 2))
+                  }
+                  placeholder="10"
+                  keyboardType="number-pad"
+                  maxLength={2}
+                  containerStyle={styles.field}
+                  accessibilityLabel="Players on the field"
+                />
+              </View>
+              {validation.errors.size ? (
+                <AppText color="danger" accessibilityRole="alert">
+                  {validation.errors.size}
+                </AppText>
+              ) : null}
+            </View>
+            <View
+              collapsable={false}
+              ref={(node) => {
+                validation.fields.current.rules = node;
+              }}
+            >
+              <Input
+                label="League rules"
+                value={rulesText}
+                onChangeText={setRulesText}
+                placeholder="7 innings, 10 on the field, at least 3 women, nobody sits twice in a row…"
+                multiline
+                textAlignVertical="top"
+                style={styles.textarea}
+                error={createError}
+                hint="Simple rules go live instantly. Unusual ones get a custom engine built in a few minutes."
+                accessibilityLabel="League rules"
+              />
+              {validation.errors.rules ? (
+                <AppText color="danger" accessibilityRole="alert">
+                  {validation.errors.rules}
+                </AppText>
+              ) : null}
+            </View>
 
             {suggestions ? (
               <View style={styles.suggestions}>
@@ -264,8 +359,8 @@ const LeaguesScreen = ({ session, onBack, onOpenLeague }: Props) => {
                   Is your league one of these?
                 </AppText>
                 <AppText variant="caption" color="secondary">
-                  Same sport in your zip, or a similar name. Join it, or confirm yours
-                  is different.
+                  Same sport in your zip, or a similar name. Join it, or confirm
+                  yours is different.
                 </AppText>
                 <ListGroup>
                   {suggestions.map((league) => (
@@ -282,7 +377,7 @@ const LeaguesScreen = ({ session, onBack, onOpenLeague }: Props) => {
                   variant="secondary"
                   onPress={() => void createLeague(true)}
                   loading={isCreating}
-                  disabled={!formValid}
+                  disabled={isCreating}
                   fullWidth
                   accessibilityLabel="Create this league anyway"
                 />
@@ -293,7 +388,7 @@ const LeaguesScreen = ({ session, onBack, onOpenLeague }: Props) => {
                 size="lg"
                 onPress={() => void createLeague(false)}
                 loading={isCreating}
-                disabled={!formValid}
+                disabled={isCreating}
                 fullWidth
                 accessibilityLabel="Create league"
               />

@@ -21,6 +21,7 @@ type Props = {
   onResendVerification: () => void;
   onCancelVerification: () => void;
   onToggleMode: () => void;
+  onForgotPassword: () => void;
 };
 
 // Inline text link under the form ("New here? Create an account").
@@ -70,6 +71,7 @@ const AuthForm = ({
   onResendVerification,
   onCancelVerification,
   onToggleMode,
+  onForgotPassword,
 }: Props) => {
   const isVerificationStep = !!verificationEmail;
   const isSignIn = mode === AuthMode.SignIn;
@@ -121,6 +123,14 @@ const AuthForm = ({
         </>
       )}
 
+      {isSignIn && !isVerificationStep ? (
+        <FooterLink
+          prompt=""
+          action="Forgot password?"
+          onPress={onForgotPassword}
+          disabled={loading}
+        />
+      ) : null}
       {error ? (
         <AppText variant="body" color="danger">
           {error}
@@ -162,6 +172,7 @@ const AuthForm = ({
           prompt={isSignIn ? "New here?" : "Already have an account?"}
           action={isSignIn ? "Create an account" : "Sign in"}
           onPress={onToggleMode}
+          disabled={loading}
         />
       )}
     </View>
