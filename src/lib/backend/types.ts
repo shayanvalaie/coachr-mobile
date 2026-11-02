@@ -1,3 +1,8 @@
+import type { ImportPreview, ImportCommitResult, ImportRow } from "../../utils/rosterImport";
+import { Page } from "./pagination";
+import { ModerationApi } from "../moderation/contracts";
+import { RulesetSpec } from "../../types/rules";
+import { DeclaredAgeBand, PrivacyApi } from "../privacy/contracts";
 import { Player } from "../../types/lineup";
 import {
   LeagueDetail,
@@ -54,6 +59,7 @@ export type BackendTeamRulesInput = {
 };
 
 export type BackendCreateLeagueInput = {
+  publicationConfirmed: boolean;
   name: string;
   sport: string;
   city: string;
@@ -67,6 +73,7 @@ export type BackendCreateLeagueInput = {
 };
 
 export type BackendLineupRequest = {
+  rulesContext?: string | null;
   teamId: string;
   sport: string;
   roster: BackendLineupPlayer[];
@@ -77,6 +84,7 @@ export type BackendLineupRequest = {
 };
 
 export type BackendSaveLineupRequest = {
+  rulesContext?: string | null;
   teamId: string;
   sport: string;
   roster: BackendLineupPlayer[];
@@ -102,6 +110,8 @@ export type BackendLineupVersionSummary = {
 };
 
 export type BackendLineupVersionDetail = BackendLineupVersionSummary & {
+  rulesContext: string;
+  rulesSpec: RulesetSpec | null;
   rows: Record<string, unknown>[];
   output: Record<string, unknown>;
 };
@@ -115,8 +125,9 @@ export type BackendLineupExport = {
 export type BackendSubscriptionStatus = {
   isPro: boolean;
   productId: string | null;
-  status: "active" | "expired" | "cancelled" | "billing_retry" | "revoked" | null;
+  status: "active" | "grace" | "expired" | "cancelled" | "billing_retry" | "revoked" | null;
   expiresAt: string | null;
+  accessUntil: string | null;
   /** Admin Pro override flag on the user: true/false/null. */
   proAccess: boolean | null;
   /** Whether the signed-in user may set `proAccess` (server-authoritative admin). */
@@ -124,7 +135,14 @@ export type BackendSubscriptionStatus = {
   canManageAdmins: boolean;
 };
 
+export type BackendRequestOptions = { signal?: AbortSignal };
+
+export type BackendSubscriptionVerification = BackendSubscriptionStatus & {
+  acknowledgement: { transactionId: string; state: "committed" };
+};
+
 export type BackendVerifySubscriptionRequest = {
+  purpose?: "purchase" | "recovery" | "restore";
   productId: string;
   transactionId: string;
   originalTransactionId?: string | null;
@@ -160,11 +178,14 @@ export type BackendAdminAccount = {
   emailVerified: boolean;
 };
 
-export type BackendClient = {
+export type BackendGamePageItem = BackendGame & { lineupCount: number };
+
+export type BackendClient = PrivacyApi & ModerationApi & {
   lookupAdminAccount: (email: string) => Promise<BackendAdminAccount>;
   grantAdminAccount: (email: string) => Promise<BackendAdminAccount>;
   provider: BackendProvider;
   auth: {
+    getSessionEpoch: () => number;
     signInWithPassword: (input: {
       email: string;
       password: string;
@@ -172,16 +193,21 @@ export type BackendClient = {
     signUp: (input: {
       email: string;
       password: string;
+      ageBand: DeclaredAgeBand;
+      policyVersion: string;
     }) => Promise<BackendAuthResponse>;
     verifyEmail: (input: {
       email: string;
       code: string;
+      password: string;
     }) => Promise<BackendAuthResponse>;
     resendVerification: (input: {
       email: string;
+      password: string;
     }) => Promise<{ error: Error | null }>;
     forgotPassword: (input: { email: string }) => Promise<{ error: Error | null }>;
     resetPassword: (input: { email: string; code: string; password: string }) => Promise<{ error: Error | null }>;
+    deleteAccount: (password: string) => Promise<{ error: Error | null; cleanupError: Error | null }>;
     signOut: (options?: {
       scope?: "global" | "local";
     }) => Promise<{ error: Error | null }>;
@@ -203,10 +229,14 @@ export type BackendClient = {
   createLeague: (input: BackendCreateLeagueInput) => Promise<LeagueDetail>;
   getLeague: (leagueId: string) => Promise<LeagueDetail>;
   createChangeRequest: (leagueId: string, message: string) => Promise<void>;
-  getRuleset: (rulesetId: string) => Promise<RulesetPayload>;
+  getRuleset: (rulesetId: string, context?: {kind: "team" | "league" | "admin"; id?: string; submissionId?: string}) => Promise<RulesetPayload>;
   getTeamRoster: (teamId: string, options?: { requireSaved?: boolean }) => Promise<Player[]>;
-  saveTeamPlayer: (teamId: string, player: Player) => Promise<{ id: string }>;
+  previewRosterImport: (teamId: string, payload: {fileName: string; base64Data: string}, options?: {signal?: AbortSignal}) => Promise<ImportPreview>;
+  commitRosterImport: (teamId: string, payload: {operationId: string; rows: ImportRow[]; rulesContext?: string}, options?: {signal?: AbortSignal}) => Promise<ImportCommitResult>;
+  saveTeamPlayer: (teamId: string, player: Player, options?: {rulesContext?: string}) => Promise<{ id: string }>;
   deleteTeamPlayer: (teamId: string, playerId: string) => Promise<void>;
+  getTeamGamesPage: (input: {teamId: string; from: string; to: string; cursor?: string; limit?: number}) => Promise<Page<BackendGamePageItem>>;
+  getLineupVersionsPage: (input: {teamId: string; gameId?: string | null; cursor?: string; limit?: number}) => Promise<Page<BackendLineupVersionSummary>>;
   getTeamGames: (teamId: string) => Promise<BackendGame[]>;
   saveTeamGame: (teamId: string, game: BackendGame) => Promise<{ id: string }>;
   deleteTeamGame: (teamId: string, gameId: string) => Promise<void>;
@@ -222,8 +252,10 @@ export type BackendClient = {
   ) => Promise<BackendLineupExport>;
   verifySubscription: (
     payload: BackendVerifySubscriptionRequest,
-  ) => Promise<BackendSubscriptionStatus>;
-  getSubscriptionStatus: () => Promise<BackendSubscriptionStatus>;
+    options?: BackendRequestOptions,
+  ) => Promise<BackendSubscriptionVerification>;
+  getSubscriptionAccountToken: () => Promise<{ appAccountToken: string }>;
+  getSubscriptionStatus: (options?: BackendRequestOptions) => Promise<BackendSubscriptionStatus>;
   /** Admin-only: set the caller's Pro override flag (true/false/null). */
   setProAccess: (
     enabled: boolean | null,

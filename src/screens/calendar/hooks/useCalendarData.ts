@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { assertPaidAccess, capturePaidAccess } from "../../../lib/access/paidAccess";
+import { calendarMonthWindow, readAllPages } from "../../../lib/backend/pagination";
 import { backendClient } from "../../../lib/backend/client";
 import {
   BackendGame,
-  BackendLineupVersionSummary,
+  BackendGamePageItem,
   BackendSession,
 } from "../../../lib/backend/types";
 import { useToast } from "../../../components/ui";
@@ -11,19 +13,20 @@ import { buildPlayerGenderByName } from "../../../utils/playerNames";
 
 type Params = {
   session: BackendSession;
+  selectedDateKey: string;
 };
 
 // Team context for the calendar: games, lineup version summaries, and the
 // roster-derived player gender map used when rendering saved lineup grids.
-export const useCalendarData = ({ session }: Params) => {
+export const useCalendarData = ({ session, selectedDateKey }: Params) => {
   const toast = useToast();
   const [teamId, setTeamId] = useState<string | null>(null);
-  const [games, setGames] = useState<BackendGame[]>([]);
-  const [lineupHistory, setLineupHistory] = useState<BackendLineupVersionSummary[]>([]);
+  const [games, setGames] = useState<BackendGamePageItem[]>([]);
   const [playerGenderByName, setPlayerGenderByName] = useState<
-    Record<string, "male" | "female">
+    Record<string, string>
   >({});
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const ensureTeam = useCallback(async () => {
     if (teamId) return teamId;
@@ -33,24 +36,37 @@ export const useCalendarData = ({ session }: Params) => {
     return nextTeamId;
   }, [session.user.id, teamId]);
 
+  const requestEpoch = useRef(0);
+  const [year, month] = selectedDateKey.split("-").map(Number);
+  const window = useMemo(() => calendarMonthWindow(year, month - 1), [year, month]);
+
   const loadGames = useCallback(async () => {
+    const epoch = ++requestEpoch.current;
+    const access = capturePaidAccess();
+    setIsLoading(true);
+    setLoadError(null);
+    setGames([]);
+    const assertCurrent = () => {
+      assertPaidAccess(access);
+      if (epoch !== requestEpoch.current) throw new Error("Calendar window changed");
+    };
     try {
       const team = await ensureTeam();
       if (!team) return;
-      const [list, versions, roster] = await Promise.all([
-        backendClient.getTeamGames(team),
-        backendClient.getLineupVersions(team),
-        backendClient.getTeamRoster(team).catch(() => null),
+      assertCurrent();
+      const [list, roster] = await Promise.all([
+        readAllPages(cursor => backendClient.getTeamGamesPage({ teamId: team, ...window, cursor, limit: 100 }), assertCurrent),
+        backendClient.getTeamRoster(team),
       ]);
+      assertCurrent();
       setGames(list);
-      setLineupHistory(versions);
-      setPlayerGenderByName(roster ? buildPlayerGenderByName(roster) : {});
+      setPlayerGenderByName(buildPlayerGenderByName(roster));
     } catch (_err) {
-      toast.show({ type: "error", message: "Unable to load games." });
+      if (epoch === requestEpoch.current) setLoadError("Unable to load this calendar month. Try again.");
     } finally {
-      setIsLoading(false);
+      if (epoch === requestEpoch.current) setIsLoading(false);
     }
-  }, [ensureTeam, toast]);
+  }, [ensureTeam, toast, window]);
 
   useEffect(() => {
     loadGames().catch(() => {
@@ -60,7 +76,7 @@ export const useCalendarData = ({ session }: Params) => {
   }, [loadGames, toast]);
 
   const gamesByDay = useMemo(() => {
-    const map = new Map<string, BackendGame[]>();
+    const map = new Map<string, BackendGamePageItem[]>();
     for (const game of games) {
       const dayKey = toDayKeyFromIso(game.scheduledAt);
       if (!dayKey) continue;
@@ -76,30 +92,13 @@ export const useCalendarData = ({ session }: Params) => {
     return map;
   }, [games]);
 
-  const lineupsByGameId = useMemo(() => {
-    const grouped = new Map<string, BackendLineupVersionSummary[]>();
-    lineupHistory.forEach((version) => {
-      if (!version.gameId) return;
-      const current = grouped.get(version.gameId);
-      if (current) current.push(version);
-      else grouped.set(version.gameId, [version]);
-    });
-
-    for (const list of grouped.values()) {
-      list.sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-      );
-    }
-    return grouped;
-  }, [lineupHistory]);
-
   return {
     ensureTeam,
     games,
     gamesByDay,
-    lineupsByGameId,
     playerGenderByName,
     isLoading,
+    loadError,
     loadGames,
   };
 };

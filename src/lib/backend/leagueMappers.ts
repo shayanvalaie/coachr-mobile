@@ -1,3 +1,4 @@
+import { parsePublicationState } from "../moderation/parsers";
 import {
   LeagueMatchReason,
   LeagueSuggestion,
@@ -19,6 +20,7 @@ const isMatchReason = (value: unknown): value is LeagueMatchReason =>
   LEAGUE_MATCH_REASONS.includes(value as LeagueMatchReason);
 
 export const mapLeagueSummary = (raw: any): LeagueSummary => ({
+  ...parsePublicationState(raw),
   id: String(raw?.id ?? ""),
   name: typeof raw?.name === "string" ? raw.name : "",
   sport: typeof raw?.sport === "string" ? raw.sport : "",

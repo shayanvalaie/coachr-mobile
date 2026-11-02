@@ -1,8 +1,10 @@
+import { PublicationState } from "../lib/moderation/contracts";
 // Rules now live in a shared ruleset spec (league or team). The client renders
 // the spec and projects it onto the flat TeamRulesConfig shape the existing
 // screens were built around.
 
 export type TeamRulesConfig = {
+  rulesContext: string | null;
   sport: string;
   segmentLabel: string;
   segmentCount: number;
@@ -14,6 +16,7 @@ export type TeamRulesConfig = {
 };
 
 export const defaultTeamRulesConfig: TeamRulesConfig = {
+  rulesContext: null,
   sport: "softball",
   segmentLabel: "inning",
   segmentCount: 7,
@@ -54,6 +57,10 @@ export type RulesetSpec = {
 };
 
 export type RulesetPayload = {
+  context: string;
+  submissionId: string | null;
+  publicationRevisionId: string | null;
+  proseStatus: "available" | "withheld";
   id: string;
   sport: string;
   status: RulesetStatus;
@@ -68,7 +75,7 @@ export type RulesetPayload = {
   activatedAt: string | null;
 };
 
-export type LeagueSummary = {
+export type LeagueSummary = PublicationState & {
   id: string;
   name: string;
   sport: string;
@@ -156,6 +163,7 @@ export const rulesConfigFromSpec = (
   spec: RulesetSpec,
   tier: ResolvedTier = resolveSpecTier(spec, []),
 ): TeamRulesConfig => ({
+  rulesContext: null,
   sport: spec.sport,
   segmentLabel: spec.segment.label,
   segmentCount: spec.segment.count,
@@ -174,6 +182,7 @@ export const rulesConfigFromTeamRules = (
   if (!state?.ruleset) return defaultTeamRulesConfig;
   return {
     ...rulesConfigFromSpec(state.ruleset.spec),
+    rulesContext: state.ruleset.context,
     customInstructions: state.coachPreferences,
   };
 };

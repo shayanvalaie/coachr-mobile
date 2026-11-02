@@ -22,6 +22,7 @@ import { backendClient } from "../../lib/backend/client";
 import { BackendSession } from "../../lib/backend/types";
 import { theme } from "../../theme/colors";
 import { motion, radius, space, TAB_BAR_CLEARANCE } from "../../theme/tokens";
+import { RulesetSpec } from "../../types/rules";
 import { InningAssignment } from "../../types/lineup";
 import { LineupLaunchRequest } from "../../types/lineupLaunch";
 import { navigateFromRef } from "../../navigation/navigationRef";
@@ -67,6 +68,8 @@ const LineupScreen = ({
 }: Props) => {
   // Cross-cutting document/UI state shared between the hooks below.
   const [activeTab, setActiveTab] = useState<"build" | "history">("history");
+  const [lineupRulesContext, setLineupRulesContext] = useState<string | null>(null);
+  const [lineupRulesSpec, setLineupRulesSpec] = useState<RulesetSpec | null>(null);
   const [lineup, setLineup] = useState<InningAssignment[] | null>(null);
   const [lineupParentVersionId, setLineupParentVersionId] = useState<
     string | null
@@ -148,6 +151,8 @@ const LineupScreen = ({
     lineupHistory,
     historyLoading,
     historyError,
+    hasMoreHistory,
+    loadMoreHistory,
     selectedHistoryDetail,
     setSelectedHistoryDetail,
     setCompareBase,
@@ -210,6 +215,8 @@ const LineupScreen = ({
     duplicateSave,
     clearDuplicateSave,
   } = useLineupEditor({
+    lineupRulesContext,
+    lineupRulesSpec,
     lineup,
     setLineup,
     editModalVisible,
@@ -240,6 +247,8 @@ const LineupScreen = ({
     setPendingAutoGenerate,
     runLineupGeneration,
   } = useLineupGeneration({
+    setLineupRulesContext,
+    setLineupRulesSpec,
     ensureTeam,
     teamRules,
     activePlayers,
@@ -499,6 +508,8 @@ const LineupScreen = ({
             lineupHistory={lineupHistory}
             historyLoading={historyLoading}
             historyError={historyError}
+            hasMoreHistory={hasMoreHistory}
+            onLoadMore={() => { void loadMoreHistory(); }}
             renderVersion={(version) => (
               <HistoryCard
                 version={version}

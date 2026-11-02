@@ -1,5 +1,7 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Share } from "react-native";
+import { assertPaidAccess, capturePaidAccess, registerPaidAccessInvalidation } from "../../../lib/access/paidAccess";
+import { readAllPages } from "../../../lib/backend/pagination";
 import { backendClient } from "../../../lib/backend/client";
 import {
   BackendGame,
@@ -105,7 +107,6 @@ const applyLineupCellEdit = (
 type Params = {
   ensureTeam: () => Promise<string | null>;
   loadGames: () => Promise<void>;
-  lineupsByGameId: Map<string, BackendLineupVersionSummary[]>;
 };
 
 // Saved-lineups sheet state: which game's lineups are showing, the carousel
@@ -113,7 +114,6 @@ type Params = {
 export const useLineupCarousel = ({
   ensureTeam,
   loadGames,
-  lineupsByGameId,
 }: Params) => {
   const toast = useToast();
   const [isOpen, setIsOpen] = useState(false);
@@ -133,51 +133,79 @@ export const useLineupCarousel = ({
   >({});
 
   const close = useCallback(() => {
+    openEpoch.current++;
     setIsOpen(false);
     setEditingLineupId(null);
   }, []);
 
+  const openEpoch = useRef(0);
+  useEffect(() => registerPaidAccessInvalidation(() => {
+    openEpoch.current++;
+    setIsOpen(false);
+    setLineups([]);
+    setDetailsById({});
+    setDraftRowsByLineupId({});
+    setEditingLineupId(null);
+  }), []);
+
   const openForGame = useCallback(
     async (game: BackendGame) => {
-      const title = `${game.title || "Untitled Game"} vs ${game.opponentName || "TBD"}`;
-      const versions = game.id ? lineupsByGameId.get(game.id) ?? [] : [];
-      setModalTitle(title);
-      setModalGameId(game.id ?? null);
-      setLineups(versions);
+      if (!game.id) { setDetailsError("This game could not be loaded. Reload the calendar."); return; }
+      const epoch = ++openEpoch.current;
+      const access = capturePaidAccess();
+      const assertCurrent = () => {
+        assertPaidAccess(access);
+        if (epoch !== openEpoch.current) throw new Error("Game changed");
+      };
+      setModalTitle(`${game.title || "Untitled Game"} vs ${game.opponentName || "TBD"}`);
+      setModalGameId(game.id);
+      setLineups([]);
       setCarouselIndex(0);
       setDetailsError(null);
       setEditingLineupId(null);
       setDraftRowsByLineupId({});
       setIsOpen(true);
-
-      if (versions.length === 0) return;
-
+      setIsDetailsLoading(true);
       try {
         const team = await ensureTeam();
         if (!team) return;
-        setIsDetailsLoading(true);
-        const pending = versions.filter((version) => !detailsById[version.id]);
-        if (pending.length === 0) return;
-
-        const loaded = await Promise.all(
-          pending.map((version) => backendClient.getLineupVersion(team, version.id)),
-        );
-
-        setDetailsById((prev) => {
-          const next = { ...prev };
-          loaded.forEach((detail) => {
-            next[detail.id] = detail;
-          });
-          return next;
-        });
+        const versions = await readAllPages(cursor => backendClient.getLineupVersionsPage({ teamId: team, gameId: game.id, cursor, limit: 100 }), assertCurrent);
+        assertCurrent();
+        setLineups(versions);
+        // Load the visible detail first; swiping loads one new detail at a time.
+        if (versions.length > 0) {
+          const detail = await backendClient.getLineupVersion(team, versions[0].id);
+          assertCurrent();
+          setDetailsById({ [detail.id]: detail });
+        }
       } catch (_err) {
-        setDetailsError("Unable to load lineup details.");
+        if (epoch === openEpoch.current) setDetailsError("Unable to load saved lineups. Try again.");
       } finally {
-        setIsDetailsLoading(false);
+        if (epoch === openEpoch.current) setIsDetailsLoading(false);
       }
     },
-    [detailsById, ensureTeam, lineupsByGameId],
+    [ensureTeam],
   );
+
+  useEffect(() => {
+    const version = lineups[carouselIndex];
+    if (!isOpen || !version || detailsById[version.id]) return;
+    const epoch = openEpoch.current;
+    const access = capturePaidAccess();
+    let cancelled = false;
+    setIsDetailsLoading(true);
+    ensureTeam().then(async team => {
+      if (!team) return;
+      const detail = await backendClient.getLineupVersion(team, version.id);
+      assertPaidAccess(access);
+      if (!cancelled && epoch === openEpoch.current) setDetailsById(prev => ({ ...prev, [detail.id]: detail }));
+    }).catch(() => {
+      if (!cancelled && epoch === openEpoch.current) setDetailsError("Unable to load lineup details.");
+    }).finally(() => {
+      if (!cancelled && epoch === openEpoch.current) setIsDetailsLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [carouselIndex, detailsById, ensureTeam, isOpen, lineups]);
 
   const toggleEditing = useCallback(
     (lineupId: string, normalizedRows: InningAssignment[] | null) => {
@@ -267,14 +295,16 @@ export const useLineupCarousel = ({
         setActiveLineupId(lineupVersion.id);
         setDetailsError(null);
 
-        const [roster, teamRules] = await Promise.all([
-          backendClient.getTeamRoster(team),
-          backendClient.getTeamRules(team),
-        ]);
+        const detail = detailsById[lineupVersion.id];
+        if (!detail?.rulesSpec || !detail.rulesContext) {
+          setDetailsError("These saved rules could not be verified. Reload team rules and generate a new lineup. Your draft has been kept.");
+          return;
+        }
+        const roster = await backendClient.getTeamRoster(team);
 
         const validationError = validateEditedLineupForSave(
           editedRows,
-          teamRules.ruleset?.spec ?? null,
+          detail.rulesSpec,
           roster,
         );
         if (validationError) {
@@ -293,6 +323,7 @@ export const useLineupCarousel = ({
 
         const saved = await backendClient.saveLineupVersion({
           teamId: team,
+          rulesContext: detail.rulesContext,
           sport: lineupVersion.sport || "softball",
           roster: payloadRoster,
           gameId: lineupVersion.gameId ?? null,
@@ -303,28 +334,11 @@ export const useLineupCarousel = ({
           source: "manualEdit",
         });
 
-        setDetailsById((prev) => ({
-          ...prev,
-          [saved.id]: {
-            id: saved.id,
-            gameId: saved.gameId ?? lineupVersion.gameId ?? null,
-            gameTitle: saved.gameTitle || lineupVersion.gameTitle || "",
-            lineupName: saved.lineupName || lineupVersion.lineupName || "",
-            sport: saved.sport || lineupVersion.sport || "softball",
-            versionNumber: saved.versionNumber,
-            createdAt: saved.createdAt,
-            segmentCount: saved.segmentCount ?? lineupVersion.segmentCount ?? null,
-            source: saved.source,
-            parentLineupId: saved.parentLineupId ?? lineupVersion.id,
-            rows: toLineupRowsPayload(editedRows),
-            output: {},
-          },
-        }));
+        const savedDetail = await backendClient.getLineupVersion(team, saved.id);
+        setDetailsById((prev) => ({ ...prev, [saved.id]: savedDetail }));
 
-        const refreshedLineups = await backendClient.getLineupVersions(
-          team,
-          lineupVersion.gameId ?? null,
-        );
+        const access = capturePaidAccess();
+        const refreshedLineups = await readAllPages(cursor => backendClient.getLineupVersionsPage({ teamId: team, gameId: lineupVersion.gameId ?? null, cursor, limit: 100 }), () => assertPaidAccess(access));
         setLineups(refreshedLineups);
         setCarouselIndex(0);
         setEditingLineupId(null);
@@ -345,7 +359,7 @@ export const useLineupCarousel = ({
         setActiveLineupId(null);
       }
     },
-    [draftRowsByLineupId, ensureTeam, loadGames, modalTitle, toast],
+    [detailsById, draftRowsByLineupId, ensureTeam, loadGames, modalTitle, toast],
   );
 
   return {

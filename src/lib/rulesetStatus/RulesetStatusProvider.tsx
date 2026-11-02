@@ -70,6 +70,17 @@ export const RulesetStatusProvider = ({
   const [snapshot, setSnapshot] = useState<Snapshot>(null);
   const [appActive, setAppActive] = useState(AppState.currentState === "active");
   const teamIdRef = useRef<string | null>(null);
+  const activeRef = useRef(true);
+  useEffect(() => {
+    activeRef.current = true;
+    const { data } = backendClient.auth.onAuthStateChange((_event, current) => {
+      if (current?.user.id !== session.user.id) activeRef.current = false;
+    });
+    return () => {
+      activeRef.current = false;
+      data.subscription.unsubscribe();
+    };
+  }, [session.user.id]);
 
   // Last-seen "<rulesetId>:<status>" for the current team. undefined until
   // read from storage, so the first apply always compares against disk.
@@ -78,10 +89,13 @@ export const RulesetStatusProvider = ({
 
   const applyRuleset = useCallback(
     async (team: string, ruleset: RulesetPayload | null) => {
+      if (!activeRef.current) return;
       const next = toSnapshot(ruleset);
       const key = LAST_SEEN_KEY_PREFIX + team;
       if (lastSeenRef.current === undefined) {
-        lastSeenRef.current = await AsyncStorage.getItem(key);
+        const stored = await AsyncStorage.getItem(key);
+        if (!activeRef.current) return;
+        lastSeenRef.current = stored;
       }
 
       const previous = snapshotRef.current;
@@ -169,7 +183,7 @@ export const RulesetStatusProvider = ({
     const rulesetId = snapshot.rulesetId;
     const timer = setInterval(() => {
       backendClient
-        .getRuleset(rulesetId)
+        .getRuleset(rulesetId, {kind: "team", id: team})
         .then((ruleset) => applyRuleset(team, ruleset))
         .catch(() => {
           // Transient failure: the next tick retries.

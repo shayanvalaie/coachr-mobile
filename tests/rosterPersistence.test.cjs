@@ -11,7 +11,9 @@ function load(file) {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
   });
   const exports = {};
-  vm.runInNewContext(outputText, { exports });
+  vm.runInNewContext(outputText, { exports, require(name) {
+    return load(name + ".ts");
+  } });
   return exports;
 }
 
@@ -92,4 +94,18 @@ test('sign-out cache clear prevents an old read from repopulating cache', async 
   gate.resolve('old');
   await oldRead;
   assert.equal(await cachedRead('roster:team', async () => 'fresh'), 'fresh');
+});
+
+test('clearing account writes prevents a late failure from restoring old state', async () => {
+  const { writeRoster, waitForRosterWrites, clearRosterWrites } = load('rosterWrites.ts');
+  const gate = deferred();
+  const write = writeRoster('deleted-team', 'player', async () => {
+    await gate.promise;
+    throw new Error('Old account request failed');
+  });
+  const rejection = assert.rejects(write, /Old account/);
+  clearRosterWrites();
+  gate.resolve();
+  await rejection;
+  await waitForRosterWrites('deleted-team');
 });

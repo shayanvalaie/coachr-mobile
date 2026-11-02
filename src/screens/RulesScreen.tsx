@@ -1,3 +1,5 @@
+import RateLimitNotice from "../components/RateLimitNotice";
+import { usePrivacy } from "../components/privacy/PrivacyProvider";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, StyleSheet, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
@@ -22,7 +24,7 @@ import {
 import { BackendSession } from "../lib/backend/types";
 import { clearReads } from "../lib/backend/cache";
 import { backendClient } from "../lib/backend/client";
-import { toError } from "../lib/backend/utils";
+import { retryDeadline, toError } from "../lib/backend/utils";
 import { useRulesetStatus } from "../lib/rulesetStatus/RulesetStatusProvider";
 import { radius, space } from "../theme/tokens";
 import { RulesetPayload, TeamRulesState } from "../types/rules";
@@ -57,6 +59,8 @@ const savedRulesMessage = (ruleset: RulesetPayload): string => {
 const RulesScreen = ({ session, onBack, onOpenLeagues }: Props) => {
   const toast = useToast();
   const rulesetStatus = useRulesetStatus();
+  const privacy = usePrivacy();
+  const rulesSubmissionPending = useRef(false);
   const [teamId, setTeamId] = useState<string | null>(null);
   const [rules, setRules] = useState<TeamRulesState | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -68,6 +72,7 @@ const RulesScreen = ({ session, onBack, onOpenLeagues }: Props) => {
   const [segmentCountDraft, setSegmentCountDraft] = useState("");
   const [playersOnFieldDraft, setPlayersOnFieldDraft] = useState("");
   const [rulesError, setRulesError] = useState<string | null>(null);
+  const [rulesRetryAt, setRulesRetryAt] = useState<number | null>(null);
   const [isSavingRules, setIsSavingRules] = useState(false);
 
   const [prefsDraft, setPrefsDraft] = useState("");
@@ -148,6 +153,7 @@ const RulesScreen = ({ session, onBack, onOpenLeagues }: Props) => {
   }, [loadRules]);
 
   const handleSaveRules = useCallback(async () => {
+    if (rulesSubmissionPending.current || (rulesRetryAt !== null && Date.now() < rulesRetryAt)) return;
     const rulesText = rulesDraft.trim();
     if (!rulesText) {
       setRulesError("Describe your rules before saving.");
@@ -163,11 +169,16 @@ const RulesScreen = ({ session, onBack, onOpenLeagues }: Props) => {
       setRulesError("Enter how many innings or periods you play and how many players are on the field (1–30).");
       return;
     }
+    const account = privacy.account;
+    if (!account || account.accountId !== session.user.id) return;
+    rulesSubmissionPending.current = true;
+    setRulesRetryAt(null);
     setRulesError(null);
     setIsSavingRules(true);
     try {
+      if (!await privacy.requireAiConsent(account)) return;
       const team = await ensureTeam();
-      if (!team) return;
+      if (!team || !privacy.controller.isCurrentAccount(account)) return;
 
       const next = await backendClient.upsertTeamRules(team, {
         rulesText,
@@ -184,14 +195,19 @@ const RulesScreen = ({ session, onBack, onOpenLeagues }: Props) => {
         });
       }
     } catch (err) {
+      setRulesRetryAt(retryDeadline(err));
       setRulesError(toError(err).message);
     } finally {
+      rulesSubmissionPending.current = false;
       setIsSavingRules(false);
     }
   }, [
     applyRules,
+    rulesRetryAt,
     ensureTeam,
     playersOnFieldDraft,
+    privacy,
+    session.user.id,
     rulesDraft,
     rulesetStatus,
     segmentCountDraft,
@@ -399,9 +415,10 @@ const RulesScreen = ({ session, onBack, onOpenLeagues }: Props) => {
                   textAlignVertical="top"
                   style={styles.textarea}
                   error={rulesError}
-                  hint="Simple rules go live instantly. Unusual ones get a custom engine built in a few minutes."
+                  hint="Supported rules can go live immediately. Unusual rules need review; custom lineup execution is currently unavailable."
                   accessibilityLabel="Team rules"
                 />
+                {rulesRetryAt !== null ? <RateLimitNotice retryAt={rulesRetryAt} /> : null}
                 <Button
                   label="Save rules"
                   size="lg"

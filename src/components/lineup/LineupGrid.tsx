@@ -23,7 +23,7 @@ type Props = {
     playerName: string,
     targetPosition: string,
   ) => void;
-  playerGenderByName?: Record<string, "male" | "female">;
+  playerGenderByName?: Record<string, string>;
   // Vertical scroller hosting this grid; when provided, Sortable auto-scrolls
   // it as a dragged row nears the viewport edge.
   scrollableRef?: AnimatedRef<Animated.ScrollView>;

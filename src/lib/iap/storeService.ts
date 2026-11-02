@@ -6,7 +6,7 @@
  *
  *  - Store connection lifecycle (init / end)
  *  - Purchase & error event listeners
- *  - Transaction finishing (CRITICAL — unfinished transactions block the store)
+ *  - Transaction finishing after backend verification
  *  - Active-subscription queries
  *  - Product fetching with normalisation into our SubscriptionProduct type
  *
@@ -21,7 +21,8 @@ import {
   fetchProducts,
   requestPurchase,
   finishTransaction,
-  getActiveSubscriptions,
+  getAvailablePurchases,
+  syncIOS,
   purchaseUpdatedListener,
   purchaseErrorListener,
   type ProductOrSubscription,
@@ -30,7 +31,7 @@ import {
   type EventSubscription,
   ErrorCode,
 } from "react-native-iap";
-import { persistSubscription } from "./persistence";
+import { API_REQUEST_TIMEOUT_MS, runWithRequestDeadline } from "../backend/requestTransport";
 import {
   ALL_SKUS,
   IAP_SKUS,
@@ -68,7 +69,7 @@ const normaliseProduct = (p: ProductOrSubscription): SubscriptionProduct | null 
 
 export const connectToStore = async (): Promise<boolean> => {
   try {
-    await initConnection();
+    await runWithRequestDeadline(API_REQUEST_TIMEOUT_MS, () => initConnection());
     return true;
   } catch (err) {
     if (__DEV__) console.warn("[iap] initConnection failed", err);
@@ -90,7 +91,7 @@ export const fetchSubscriptionProducts = async (): Promise<
   SubscriptionProduct[]
 > => {
   try {
-    const raw = await fetchProducts({ skus: ALL_SKUS, type: "subs" });
+    const raw = await runWithRequestDeadline(API_REQUEST_TIMEOUT_MS, () => fetchProducts({ skus: ALL_SKUS, type: "subs" }));
     if (!raw) return [];
     const products: SubscriptionProduct[] = [];
     for (const p of raw) {
@@ -112,58 +113,20 @@ export const fetchSubscriptionProducts = async (): Promise<
 
 // ─── Active subscription check ──────────────────────────────────────────────
 
-export type ActiveSubResult = {
-  isPro: boolean;
-  activeSku: IapSku | null;
-  transactionId: string | null;
-  /** Raw store product id (may be an unknown/legacy sku). */
-  productId: string | null;
-  /** Apple original transaction id — links renewals to one subscription. */
-  originalTransactionId: string | null;
-  /** Store purchase token / JWS representation, when available. */
-  purchaseToken: string | null;
+/** Return store purchases for backend verification; this grants no entitlement. */
+export const getRestorablePurchases = async (): Promise<Purchase[]> => {
+  const purchases = await runWithRequestDeadline(API_REQUEST_TIMEOUT_MS, () => getAvailablePurchases({
+    onlyIncludeActiveItemsIOS: true,
+    alsoPublishToEventListenerIOS: false,
+  }));
+  return purchases.filter(
+    (purchase) => isKnownSku(purchase.productId) && purchase.purchaseState === "purchased",
+  );
 };
 
-const EMPTY_ACTIVE: ActiveSubResult = {
-  isPro: false,
-  activeSku: null,
-  transactionId: null,
-  productId: null,
-  originalTransactionId: null,
-  purchaseToken: null,
-};
-
-export const checkActiveSubscriptions = async (): Promise<ActiveSubResult> => {
-  try {
-    const subs = await getActiveSubscriptions(ALL_SKUS);
-    if (subs.length === 0) {
-      return EMPTY_ACTIVE;
-    }
-    // Pick the first active subscription (should only be one for this app).
-    // Fields beyond productId/transactionId aren't on every platform's type,
-    // so read them through a loose shape rather than the strict union.
-    const active = subs[0] as unknown as {
-      productId: string;
-      transactionId?: string | null;
-      originalTransactionIdentifierIOS?: string | null;
-      purchaseToken?: string | null;
-    };
-    const sku = isKnownSku(active.productId) ? active.productId : null;
-    const result: ActiveSubResult = {
-      isPro: true,
-      activeSku: sku,
-      transactionId: active.transactionId ?? null,
-      productId: active.productId ?? null,
-      originalTransactionId: active.originalTransactionIdentifierIOS ?? null,
-      purchaseToken: active.purchaseToken ?? null,
-    };
-    // Persist so the app can show Pro instantly on next cold start
-    await persistSubscription(result.isPro, result.activeSku, result.transactionId);
-    return result;
-  } catch (err) {
-    if (__DEV__) console.warn("[iap] checkActiveSubscriptions failed", err);
-    return EMPTY_ACTIVE;
-  }
+// Explicit Restore only: StoreKit synchronization may present an Apple prompt.
+export const synchronizeStorePurchases = async (): Promise<void> => {
+  if (!await syncIOS()) throw new Error("Could not synchronize App Store purchases.");
 };
 
 // ─── Purchase ───────────────────────────────────────────────────────────────
@@ -174,30 +137,23 @@ export const checkActiveSubscriptions = async (): Promise<ActiveSubResult> => {
  */
 export const requestSubscriptionPurchase = async (
   sku: string,
+  appAccountToken: string,
 ): Promise<void> => {
   if (Platform.OS !== "ios") {
     // iOS-only for now — Android IAP is intentionally unsupported.
     throw new Error("In-app purchases are only available on iOS.");
   }
   await requestPurchase({
-    request: { apple: { sku } },
+    request: { apple: { sku, appAccountToken, andDangerouslyFinishTransactionAutomatically: false } },
     type: "subs",
   });
 };
 
 // ─── Transaction finishing ──────────────────────────────────────────────────
 
-/**
- * Finish (acknowledge) a purchase. MUST be called for every successful purchase,
- * otherwise the store will refund the transaction after a grace period.
- */
+/** Finish only after the backend has verified and recorded the purchase. */
 export const finishPurchase = async (purchase: Purchase): Promise<void> => {
-  try {
-    await finishTransaction({ purchase, isConsumable: false });
-    if (__DEV__) console.log("[iap] transaction finished", purchase.productId);
-  } catch (err) {
-    if (__DEV__) console.warn("[iap] finishTransaction failed", err);
-  }
+  await runWithRequestDeadline(API_REQUEST_TIMEOUT_MS, () => finishTransaction({ purchase, isConsumable: false }));
 };
 
 // ─── Listeners ──────────────────────────────────────────────────────────────

@@ -1,3 +1,4 @@
+import { registerPaidAccessInvalidation } from "../access/paidAccess";
 // Short-lived read cache with in-flight dedup for the backend client's GET
 // calls. Every tab loads team, roster, rules, and games on mount and again on
 // focus, so without this the same resources are fetched several times per
@@ -44,3 +45,6 @@ export const clearReads = () => {
   inFlight.clear();
   entries.clear();
 };
+
+// Expiry/revocation/account changes discard values and pending cache writers.
+registerPaidAccessInvalidation(clearReads);

@@ -1,6 +1,9 @@
+import RateLimitNotice from "../components/RateLimitNotice";
+import { retryDeadline } from "../lib/backend/utils";
 import { useState } from "react";
 import {
   Keyboard,
+  Linking,
   StyleSheet,
   TouchableWithoutFeedback,
   View,
@@ -8,7 +11,9 @@ import {
 import PasswordResetForm from "../components/auth/PasswordResetForm";
 import AuthForm from "../components/auth/AuthForm";
 import AuthHeader from "../components/auth/AuthHeader";
-import { Reveal, ScreenContainer } from "../components/ui";
+import { AgeEligibility } from "../components/privacy/AgeEligibility";
+import { AGE_POLICY_VERSION, DeclaredAgeBand, PRIVACY_URL, TERMS_URL } from "../lib/privacy/contracts";
+import { AppPressable, AppText, Reveal, ScreenContainer } from "../components/ui";
 import { space } from "../theme/tokens";
 import { AuthMode } from "../types/auth";
 import { backendClient } from "../lib/backend/client";
@@ -16,6 +21,7 @@ import { backendClient } from "../lib/backend/client";
 const AuthScreen = () => {
   const [resettingPassword, setResettingPassword] = useState(false);
   const [mode, setMode] = useState<AuthMode>(AuthMode.SignIn);
+  const [ageBand, setAgeBand] = useState<DeclaredAgeBand | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -25,12 +31,14 @@ const AuthScreen = () => {
   const [verificationCode, setVerificationCode] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [retryAt, setRetryAt] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
 
   const isLikelyEmail = (value: string) =>
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
   const handleSubmit = async () => {
+    if (retryAt !== null && Date.now() < retryAt) return;
     setError(null);
     setStatus(null);
     const normalizedEmail = email.trim().toLowerCase();
@@ -48,6 +56,7 @@ const AuthScreen = () => {
           await backendClient.auth.verifyEmail({
             email: verificationEmail,
             code: normalizedCode,
+            password,
           });
         if (verifyError) throw verifyError;
         setVerificationEmail(null);
@@ -57,7 +66,7 @@ const AuthScreen = () => {
           data.session ? "Email verified. Signed in." : "Email verified.",
         );
       } catch (err: any) {
-        if (__DEV__) console.log("[auth] verify-email error", err);
+        setRetryAt(retryDeadline(err));
         setError(err?.message ?? "Unable to verify email right now.");
       } finally {
         setLoading(false);
@@ -65,6 +74,10 @@ const AuthScreen = () => {
       return;
     }
 
+    if (mode === AuthMode.SignUp && (ageBand === null || ageBand === "under13")) {
+      setError("Coachr accounts require an age group of 13 or older.");
+      return;
+    }
     if (!normalizedEmail || !password) {
       setError("Email and password are required.");
       return;
@@ -112,6 +125,8 @@ const AuthScreen = () => {
         const { data, error: signUpError } = await backendClient.auth.signUp({
           email: normalizedEmail,
           password,
+          ageBand: ageBand!,
+          policyVersion: AGE_POLICY_VERSION,
         });
         if (signUpError) throw signUpError;
         const needsEmailVerify = !data.session;
@@ -127,7 +142,7 @@ const AuthScreen = () => {
         setConfirm("");
       }
     } catch (err: any) {
-      if (__DEV__) console.log("[auth] error", err);
+      setRetryAt(retryDeadline(err));
       setError(err?.message ?? "Something went wrong. Please try again.");
     } finally {
       setLoading(false);
@@ -135,6 +150,7 @@ const AuthScreen = () => {
   };
 
   const handleResendVerification = async () => {
+    if (retryAt !== null && Date.now() < retryAt) return;
     if (!verificationEmail) return;
     setError(null);
     setStatus(null);
@@ -143,11 +159,12 @@ const AuthScreen = () => {
       const { error: resendError } =
         await backendClient.auth.resendVerification({
           email: verificationEmail,
+          password,
         });
       if (resendError) throw resendError;
       setStatus("Verification code resent.");
     } catch (err: any) {
-      if (__DEV__) console.log("[auth] resend-verification error", err);
+      setRetryAt(retryDeadline(err));
       setError(err?.message ?? "Unable to resend verification code.");
     } finally {
       setLoading(false);
@@ -182,7 +199,12 @@ const AuthScreen = () => {
               Mount-only, so mode/verification swaps stay still. */}
           <Reveal style={styles.stack}>
             <AuthHeader />
-            {resettingPassword ? (
+            {mode === AuthMode.SignUp && !verificationEmail && !resettingPassword ?
+              <AgeEligibility value={ageBand} onChange={setAgeBand} disabled={loading} /> : null}
+            {mode === AuthMode.SignUp && !verificationEmail && !resettingPassword &&
+              (ageBand === null || ageBand === "under13") ? (
+                <AppPressable onPress={handleToggleMode}><AppText>Already have an account? Sign in</AppText></AppPressable>
+              ) : resettingPassword ? (
               <PasswordResetForm
                 initialEmail={email}
                 onBack={(nextEmail, completed) => {
@@ -221,6 +243,11 @@ const AuthScreen = () => {
                 onToggleMode={handleToggleMode}
               />
             )}
+            {retryAt !== null ? <RateLimitNotice retryAt={retryAt} /> : null}
+            <View style={{flexDirection: "row", gap: space.md}}>
+              <AppPressable onPress={() => { void Linking.openURL(PRIVACY_URL); }}><AppText>Privacy Policy</AppText></AppPressable>
+              <AppPressable onPress={() => { void Linking.openURL(TERMS_URL); }}><AppText>Terms of Use</AppText></AppPressable>
+            </View>
           </Reveal>
         </View>
       </TouchableWithoutFeedback>

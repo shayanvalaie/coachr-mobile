@@ -1,3 +1,8 @@
+import RateLimitNotice from "../components/RateLimitNotice";
+import { useNavigation } from "@react-navigation/native";
+import { BlockManagement } from "../components/moderation/BlockManagement";
+import { PrivacySettings } from "../components/privacy/PrivacySettings";
+import DeleteAccountSheet from "../components/auth/DeleteAccountSheet";
 import AdminManagement from "../components/admin/AdminManagement";
 import { useCallback, useState } from "react";
 import { Alert, StyleSheet, Switch, View } from "react-native";
@@ -36,18 +41,21 @@ const initialsOf = (name: string) =>
     .toUpperCase() || "C";
 
 const ProfileScreen = ({ session, onOpenSubscribe, onOpenRules, onReplayTour }: Props) => {
+  const navigation = useNavigation();
   const email = session.user.email ?? "";
   const {
     isPro,
     activeSku,
     products,
     restore,
+    verificationRetryAt,
     loading,
     clearSubscription,
     isAdmin,
     adminProEnabled,
     setAdminProEnabled,
   } = useSubscription();
+  const [deletingAccount, setDeletingAccount] = useState(false);
   const [canManageAdmins, setCanManageAdmins] = useState(false);
   const [teamName, setTeamName] = useState("");
   const [rules, setRules] = useState<TeamRulesState | null>(null);
@@ -114,6 +122,8 @@ const ProfileScreen = ({ session, onOpenSubscribe, onOpenRules, onReplayTour }: 
 
   return (
     <ScreenContainer keyboard scroll contentStyle={styles.content}>
+      <PrivacySettings />
+      <BlockManagement api={backendClient} accountId={session.user.id} />
       <PageHeader eyebrow="Profile" title="Coach" />
 
       <Card padding="none">
@@ -160,6 +170,7 @@ const ProfileScreen = ({ session, onOpenSubscribe, onOpenRules, onReplayTour }: 
         </View>
       </Card>
 
+      {verificationRetryAt !== null ? <RateLimitNotice retryAt={verificationRetryAt} /> : null}
       <ListGroup>
         <ListRow title="Team rules" value={rulesValue} onPress={onOpenRules} />
         <ListRow
@@ -177,13 +188,16 @@ const ProfileScreen = ({ session, onOpenSubscribe, onOpenRules, onReplayTour }: 
           onPress={() => {
             backendClient.auth.signOut().then(({ error }) => {
               if (error && __DEV__) {
-                console.log("[sign out] token revocation failed", error);
+                console.log("[sign out] token revocation failed");
               }
             });
           }}
         />
+        <ListRow title="Delete account" danger onPress={() => setDeletingAccount(true)} />
       </ListGroup>
+      {deletingAccount ? <DeleteAccountSheet onClose={() => setDeletingAccount(false)} /> : null}
 
+      {isAdmin ? <ListRow title="Review public content" onPress={() => navigation.navigate("Moderation")} /> : null}
       {canManageAdmins ? <AdminManagement key={session.user.id} /> : null}
 
       {isAdmin || (__DEV__ && isPro) ? (

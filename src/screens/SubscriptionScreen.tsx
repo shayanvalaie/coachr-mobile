@@ -98,7 +98,7 @@ const PlanCard = ({ name, priceLine, selected, tag, elevated, onPress }: PlanCar
 );
 
 const SubscriptionScreen = ({ onClose }: Props) => {
-  const { isPro, activeSku, products, loading, purchase, restore } =
+  const { isPro, activeSku, products, loading, purchase, restore, purchaseState, adminProEnabled } =
     useSubscription();
   // This paywall is presented as a native fullScreenModal, which escapes the
   // app-level SafeAreaView that pads the rest of the app. Apply the insets
@@ -110,7 +110,7 @@ const SubscriptionScreen = ({ onClose }: Props) => {
     void lockOrientation(ORIENTATION_LOCK_PORTRAIT_UP);
   }, []);
 
-  const isDevUnlocked = __DEV__ && isPro && !activeSku;
+  const isAdminUnlocked = adminProEnabled && isPro && !activeSku;
   const hasProducts = products.length > 0;
   // True only while the store products are first being fetched. Once products
   // exist, `loading` also flips during purchase/restore and must not swap the
@@ -145,9 +145,15 @@ const SubscriptionScreen = ({ onClose }: Props) => {
           eyebrow="Coachr Pro"
           title="Cleaner game days"
           right={
-            <IconButton icon="x" size={36} onPress={onClose} accessibilityLabel="Close" />
+            <IconButton icon="x" size={40} onPress={onClose} accessibilityLabel="Close" />
           }
         />
+
+        {purchaseState !== "idle" && (
+          <AppText variant="body" color="secondary" accessibilityLiveRegion="polite">
+            {{ verifying: "Verifying your purchase…", waiting: "Waiting for the App Store. Your purchase will appear after confirmation.", retryable_error: "Verification is delayed. We'll retry automatically.", conflict: "This purchase needs attention. Restore with its original Coachr account or contact support.", canceled: "Purchase canceled.", deferred: "Your purchase is awaiting approval.", expired: "Pro access has ended. Your calendar, game lineups, and game history are saved. Renew or restore to unlock them.", restored: "Your Pro access has been restored." }[purchaseState]}
+          </AppText>
+        )}
 
         {isPro ? (
           <Card variant="glass" radius="xl" borderColor={theme.accent.subtleBorder}>
@@ -156,15 +162,15 @@ const SubscriptionScreen = ({ onClose }: Props) => {
                 You're on Pro
               </AppText>
               <AppText variant="title" family="display">
-                {isDevUnlocked
-                  ? "Development unlock"
+                {isAdminUnlocked
+                  ? "Admin access"
                   : activeSku === IAP_SKUS.ANNUAL
                     ? "Annual plan"
                     : "Monthly plan"}
               </AppText>
               <AppText variant="body" color="secondary">
-                {isDevUnlocked
-                  ? "This build bypasses subscription gating so you can access the full app in development."
+                {isAdminUnlocked
+                  ? "Pro access is enabled for this account by an administrator."
                   : "Manage or cancel in your App Store settings."}
               </AppText>
             </View>
@@ -202,11 +208,11 @@ const SubscriptionScreen = ({ onClose }: Props) => {
                       Coachr couldn&apos;t load the monthly and annual plans from the
                       store for this build.
                     </AppText>
-                    <AppText variant="body" color="secondary">
+                    {__DEV__ && <AppText variant="body" color="secondary">
                       On the iOS simulator, attach a StoreKit configuration file to
                       the `coachrmobile` scheme or test on a real device with sandbox
                       / TestFlight.
-                    </AppText>
+                    </AppText>}
                     {__DEV__ ? (
                       <AppText variant="caption" color="muted">
                         Expected product IDs: {IAP_SKUS.MONTHLY}, {IAP_SKUS.ANNUAL}

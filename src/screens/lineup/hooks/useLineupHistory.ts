@@ -1,12 +1,15 @@
+import { useProGate } from "../../../lib/proGate";
 import {
   Dispatch,
   SetStateAction,
   useCallback,
   useEffect,
+  useRef,
   useState,
 } from "react";
 import { LayoutAnimation, Share } from "react-native";
 import { useToast } from "../../../components/ui";
+import { assertPaidAccess, capturePaidAccess, registerPaidAccessInvalidation } from "../../../lib/access/paidAccess";
 import { backendClient } from "../../../lib/backend/client";
 import {
   BackendLineupVersionDetail,
@@ -64,6 +67,7 @@ export const useLineupHistory = ({
   onEditModeChange,
 }: Params) => {
   const toast = useToast();
+  const { isPro } = useProGate();
   const [lineupHistory, setLineupHistory] = useState<
     BackendLineupVersionSummary[]
   >([]);
@@ -83,21 +87,50 @@ export const useLineupHistory = ({
   // history-card spinner never gets wedged by an in-flight or dismissed share.
   const [isExporting, setIsExporting] = useState(false);
 
+  const requestEpoch = useRef(0);
+  const loadingPageRef = useRef(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
   const loadLineupHistory = useCallback(
-    async (team: string, gameId: string | null) => {
+    async (team: string, gameId: string | null, cursor?: string) => {
+      if (cursor && loadingPageRef.current) return;
+      loadingPageRef.current = true;
+      const epoch = ++requestEpoch.current;
+      const access = capturePaidAccess();
       setHistoryLoading(true);
       setHistoryError(null);
+      if (!cursor) { setLineupHistory([]); setNextCursor(null); setHasMore(false); }
       try {
-        const versions = await backendClient.getLineupVersions(team, gameId);
-        setLineupHistory(versions);
+        const page = await backendClient.getLineupVersionsPage({ teamId: team, gameId, cursor, limit: 50 });
+        assertPaidAccess(access);
+        if (epoch !== requestEpoch.current) return;
+        setLineupHistory(previous => cursor ? [...previous, ...page.items.filter(item => !previous.some(old => old.id === item.id))] : page.items);
+        setNextCursor(page.nextCursor);
+        setHasMore(page.hasMore);
       } catch (_err) {
-        setHistoryError("Unable to load lineup history.");
+        if (epoch === requestEpoch.current) setHistoryError("Unable to load lineup history. Try again.");
       } finally {
-        setHistoryLoading(false);
+        if (epoch === requestEpoch.current) { loadingPageRef.current = false; setHistoryLoading(false); }
       }
     },
     [],
   );
+  const loadMoreHistory = useCallback(async () => {
+    if (!hasMore || historyLoading || !nextCursor) return;
+    const team = await ensureTeam();
+    if (team) await loadLineupHistory(team, selectedGameId, nextCursor);
+  }, [ensureTeam, hasMore, historyLoading, loadLineupHistory, nextCursor, selectedGameId]);
+
+  useEffect(() => registerPaidAccessInvalidation(() => {
+    requestEpoch.current++;
+    setLineupHistory([]);
+    setNextCursor(null);
+    setHasMore(false);
+    setSelectedHistoryDetail(null);
+    setCompareBase(null);
+    setHistoryEditRows(null);
+    setEditModalVisible(false);
+  }), [setEditModalVisible, setHistoryEditRows]);
 
   useEffect(() => {
     ensureTeam()
@@ -114,7 +147,7 @@ export const useLineupHistory = ({
         setHistoryError("Unable to load lineup history.");
         setHistoryLoading(false);
       });
-  }, [ensureTeam, loadLineupHistory, selectedGameId]);
+  }, [ensureTeam, isPro, loadLineupHistory, selectedGameId]);
 
   const openLineupHistoryDetail = useCallback(
     async (lineupId: string) => {
@@ -314,6 +347,8 @@ export const useLineupHistory = ({
     lineupHistory,
     historyLoading,
     historyError,
+    hasMoreHistory: hasMore,
+    loadMoreHistory,
     selectedHistoryDetail,
     setSelectedHistoryDetail,
     compareBase,

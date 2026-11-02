@@ -1,7 +1,8 @@
+import ProScreenGate from "../../components/ProScreenGate";
 import { useCallback, useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
-import { BackendGame, BackendSession } from "../../lib/backend/types";
-import { IconButton, PageHeader, ScreenContainer } from "../../components/ui";
+import { BackendGame, BackendGamePageItem, BackendSession } from "../../lib/backend/types";
+import { AppText, Button, IconButton, PageHeader, ScreenContainer } from "../../components/ui";
 import { space } from "../../theme/tokens";
 import { LineupLaunchRequestInput } from "../../types/lineupLaunch";
 import {
@@ -38,7 +39,7 @@ const dayKeyToAgendaLabel = (dayKey: string) => {
 // Calendar workspace orchestrator: owns the selected day (which also drives
 // the month shown) and wires the data/form/carousel hooks into the grid,
 // agenda, and sheets.
-const CalendarScreen = ({
+const CalendarContent = ({
   session,
   onOpenLineupPage,
   hasProSubscription,
@@ -50,11 +51,12 @@ const CalendarScreen = ({
   const {
     ensureTeam,
     gamesByDay,
-    lineupsByGameId,
+
     playerGenderByName,
     isLoading,
+    loadError,
     loadGames,
-  } = useCalendarData({ session });
+  } = useCalendarData({ session, selectedDateKey });
 
   const gameForm = useGameForm({
     ensureTeam,
@@ -64,7 +66,7 @@ const CalendarScreen = ({
     onSaved: () => {},
   });
 
-  const carousel = useLineupCarousel({ ensureTeam, loadGames, lineupsByGameId });
+  const carousel = useLineupCarousel({ ensureTeam, loadGames });
 
   const selectedGames = useMemo(
     () => gamesByDay.get(selectedDateKey) ?? [],
@@ -99,15 +101,14 @@ const CalendarScreen = ({
   );
 
   const handleOpenLineups = useCallback(
-    (game: BackendGame) => {
-      const savedLineups = game.id ? lineupsByGameId.get(game.id) ?? [] : [];
-      if (savedLineups.length === 0) {
+    (game: BackendGamePageItem) => {
+      if (game.lineupCount === 0) {
         openLineupWorkspace({ gameId: game.id ?? null, autoGenerate: true });
         return;
       }
       void carousel.openForGame(game);
     },
-    [carousel, lineupsByGameId, openLineupWorkspace],
+    [carousel, openLineupWorkspace],
   );
 
   const handleExport = useCallback(
@@ -153,16 +154,15 @@ const CalendarScreen = ({
         onPressDay={setSelectedDateKey}
       />
 
-      <DayAgenda
+      {loadError ? <View><AppText color="danger">{loadError}</AppText><Button label="Try again" variant="secondary" onPress={() => { void loadGames(); }} /></View> : <DayAgenda
         dayLabel={dayKeyToAgendaLabel(selectedDateKey)}
         games={selectedGames}
-        lineupsByGameId={lineupsByGameId}
         isLoading={isLoading}
         onAddGame={() => gameForm.openCreateForDate(selectedDateKey)}
         onOpenLineups={handleOpenLineups}
         onEditGame={gameForm.startEditingGame}
         onDeleteGame={gameForm.deleteGame}
-      />
+      />}
 
       <LineupsSheet
         visible={carousel.isOpen}
@@ -211,5 +211,9 @@ const styles = StyleSheet.create({
     gap: space.xs,
   },
 });
+
+const CalendarScreen = (props: Props) => (
+  <ProScreenGate featureLabel="Calendar"><CalendarContent {...props} /></ProScreenGate>
+);
 
 export default CalendarScreen;

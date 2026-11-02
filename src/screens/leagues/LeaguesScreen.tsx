@@ -1,3 +1,6 @@
+import { usePrivacy } from "../../components/privacy/PrivacyProvider";
+import { PublicationConfirmation } from "../../components/moderation/PublicationConfirmation";
+import { subscribePublicContent } from "../../lib/moderation/events";
 import { useLeagueValidation } from "../../hooks/useLeagueValidation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { StyleSheet, View } from "react-native";
@@ -41,6 +44,9 @@ const SEARCH_DEBOUNCE_MS = 250;
 const LeaguesScreen = ({ session, onBack, onOpenLeague }: Props) => {
   const toast = useToast();
   const rulesetStatus = useRulesetStatus();
+  const privacy = usePrivacy();
+  const creationPending = useRef(false);
+  const [publicationConfirmed, setPublicationConfirmed] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<LeagueSummary[]>([]);
   const [isSearching, setIsSearching] = useState(true);
@@ -113,6 +119,9 @@ const LeaguesScreen = ({ session, onBack, onOpenLeague }: Props) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, runSearch]);
 
+  useEffect(() => subscribePublicContent(() => { setResults([]); setSuggestions(null); void runSearch(query); }), [query, runSearch]);
+  useEffect(() => { latestSearch.current += 1; setResults([]); setSuggestions(null); void runSearch(query); }, [session.user.id, privacy.account?.sessionEpoch]);
+
   const openCreate = useCallback(() => {
     setShowCreate(true);
     if (!name && query.trim()) setName(query.trim());
@@ -126,6 +135,8 @@ const LeaguesScreen = ({ session, onBack, onOpenLeague }: Props) => {
 
   const createLeague = useCallback(
     async (confirmDistinct: boolean) => {
+      if (creationPending.current) return;
+      if (!publicationConfirmed) { setCreateError("Confirm which fields you want reviewed for public publication."); return; }
       if (!validation.validate()) return;
       if (
         !formValid ||
@@ -136,6 +147,9 @@ const LeaguesScreen = ({ session, onBack, onOpenLeague }: Props) => {
       ) {
         return;
       }
+      const account = privacy.account;
+      if (!account || account.accountId !== session.user.id) return;
+      creationPending.current = true;
       setCreateError(null);
       setIsCreating(true);
       trace("leagues screen create submit", {
@@ -147,6 +161,7 @@ const LeaguesScreen = ({ session, onBack, onOpenLeague }: Props) => {
         confirmDistinct,
       });
       try {
+        if (!await privacy.requireAiConsent(account) || !privacy.controller.isCurrentAccount(account)) return;
         const league = await backendClient.createLeague({
           name: name.trim(),
           sport,
@@ -157,20 +172,18 @@ const LeaguesScreen = ({ session, onBack, onOpenLeague }: Props) => {
           playersOnField: parsedPlayersOnField,
           rulesText: rulesText.trim(),
           confirmDistinct,
+          publicationConfirmed,
         });
         setSuggestions(null);
 
         // The creator's team joins right away; the detail screen offers Leave.
         const teamId = await backendClient.getOrCreateTeam(session.user.id);
-        if (teamId) {
+        if (teamId && privacy.controller.isCurrentAccount(account)) {
           await backendClient.setTeamLeague(teamId, league.id);
           void rulesetStatus.refresh();
         }
         toast.show({
-          message:
-            league.status === "active"
-              ? `${league.name} is live. Your team joined.`
-              : `${league.name} created. We'll email you when its rules are ready.`,
+          message: `${league.name} submitted for publication review. Your private team setup is available.`,
           type: "success",
         });
         setShowCreate(false);
@@ -180,6 +193,7 @@ const LeaguesScreen = ({ session, onBack, onOpenLeague }: Props) => {
         setSegmentCount("");
         setPlayersOnField("");
         setRulesText("");
+        setPublicationConfirmed(false);
         onOpenLeague(league.id);
       } catch (err) {
         const similar = getSimilarLeaguesError(err);
@@ -198,11 +212,14 @@ const LeaguesScreen = ({ session, onBack, onOpenLeague }: Props) => {
         }
         setCreateError(toError(err).message);
       } finally {
+        creationPending.current = false;
         setIsCreating(false);
       }
     },
     [
       validation,
+      privacy,
+      publicationConfirmed,
       formValid,
       name,
       onOpenLeague,
@@ -343,7 +360,7 @@ const LeaguesScreen = ({ session, onBack, onOpenLeague }: Props) => {
                 textAlignVertical="top"
                 style={styles.textarea}
                 error={createError}
-                hint="Simple rules go live instantly. Unusual ones get a custom engine built in a few minutes."
+                hint="Rules processing and public publication review are separate. Your team can use its private setup while publication is pending."
                 accessibilityLabel="League rules"
               />
               {validation.errors.rules ? (
@@ -352,6 +369,8 @@ const LeaguesScreen = ({ session, onBack, onOpenLeague }: Props) => {
                 </AppText>
               ) : null}
             </View>
+
+            <PublicationConfirmation confirmed={publicationConfirmed} onChange={setPublicationConfirmed} disabled={isCreating} />
 
             {suggestions ? (
               <View style={styles.suggestions}>

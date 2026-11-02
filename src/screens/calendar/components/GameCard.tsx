@@ -1,14 +1,13 @@
 import { StyleSheet, View } from "react-native";
-import { BackendGame, BackendLineupVersionSummary } from "../../../lib/backend/types";
+import { BackendGame, BackendGamePageItem } from "../../../lib/backend/types";
 import { AppText, Button, Card } from "../../../components/ui";
 import { theme } from "../../../theme/colors";
 import { radius, space } from "../../../theme/tokens";
 import { typeface } from "../../../theme/typography";
 
 type Props = {
-  game: BackendGame;
-  savedLineups: BackendLineupVersionSummary[];
-  onOpenLineups: (game: BackendGame) => void;
+  game: BackendGamePageItem;
+  onOpenLineups: (game: BackendGamePageItem) => void;
   onEdit: (game: BackendGame) => void;
   onDelete: (gameId: string) => void;
 };
@@ -48,8 +47,8 @@ const gameMeta = (game: BackendGame) => {
 
 // One game on the selected day: a glass hero with the schedule, lineup
 // status, and the day's one amber action. Long-press to delete.
-const GameCard = ({ game, savedLineups, onOpenLineups, onEdit, onDelete }: Props) => {
-  const hasLineup = savedLineups.length > 0;
+const GameCard = ({ game, onOpenLineups, onEdit, onDelete }: Props) => {
+  const hasLineup = game.lineupCount > 0;
   const title = gameTitle(game);
   const hasScore = game.ourScore != null || game.opponentScore != null;
 
@@ -86,7 +85,7 @@ const GameCard = ({ game, savedLineups, onOpenLineups, onEdit, onDelete }: Props
           />
           <AppText variant="caption" family="heading" color={hasLineup ? "success" : "muted"}>
             {hasLineup
-              ? `${savedLineups.length} saved lineup${savedLineups.length === 1 ? "" : "s"}`
+              ? `${game.lineupCount} saved lineup${game.lineupCount === 1 ? "" : "s"}`
               : "No lineup yet"}
           </AppText>
         </View>

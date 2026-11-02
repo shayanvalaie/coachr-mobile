@@ -1,3 +1,9 @@
+import { ModerationReviewScreen } from "../components/moderation/ModerationReviewScreen";
+import { backendClient } from "../lib/backend/client";
+import { useSubscription } from "../lib/iap";
+import { AppText, ScreenContainer } from "../components/ui";
+import { usePrivacy } from "../components/privacy/PrivacyProvider";
+import RestrictedAccount from "./RestrictedAccount";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { useBackendAuth } from "../hooks/useBackendAuth";
@@ -16,6 +22,9 @@ const RootStack = createNativeStackNavigator<RootStackParamList>();
 const RootNavigator = () => {
   const { session, initializing } = useBackendAuth();
   const reducedMotion = useReducedMotion();
+  const { isAdmin } = useSubscription();
+  const { state, account } = usePrivacy();
+  const restricted = session !== null && account?.accountId === session.user.id && state?.ageBand === "under13";
 
   if (initializing) {
     return (
@@ -38,7 +47,12 @@ const RootNavigator = () => {
       ) : (
         <>
           <RootStack.Screen name="Main">
-            {() => <MainTabs session={session} />}
+            {() => restricted ? <RestrictedAccount /> : <MainTabs session={session} />}
+          </RootStack.Screen>
+          <RootStack.Screen name="Moderation">
+            {({ navigation }) => isAdmin && !restricted ?
+              <ModerationReviewScreen api={backendClient} accountId={session.user.id} onBack={() => navigation.goBack()} /> :
+              <ScreenContainer><AppText>Admin review access is required.</AppText></ScreenContainer>}
           </RootStack.Screen>
           <RootStack.Screen
             name="Subscribe"
@@ -58,11 +72,11 @@ const RootNavigator = () => {
     </RootStack.Navigator>
     {/* First-run setup overlay: decides for itself whether this account still
         needs it, so it costs nothing for existing users. */}
-    {session ? <SetupWizard key={session.user.id} session={session} /> : null}
+    {session && !restricted ? <SetupWizard key={session.user.id} session={session} /> : null}
     </>
   );
 
-  if (!session) return content;
+  if (!session || restricted) return content;
   return <RulesetStatusProvider session={session}>{content}</RulesetStatusProvider>;
 };
 

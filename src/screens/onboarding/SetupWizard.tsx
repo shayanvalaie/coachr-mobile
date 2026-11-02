@@ -1,3 +1,6 @@
+import RateLimitNotice from "../../components/RateLimitNotice";
+import { PublicationConfirmation } from "../../components/moderation/PublicationConfirmation";
+import { usePrivacy } from "../../components/privacy/PrivacyProvider";
 import { useLeagueValidation } from "../../hooks/useLeagueValidation";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -27,7 +30,7 @@ import {
 import { backendClient } from "../../lib/backend/client";
 import { trace } from "../../lib/backend/trace";
 import { BackendSession } from "../../lib/backend/types";
-import { getSimilarLeaguesError, toError } from "../../lib/backend/utils";
+import { getSimilarLeaguesError, retryDeadline, toError } from "../../lib/backend/utils";
 import PlaceSearch from "../../components/PlaceSearch";
 import { PlaceValue } from "../../lib/placeSearch";
 import { useRulesetStatus } from "../../lib/rulesetStatus/RulesetStatusProvider";
@@ -99,8 +102,8 @@ const noticeCopy = (notice: SetupNotice): { title: string; body: string } => {
       return { title: "Your rules are live", body: ADD_PLAYERS_THEN_GENERATE };
     case "baking":
       return {
-        title: "Your lineup engine is being generated",
-        body: "This takes a few minutes. Add your players in the meantime and we'll let you know when it's ready.",
+        title: "Your rules are awaiting review",
+        body: "Custom lineup execution is currently unavailable. You can add your players while your rules await review.",
       };
     case "review":
       return {
@@ -121,7 +124,7 @@ type Props = {
 
 const SEARCH_DEBOUNCE_MS = 250;
 const RULES_HINT =
-  "Simple rules go live instantly. Unusual ones get a custom engine built in a few minutes.";
+  "Supported rules can go live immediately. Unusual rules need review; custom lineup execution is currently unavailable.";
 
 const WELCOME_ITEMS: Array<{ label: string; detail: string }> = [
   { label: "Rules", detail: "Join or create your league, or write your own" },
@@ -173,6 +176,9 @@ const OptionRow = ({
 const SetupWizard = ({ session }: Props) => {
   const toast = useToast();
   const rulesetStatus = useRulesetStatus();
+  const privacy = usePrivacy();
+  const [publicationConfirmed, setPublicationConfirmed] = useState(false);
+  const rulesSubmissionPending = useRef(false);
   const insets = useSafeAreaInsets();
   const wizardKey = WIZARD_KEY_PREFIX + session.user.id;
 
@@ -191,6 +197,7 @@ const SetupWizard = ({ session }: Props) => {
   const [sportDraft, setSportDraft] = useState<string | null>(null);
   const [rulesDraft, setRulesDraft] = useState("");
   const [rulesError, setRulesError] = useState<string | null>(null);
+  const [rulesRetryAt, setRulesRetryAt] = useState<number | null>(null);
   const [isSavingRules, setIsSavingRules] = useState(false);
   // Sheet shown over the Roster tab after the wizard hands off. `noticeOpen`
   // drives the sheet's exit animation; `notice` keeps the last copy.
@@ -373,6 +380,8 @@ const SetupWizard = ({ session }: Props) => {
   // back to the same form with drafts intact and the error shown.
   const createLeague = useCallback(
     async (confirmDistinct: boolean) => {
+      if (rulesSubmissionPending.current || (rulesRetryAt !== null && Date.now() < rulesRetryAt)) return;
+      if (!publicationConfirmed) { setRulesError("Confirm which fields you want reviewed for public publication."); return; }
       if (!validation.validate()) return;
       if (
         !teamId ||
@@ -384,6 +393,10 @@ const SetupWizard = ({ session }: Props) => {
       ) {
         return;
       }
+      const account = privacy.account;
+      if (!account || account.accountId !== session.user.id) return;
+      rulesSubmissionPending.current = true;
+    setRulesRetryAt(null);
       const draft: CreateLeagueDraft = {
         sport: sportDraft,
         rulesText: rulesDraft.trim(),
@@ -398,12 +411,13 @@ const SetupWizard = ({ session }: Props) => {
       setRulesError(null);
       setSimilarLeagues(null);
       setIsSavingRules(true);
-      handOffToRoster({ kind: "saving" });
-      trace("wizard create league submit", {
-        ...draft,
-        rulesText: draft.rulesText.length + " chars",
-      });
       try {
+        if (!await privacy.requireAiConsent(account) || !privacy.controller.isCurrentAccount(account)) return;
+        handOffToRoster({ kind: "saving" });
+        trace("wizard create league submit", {
+          ...draft,
+          rulesText: draft.rulesText.length + " chars",
+        });
         const league = await backendClient.createLeague({
           name: draft.name,
           sport: draft.sport,
@@ -414,6 +428,7 @@ const SetupWizard = ({ session }: Props) => {
           playersOnField: draft.playersOnField,
           rulesText: draft.rulesText,
           confirmDistinct: draft.confirmDistinct,
+          publicationConfirmed,
         });
         trace("wizard create league ok", {
           leagueId: league.id,
@@ -424,6 +439,7 @@ const SetupWizard = ({ session }: Props) => {
         void rulesetStatus.refresh();
         announceResult({ kind: "rules", status: league.status });
       } catch (err) {
+        setRulesRetryAt(retryDeadline(err));
         // Bounce back: reopen the wizard on the form with drafts intact.
         setNoticeOpen(false);
         setVisible(true);
@@ -451,11 +467,13 @@ const SetupWizard = ({ session }: Props) => {
         setRulesError(toError(err).message);
         toast.show({ message: "We couldn't save your rules.", type: "error" });
       } finally {
+        rulesSubmissionPending.current = false;
         setIsSavingRules(false);
       }
     },
     [
       announceResult,
+      rulesRetryAt,
       validation,
       createValid,
       handOffToRoster,
@@ -463,6 +481,9 @@ const SetupWizard = ({ session }: Props) => {
       leaguePlace,
       parsedPlayersOnField,
       parsedSegmentCount,
+      privacy,
+      publicationConfirmed,
+      session.user.id,
       rulesDraft,
       rulesetStatus,
       sportDraft,
@@ -472,6 +493,7 @@ const SetupWizard = ({ session }: Props) => {
   );
 
   const saveOwnRules = useCallback(async () => {
+    if (rulesSubmissionPending.current || (rulesRetryAt !== null && Date.now() < rulesRetryAt)) return;
     if (
       !teamId ||
       !ownValid ||
@@ -481,6 +503,10 @@ const SetupWizard = ({ session }: Props) => {
     ) {
       return;
     }
+    const account = privacy.account;
+    if (!account || account.accountId !== session.user.id) return;
+    rulesSubmissionPending.current = true;
+    setRulesRetryAt(null);
     const draft: OwnRulesDraft = {
       sport: sportDraft,
       rulesText: rulesDraft.trim(),
@@ -490,12 +516,13 @@ const SetupWizard = ({ session }: Props) => {
     setRulesError(null);
     setSimilarLeagues(null);
     setIsSavingRules(true);
-    handOffToRoster({ kind: "saving" });
-    trace("wizard own rules submit", {
-      ...draft,
-      rulesText: draft.rulesText.length + " chars",
-    });
     try {
+      if (!await privacy.requireAiConsent(account) || !privacy.controller.isCurrentAccount(account)) return;
+      handOffToRoster({ kind: "saving" });
+      trace("wizard own rules submit", {
+        ...draft,
+        rulesText: draft.rulesText.length + " chars",
+      });
       const next = await backendClient.upsertTeamRules(teamId, {
         rulesText: draft.rulesText,
         sport: draft.sport,
@@ -508,6 +535,7 @@ const SetupWizard = ({ session }: Props) => {
         status: next.ruleset?.status ?? "baking",
       });
     } catch (err) {
+      setRulesRetryAt(retryDeadline(err));
       setNoticeOpen(false);
       setVisible(true);
       setStep("rules");
@@ -515,14 +543,18 @@ const SetupWizard = ({ session }: Props) => {
       setRulesError(toError(err).message);
       toast.show({ message: "We couldn't save your rules.", type: "error" });
     } finally {
+      rulesSubmissionPending.current = false;
       setIsSavingRules(false);
     }
   }, [
     announceResult,
+    rulesRetryAt,
     handOffToRoster,
     ownValid,
     parsedPlayersOnField,
     parsedSegmentCount,
+    privacy,
+    session.user.id,
     rulesDraft,
     rulesetStatus,
     sportDraft,
@@ -763,7 +795,7 @@ const SetupWizard = ({ session }: Props) => {
                   <AppText variant="body" color="secondary">
                     {anyLeaguesExist === false
                       ? "Be the first league on Coachr."
-                      : "Create your league once so every team in it can join, or keep rules to your own team."}
+                      : "Submit your league for publication review, or keep rules to your own team. Private setup remains available while review is pending."}
                   </AppText>
                   <OptionRow
                     icon="plus"
@@ -915,12 +947,14 @@ const SetupWizard = ({ session }: Props) => {
                       hint={RULES_HINT}
                       accessibilityLabel="League rules"
                     />
+                    {rulesRetryAt !== null ? <RateLimitNotice retryAt={rulesRetryAt} /> : null}
                     {validation.errors.rules ? (
                       <AppText color="danger" accessibilityRole="alert">
                         {validation.errors.rules}
                       </AppText>
                     ) : null}
                   </View>
+                  <PublicationConfirmation confirmed={publicationConfirmed} onChange={setPublicationConfirmed} disabled={isSavingRules} />
                   {similarLeagues ? (
                     <View style={styles.stack}>
                       <AppText variant="bodyLg" family="heading">
@@ -1010,6 +1044,7 @@ const SetupWizard = ({ session }: Props) => {
                     hint={RULES_HINT}
                     accessibilityLabel="Team rules"
                   />
+                  {rulesRetryAt !== null ? <RateLimitNotice retryAt={rulesRetryAt} /> : null}
                   <Button
                     label="Save rules"
                     size="lg"

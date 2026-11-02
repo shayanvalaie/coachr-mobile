@@ -103,6 +103,7 @@ export const secureStorage = {
       await deleteChunks(sanitizeKey(key));
     } catch (err) {
       if (__DEV__) console.log("[secureStorage] removeItem failed", key, err);
+      throw err;
     }
   },
 };

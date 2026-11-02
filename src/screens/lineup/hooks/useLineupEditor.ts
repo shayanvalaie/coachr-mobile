@@ -14,7 +14,7 @@ import {
 } from "../../../lib/backend/types";
 import { getDuplicateLineupError } from "../../../lib/backend/utils";
 import { InningAssignment } from "../../../types/lineup";
-import { TeamRulesConfig } from "../../../types/rules";
+import { RulesetSpec, TeamRulesConfig } from "../../../types/rules";
 import {
   cloneLineupRows,
   formatGameLabel,
@@ -30,6 +30,8 @@ import {
 } from "../orientation";
 
 type Params = {
+  lineupRulesContext: string | null;
+  lineupRulesSpec: RulesetSpec | null;
   lineup: InningAssignment[] | null;
   setLineup: Dispatch<SetStateAction<InningAssignment[] | null>>;
   editModalVisible: boolean;
@@ -60,6 +62,8 @@ type Params = {
 // Inline lineup editing: the landscape edit overlay, cell swaps, and saving
 // edited lineups as new versions.
 export const useLineupEditor = ({
+  lineupRulesContext,
+  lineupRulesSpec,
   lineup,
   setLineup,
   editModalVisible,
@@ -373,13 +377,16 @@ export const useLineupEditor = ({
         setError(null);
         setDuplicateSave(null);
 
-        const [rosterForSave, teamRules] = await Promise.all([
-          backendClient.getTeamRoster(team),
-          backendClient.getTeamRules(team),
-        ]);
+        const capturedContext = isHistoryEdit ? selectedHistoryDetail.rulesContext : lineupRulesContext;
+        const capturedSpec = isHistoryEdit ? selectedHistoryDetail.rulesSpec : lineupRulesSpec;
+        if (!capturedContext || !capturedSpec) {
+          setError("These saved rules could not be verified. Reload team rules and generate a new lineup. Your draft has been kept.");
+          return;
+        }
+        const rosterForSave = await backendClient.getTeamRoster(team);
         const validationError = validateEditedLineupForSave(
           rowsToSave,
-          teamRules.ruleset?.spec ?? null,
+          capturedSpec,
           rosterForSave,
         );
         if (validationError) {
@@ -414,7 +421,8 @@ export const useLineupEditor = ({
 
         const saved = await backendClient.saveLineupVersion({
           teamId: team,
-          sport: selectedHistoryDetail?.sport || teamRules.ruleset?.sport || "softball",
+          sport: capturedSpec.sport,
+          rulesContext: capturedContext,
           roster: rosterPayload,
           gameId: effectiveGameId,
           gameTitle,
@@ -504,6 +512,8 @@ export const useLineupEditor = ({
       loadLineupHistory,
       onDuplicateLineup,
       rulesConfig,
+      lineupRulesContext,
+      lineupRulesSpec,
       saveLineupName,
       selectedHistoryDetail,
       selectedGameId,

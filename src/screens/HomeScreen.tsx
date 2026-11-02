@@ -1,3 +1,6 @@
+import { useProGate } from "../lib/proGate";
+import { assertPaidAccess, capturePaidAccess } from "../lib/access/paidAccess";
+import { readAllPages, upcomingWindow } from "../lib/backend/pagination";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import FirstTimeTour, {
@@ -54,7 +57,6 @@ type DashboardSummary = {
   activeCount: number;
   nextGame: BackendGame | null;
   recentLineups: BackendLineupVersionSummary[];
-  lineupsCount: number;
   rules: TeamRulesConfig;
 };
 
@@ -143,13 +145,14 @@ const HomeScreen = ({
     [],
   );
 
+  const { isPro } = useProGate();
+  const [summaryAccessEpoch, setSummaryAccessEpoch] = useState<number | null>(null);
   const [teamId, setTeamId] = useState<string | null>(null);
   const [summary, setSummary] = useState<DashboardSummary>({
     teamName: "",
     activeCount: 0,
     nextGame: null,
     recentLineups: [],
-    lineupsCount: 0,
     rules: defaultTeamRulesConfig,
   });
   const [loading, setLoading] = useState(true);
@@ -179,15 +182,19 @@ const HomeScreen = ({
         return;
       }
 
-      const [teamInfo, roster, teamRules, games, lineups] = await Promise.all([
+      const access = capturePaidAccess();
+      const window = upcomingWindow();
+      const [teamInfo, roster, teamRules, games, lineupPage] = await Promise.all([
         backendClient.getMyTeam(),
         backendClient.getTeamRoster(team),
         backendClient.getTeamRules(team),
-        backendClient.getTeamGames(team),
-        backendClient.getLineupVersions(team).catch(() => []),
+        isPro ? readAllPages(cursor => backendClient.getTeamGamesPage({ teamId: team, ...window, cursor, limit: 100 }), () => assertPaidAccess(access)) : Promise.resolve([]),
+        backendClient.getLineupVersionsPage({ teamId: team, limit: RECENT_LINEUPS }),
       ]);
 
-      const recent = [...lineups].sort(
+      assertPaidAccess(access);
+      setSummaryAccessEpoch(access.epoch);
+      const recent = [...lineupPage.items].sort(
         (a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt),
       );
       setSummary({
@@ -195,7 +202,6 @@ const HomeScreen = ({
         activeCount: roster.filter((player) => !player.benched).length,
         nextGame: findNextGame(games),
         recentLineups: recent.slice(0, RECENT_LINEUPS),
-        lineupsCount: lineups.length,
         rules: rulesConfigFromTeamRules(teamRules),
       });
     } catch (_err) {
@@ -204,7 +210,7 @@ const HomeScreen = ({
       hasLoadedRef.current = true;
       setLoading(false);
     }
-  }, [ensureTeam]);
+  }, [ensureTeam, isPro]);
 
   useEffect(() => {
     loadDashboard().catch(() => {
@@ -240,12 +246,15 @@ const HomeScreen = ({
     ? `${summary.activeCount} active · ready to generate`
     : `${summary.activeCount} active · ${summary.rules.minimumPlayers - summary.activeCount} more needed`;
 
-  const nextGame = summary.nextGame;
+  const currentAccess = capturePaidAccess();
+  const currentSummary = summaryAccessEpoch === currentAccess.epoch;
+  const nextGame = currentSummary && isPro ? summary.nextGame : null;
+  const recentLineups = currentSummary ? summary.recentLineups : [];
   const nextGameDate = nextGame ? new Date(nextGame.scheduledAt) : null;
   const nextGameEyebrow =
     nextGameDate && !Number.isNaN(nextGameDate.getTime())
-      ? `Next game · ${formatShortDate(nextGameDate)}`
-      : "Next game";
+      ? `Next game · next 93 days · ${formatShortDate(nextGameDate)}`
+      : "Next game · next 93 days";
 
   return (
     <>
@@ -293,7 +302,7 @@ const HomeScreen = ({
                   color="accent"
                   style={styles.eyebrow}
                 >
-                  {nextGame ? nextGameEyebrow : "Next game"}
+                  {nextGame ? nextGameEyebrow : "Next game · next 93 days"}
                 </AppText>
                 <View style={styles.heroTitleBlock}>
                   <AppText variant="display" family="display" style={styles.heroTitle}>
@@ -379,9 +388,9 @@ const HomeScreen = ({
                 </AppPressable>
               </View>
             </View>
-            {summary.recentLineups.length > 0 ? (
+            {recentLineups.length > 0 ? (
               <ListGroup>
-                {summary.recentLineups.map((version) => (
+                {recentLineups.map((version) => (
                   <ListRow
                     key={version.id}
                     title={version.lineupName || `Lineup v${version.versionNumber}`}

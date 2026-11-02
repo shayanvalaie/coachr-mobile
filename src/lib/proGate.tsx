@@ -5,10 +5,13 @@ import {
   useContext,
   useMemo,
   useState,
+  useEffect,
+  useSyncExternalStore,
 } from "react";
 import ProGateModal from "../components/ProGateModal";
 import { navigateFromRef } from "../navigation/navigationRef";
 import { useSubscription } from "./iap";
+import { capturePaidAccess, subscribePaidAccess } from "./access/paidAccess";
 
 type ProGateContextValue = {
   // Shows the Pro upsell for a feature label ("Calendar", "Exports").
@@ -28,11 +31,9 @@ export const useProGate = (): ProGateContextValue => {
 };
 
 export const ProGateProvider = ({ children }: { children: ReactNode }) => {
-  // Single source of truth: the Pro status from SubscriptionProvider, which
-  // is driven by the admin toggle (server `has_pro_access` flag). No extra
-  // dev override here — otherwise toggling Pro off in a dev build wouldn't
-  // gate anything.
-  const { isPro } = useSubscription();
+  const subscription = useSubscription();
+  const access = useSyncExternalStore(subscribePaidAccess, capturePaidAccess, capturePaidAccess);
+  const isPro = subscription.isPro && access.isPro;
 
   const [state, setState] = useState({
     visible: false,
@@ -50,6 +51,8 @@ export const ProGateProvider = ({ children }: { children: ReactNode }) => {
   const close = useCallback(() => {
     setState((prev) => ({ ...prev, visible: false }));
   }, []);
+
+  useEffect(close, [access.epoch, close]);
 
   const upgrade = useCallback(() => {
     close();

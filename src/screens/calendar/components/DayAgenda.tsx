@@ -1,16 +1,15 @@
 import { StyleSheet, View } from "react-native";
-import { BackendGame, BackendLineupVersionSummary } from "../../../lib/backend/types";
+import { BackendGame, BackendGamePageItem } from "../../../lib/backend/types";
 import { AppPressable, AppText, Card, Skeleton } from "../../../components/ui";
 import { radius, space } from "../../../theme/tokens";
 import GameCard from "./GameCard";
 
 type Props = {
   dayLabel: string;
-  games: BackendGame[];
-  lineupsByGameId: Map<string, BackendLineupVersionSummary[]>;
+  games: BackendGamePageItem[];
   isLoading: boolean;
   onAddGame: () => void;
-  onOpenLineups: (game: BackendGame) => void;
+  onOpenLineups: (game: BackendGamePageItem) => void;
   onEditGame: (game: BackendGame) => void;
   onDeleteGame: (gameId: string) => void;
 };
@@ -20,7 +19,6 @@ type Props = {
 const DayAgenda = ({
   dayLabel,
   games,
-  lineupsByGameId,
   isLoading,
   onAddGame,
   onOpenLineups,
@@ -64,7 +62,6 @@ const DayAgenda = ({
         <GameCard
           key={game.id ?? `${game.title}-${game.scheduledAt}`}
           game={game}
-          savedLineups={game.id ? lineupsByGameId.get(game.id) ?? [] : []}
           onOpenLineups={onOpenLineups}
           onEdit={onEditGame}
           onDelete={onDeleteGame}

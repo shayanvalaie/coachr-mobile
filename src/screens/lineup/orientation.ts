@@ -1,5 +1,5 @@
 import { Platform } from "react-native";
-import { requireOptionalNativeModule } from "expo-modules-core";
+import { requireOptionalNativeModule } from "expo";
 
 export const ORIENTATION_LOCK_PORTRAIT_UP = 3;
 export const ORIENTATION_LOCK_LANDSCAPE = 5;

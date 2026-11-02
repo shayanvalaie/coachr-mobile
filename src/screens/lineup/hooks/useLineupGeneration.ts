@@ -1,3 +1,4 @@
+import { assertPaidAccess, capturePaidAccess } from "../../../lib/access/paidAccess";
 import {
   Dispatch,
   SetStateAction,
@@ -15,6 +16,7 @@ import { InningAssignment, Player } from "../../../types/lineup";
 import {
   rulesConfigFromTeamRules,
   RulesetStatus,
+  RulesetSpec,
   TeamRulesState,
 } from "../../../types/rules";
 import {
@@ -54,6 +56,8 @@ export type RosterRequirement = {
 };
 
 type Params = {
+  setLineupRulesContext: Dispatch<SetStateAction<string | null>>;
+  setLineupRulesSpec: Dispatch<SetStateAction<RulesetSpec | null>>;
   ensureTeam: () => Promise<string | null>;
   teamRules: TeamRulesState | null;
   activePlayers: Player[];
@@ -77,6 +81,8 @@ type Params = {
 // auto-generate handoff from launch requests. The server engine is the only
 // generator; there is no offline fallback.
 export const useLineupGeneration = ({
+  setLineupRulesContext,
+  setLineupRulesSpec,
   ensureTeam,
   teamRules,
   activePlayers,
@@ -106,24 +112,6 @@ export const useLineupGeneration = ({
     () => (teamRules ? rulesConfigFromTeamRules(teamRules) : null),
     [teamRules],
   );
-
-  const clearLineupState = useCallback(() => {
-    setLineup(null);
-    setLineupInlineEditMode(false);
-    setEditModalVisible(false);
-    setHistoryEditRows(null);
-    setLineupParentVersionId(null);
-    setExpandedInnings(new Set());
-    setStatus("");
-  }, [
-    setEditModalVisible,
-    setExpandedInnings,
-    setHistoryEditRows,
-    setLineup,
-    setLineupInlineEditMode,
-    setLineupParentVersionId,
-    setStatus,
-  ]);
 
   const applyGeneratedLineup = useCallback(
     (rows: InningAssignment[], statusMessage: string) => {
@@ -162,6 +150,7 @@ export const useLineupGeneration = ({
       setError(null);
 
       const startedAt = Date.now();
+      const access = capturePaidAccess();
 
       try {
         const team = await ensureTeam();
@@ -219,6 +208,7 @@ export const useLineupGeneration = ({
           presentLineupInterstitial(hasProSubscription),
           backendClient.generateLineup({
             teamId: team,
+            rulesContext: teamRules.ruleset.context,
             sport: rulesConfig.sport,
             roster: payloadRoster,
             gameId: effectiveGameId,
@@ -233,26 +223,22 @@ export const useLineupGeneration = ({
           }),
         ]);
 
+        assertPaidAccess(access);
         const nextLineup = normalizeLineupRows(extractRowsFromResponse(data));
         if (nextLineup.length === 0) {
           throw new Error("The server returned an empty lineup");
         }
 
         await holdMinGeneratingDuration(startedAt);
+        assertPaidAccess(access);
+        setLineupRulesContext(teamRules.ruleset.context);
+        setLineupRulesSpec(teamRules.ruleset.spec);
         applyGeneratedLineup(nextLineup, "Lineup generated. Save it if you like it.");
       } catch (invokeErr) {
         const { message, detail } = await describeInvokeError(invokeErr);
 
-        if (__DEV__) {
-          console.log(
-            "[lineup invoke error]",
-            message,
-            detail ? `(${detail})` : "",
-          );
-        }
 
         setError(message || "Unable to generate lineup.");
-        clearLineupState();
       } finally {
         // The skeleton -> grid cross-fade is handled in GameSetup via
         // reanimated; no classic LayoutAnimation here (it fought the sortable
@@ -263,11 +249,12 @@ export const useLineupGeneration = ({
     [
       activePlayers,
       applyGeneratedLineup,
-      clearLineupState,
       ensureTeam,
       hasProSubscription,
       selectedGameId,
       games,
+      setLineupRulesContext,
+      setLineupRulesSpec,
       rulesConfig,
       setError,
       setStatus,

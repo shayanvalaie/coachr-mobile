@@ -1,6 +1,7 @@
 import { LeagueSuggestion } from "../../types/rules";
 import { mapLeagueSuggestion } from "./leagueMappers";
 import { BackendSession } from "./types";
+import { RequestTransportError, throwIfRequestAborted } from "./requestTransport";
 
 const extractValidationMessage = (detail: unknown): string | null => {
   if (!Array.isArray(detail) || detail.length === 0) return null;
@@ -50,8 +51,14 @@ export const toError = (value: unknown, fallback = "Unexpected error") => {
   return error;
 };
 
-export const toApiError = async (res: Response, fallbackMessage = "Request failed") => {
-  const raw = await res.text();
+export const toApiError = async (res: Response, fallbackMessage = "Request failed", signal?: AbortSignal) => {
+  let raw: string;
+  try {
+    raw = await res.text();
+  } catch (_error) {
+    if (signal) throwIfRequestAborted(signal);
+    throw new RequestTransportError("NETWORK_ERROR");
+  }
   let parsed: unknown = null;
 
   if (raw) {
@@ -87,9 +94,16 @@ export const toApiError = async (res: Response, fallbackMessage = "Request faile
       : validationMessage ?? `${fallbackMessage} (${res.status})`;
 
   const error = new Error(message);
+  const retryAfter = res.headers?.get("Retry-After");
+  let retryAfterSeconds: number | undefined;
+  if (retryAfter) {
+    const seconds = /^\d+$/.test(retryAfter.trim()) ? Number(retryAfter) : (Date.parse(retryAfter) - Date.now()) / 1000;
+    if (Number.isFinite(seconds)) retryAfterSeconds = Math.max(0, Math.ceil(seconds));
+  }
   (error as { context?: unknown }).context = {
     status: res.status,
     statusText: res.statusText,
+    retryAfterSeconds,
     body: parsed,
   };
 
@@ -180,4 +194,13 @@ export const getSimilarLeaguesError = (err: unknown): LeagueSuggestion[] | null 
   const suggestions = (detail as { suggestions?: unknown }).suggestions;
   if (!Array.isArray(suggestions)) return [];
   return suggestions.map(mapLeagueSuggestion);
+};
+
+
+export const retryDeadline = (error: unknown): number | null => {
+  if (!hasHttpStatus(error, 429) || !error || typeof error !== "object") return null;
+  const context = (error as {context?: {retryAfterSeconds?: unknown}}).context;
+  const seconds = context?.retryAfterSeconds;
+  if (typeof seconds !== "number" || !Number.isFinite(seconds) || seconds < 0) return null;
+  return Date.now() + seconds * 1000;
 };

@@ -26,7 +26,7 @@ type Props = {
   activeLineupId: string | null;
   editingLineupId: string | null;
   draftRowsByLineupId: Record<string, InningAssignment[]>;
-  playerGenderByName: Record<string, "male" | "female">;
+  playerGenderByName: Record<string, string>;
   onToggleEditing: (lineupId: string, normalizedRows: InningAssignment[] | null) => void;
   onApplyCellEdit: (
     lineupId: string,

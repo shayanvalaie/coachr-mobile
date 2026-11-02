@@ -1,5 +1,5 @@
 import { ScrollView, StyleSheet, View } from "react-native";
-import { Chip } from "../../../components/ui";
+import { AppText, Chip } from "../../../components/ui";
 import { BackendGame } from "../../../lib/backend/types";
 import { space } from "../../../theme/tokens";
 import { formatGameLabel } from "../../../utils/lineupTransforms";
@@ -13,6 +13,8 @@ type Props = {
 // Pro-only chip row that scopes lineup history and saves to a game (or no
 // game at all). Shown on both the Generate and Saved tabs.
 const GameContextCard = ({ games, selectedGameId, onSelectGame }: Props) => (
+  <View>
+  <AppText variant="caption" color="muted">Upcoming games · next 93 days. Open Calendar for other dates.</AppText>
   <ScrollView
     horizontal
     showsHorizontalScrollIndicator={false}
@@ -33,6 +35,7 @@ const GameContextCard = ({ games, selectedGameId, onSelectGame }: Props) => (
       />
     ))}
   </ScrollView>
+  </View>
 );
 
 const styles = StyleSheet.create({

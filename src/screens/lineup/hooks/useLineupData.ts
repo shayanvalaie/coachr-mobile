@@ -1,5 +1,8 @@
-import { Dispatch, SetStateAction, useCallback, useMemo, useState } from "react";
+import { Dispatch, SetStateAction, useCallback, useEffect, useMemo, useState } from "react";
 import { useFocusEffect } from "@react-navigation/native";
+import { useProGate } from "../../../lib/proGate";
+import { assertPaidAccess, capturePaidAccess } from "../../../lib/access/paidAccess";
+import { readAllPages, upcomingWindow } from "../../../lib/backend/pagination";
 import { backendClient } from "../../../lib/backend/client";
 import { BackendGame, BackendSession } from "../../../lib/backend/types";
 import { Player } from "../../../types/lineup";
@@ -18,6 +21,7 @@ type Params = {
 // Team context for the lineup screen: team id, roster, games, rules, and the
 // active-player selection used for generation.
 export const useLineupData = ({ session, setError }: Params) => {
+  const { isPro } = useProGate();
   const [teamId, setTeamId] = useState<string | null>(null);
   const [roster, setRoster] = useState<Player[]>([]);
   const [games, setGames] = useState<BackendGame[]>([]);
@@ -41,11 +45,14 @@ export const useLineupData = ({ session, setError }: Params) => {
       const team = await ensureTeam();
       if (!team) return;
 
+      const access = capturePaidAccess();
+      const window = upcomingWindow();
       const [loadedRoster, loadedRules, loadedGames] = await Promise.all([
         backendClient.getTeamRoster(team),
         backendClient.getTeamRules(team),
-        backendClient.getTeamGames(team),
+        isPro ? readAllPages(cursor => backendClient.getTeamGamesPage({ teamId: team, ...window, cursor, limit: 100 }), () => assertPaidAccess(access)) : Promise.resolve([]),
       ]);
+      assertPaidAccess(access);
       setRoster(loadedRoster);
       // Honor the roster's persisted bench choices: benched players start
       // inactive so lineup generation excludes them by default.
@@ -74,7 +81,11 @@ export const useLineupData = ({ session, setError }: Params) => {
     } catch (_err) {
       setError("Unable to load lineup context.");
     }
-  }, [ensureTeam, setError]);
+  }, [ensureTeam, isPro, setError]);
+
+  useEffect(() => {
+    if (!isPro) { setGames([]); setSelectedGameId(null); }
+  }, [isPro]);
 
   // Reload every time the lineup screen gains focus so bench changes made on
   // the Roster tab are picked up before the coach generates a lineup. Tab

@@ -24,13 +24,3 @@ export type SubscriptionProduct = {
   currencyCode: string;
   period: SubscriptionPeriod;
 };
-
-/** Persisted subscription state (AsyncStorage). */
-export type PersistedSubscription = {
-  isPro: boolean;
-  activeSku: IapSku | null;
-  /** Transaction ID from the last successful purchase. */
-  transactionId: string | null;
-  /** ISO-8601 timestamp of last known state change. */
-  updatedAt: string;
-};

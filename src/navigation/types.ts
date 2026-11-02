@@ -21,6 +21,7 @@ export type RootStackParamList = {
   Auth: undefined;
   Main: NavigatorScreenParams<MainTabParamList> | undefined;
   Subscribe: undefined;
+  Moderation: undefined;
 };
 
 declare global {

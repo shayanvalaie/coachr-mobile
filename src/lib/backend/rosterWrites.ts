@@ -2,18 +2,28 @@
 // later gender/position selection. Reads wait for all edits on that team.
 const pending = new Map<string, Promise<unknown>>();
 const failures = new Map<string, unknown>();
+let generation = 0;
+
+export function clearRosterWrites(): void {
+  generation += 1;
+  pending.clear();
+  failures.clear();
+}
 
 export function writeRoster<T>(teamId: string, playerId: string, write: () => Promise<T>): Promise<T> {
+  const writeGeneration = generation;
   const key = `${teamId}:${playerId}`;
   const previous = pending.get(key) ?? Promise.resolve();
   const request = previous.catch(() => {}).then(write);
   pending.set(key, request);
   void request.then(
     () => {
+      if (writeGeneration !== generation) return;
       failures.delete(key);
       if (pending.get(key) === request) pending.delete(key);
     },
     (error) => {
+      if (writeGeneration !== generation) return;
       failures.set(key, error);
       if (pending.get(key) === request) pending.delete(key);
     },

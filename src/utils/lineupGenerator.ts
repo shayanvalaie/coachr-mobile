@@ -29,7 +29,7 @@ export const boolish = (value: any) => {
 export const parsePositions = (value: any): string[] => {
   if (!value) return []
   const raw = Array.isArray(value) ? value : String(value).split(',')
-  const cleaned = raw.map((item) => String(item).trim().toUpperCase()).filter(Boolean)
+  const cleaned = raw.map((item) => String(item).trim()).filter(Boolean)
   return Array.from(new Set(cleaned))
 }
 

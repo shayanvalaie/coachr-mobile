@@ -2,6 +2,7 @@ import { ReactNode, useCallback } from "react";
 import { ActivityIndicator, FlatList, StyleSheet, View } from "react-native";
 import {
   AppText,
+  Button,
   EmptyState,
   LoadTransition,
   Reveal,
@@ -23,6 +24,8 @@ type Props = {
   lineupHistory: BackendLineupVersionSummary[];
   historyLoading: boolean;
   historyError: string | null;
+  hasMoreHistory: boolean;
+  onLoadMore: () => void;
   renderVersion: (version: BackendLineupVersionSummary) => ReactNode;
 };
 
@@ -37,6 +40,8 @@ const HistoryTab = ({
   lineupHistory,
   historyLoading,
   historyError,
+  hasMoreHistory,
+  onLoadMore,
   renderVersion,
 }: Props) => {
   // Opacity-only fade per row mount. On load, all rows mount in one commit and
@@ -100,11 +105,16 @@ const HistoryTab = ({
           </LoadTransition>
         )
       }
+      onEndReached={hasMoreHistory && !historyLoading ? onLoadMore : undefined}
+      onEndReachedThreshold={0.3}
       ListFooterComponent={
         lineupHistory.length > 0 ? (
+          <View>
+          {hasMoreHistory ? <Button label="Load more lineups" variant="ghost" loading={historyLoading} onPress={onLoadMore} /> : null}
           <AppText variant="caption" color="muted" style={styles.footer}>
             Long-press a lineup to delete. Export to Excel or PDF from inside.
           </AppText>
+          </View>
         ) : null
       }
     />
