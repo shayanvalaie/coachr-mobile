@@ -248,7 +248,7 @@ const parseJson = async (res: Response, signal: AbortSignal): Promise<unknown> =
 const requestTimeoutMs = (path: string, method = "GET"): number => {
   if (method === "GET" || method === "HEAD") return API_REQUEST_TIMEOUT_MS;
   if (path === "/subscriptions/verify") return SUBSCRIPTION_VERIFY_TIMEOUT_MS;
-  if (path === "/lineups/generate") return 60_000;
+  if (method === "POST" && (path === "/lineups/generate" || path === "/lineups/save" || /^\/teams\/[^/]+\/roster-import\/preview$/.test(path))) return 90_000;
   if (path === "/leagues" || /^\/teams\/[^/]+\/rules$/.test(path) || /^\/admin\/change-requests\/[^/]+\/resolve$/.test(path)) return 390_000;
   return API_REQUEST_TIMEOUT_MS;
 };

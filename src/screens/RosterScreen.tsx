@@ -416,7 +416,7 @@ const RosterScreen = ({ session, hasProSubscription, onRequirePro }: Props) => {
       const preview = await pickRosterImportPreview(team, backendClient.previewRosterImport, controller.signal);
       if (!current() || preview === null) return;
       assertPaidAccess(access);
-      const pending: PendingRosterImport = { accountId, teamId: team, operationId: createPlayer().id, rows: preview.rows, rulesContext, attempted: false };
+      const pending: PendingRosterImport = { accountId, teamId: team, operationId: createPlayer().id, rows: preview.rows, rulesContext: preview.rulesContext ?? rulesContext, attempted: false };
       if (preview.issues.length === 0 && preview.rows.length > 0) {
         await savePendingRosterImport(pending);
         if (!current()) return;

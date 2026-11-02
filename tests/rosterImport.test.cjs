@@ -12,14 +12,19 @@ const settle = async () => { for (let i = 0; i < 5; i++) await new Promise(done 
 
 function utility(options = {}) {
   const store = new Map();
-  const reads = [], removed = [];
+  const reads = [], removed = [], recovered = [];
   const asset = { uri: 'file:///cache/DocumentPicker/roster.csv', name: 'roster.csv', size: 10, ...options.asset };
   const content = options.content ?? Buffer.from('Name\nAlice').toString('base64');
   const file = {
     cacheDirectory: 'file:///cache/',
     getInfoAsync: async () => options.info ?? { exists: true, size: Buffer.from(content, 'base64').length },
     readAsStringAsync: async (uri, settings) => { reads.push(settings); return content; },
-    deleteAsync: async uri => { removed.push(uri); },
+    deleteAsync: async uri => {
+      if (uri === 'file:///cache/DocumentPicker/') {
+        recovered.push(uri);
+        if (options.recovery) await options.recovery();
+      } else removed.push(uri);
+    },
   };
   const storage = {
     getItem: async key => store.get(key) ?? null,
@@ -35,7 +40,7 @@ function utility(options = {}) {
     if (name === '@react-native-async-storage/async-storage') return { default: storage };
     throw new Error(name);
   }, Error, Map, Set, Promise, AbortController });
-  return { api: exports, store, reads, removed };
+  return { api: exports, store, reads, removed, recovered };
 }
 
 test('valid preview uses a bounded native read and cleans the temporary copy', async () => {
@@ -78,9 +83,17 @@ test('base64 count handles an exact-limit file without decoding or regex stack o
   assert.throws(() => h.api.decodedBase64Size('===='), error => error.code === 'IMPORT_INVALID_FILE');
 });
 
+test('preview accepts a bounded server rules context and rejects malformed contexts', () => {
+  const h = utility();
+  assert.equal(h.api.validateImportPreview({ ...preview, rulesContext: 'submission:current' }).rulesContext, 'submission:current');
+  for (const rulesContext of [null, 12, '', 'x'.repeat(257)]) {
+    assert.throws(() => h.api.validateImportPreview({ ...preview, rulesContext }), error => error.code === 'IMPORT_INVALID_ROWS');
+  }
+});
+
 test('cancel during native read suppresses upload and removes the picker copy', async () => {
   const wait = deferred();
-  const h = utility({ pick: async () => { await wait.promise; return { canceled: false, assets: [{ uri: 'file:///cache/roster.csv', name: 'roster.csv' }] }; } });
+  const h = utility({ pick: async () => { await wait.promise; return { canceled: false, assets: [{ uri: 'file:///cache/DocumentPicker/roster.csv', name: 'roster.csv' }] }; } });
   const controller = new AbortController();
   const job = h.api.pickRosterImportPreview('team', () => assert.fail('upload'), controller.signal);
   await settle();
@@ -93,6 +106,41 @@ test('unavailable parser has an actionable error and still cleans the file', asy
   const h = utility();
   await assert.rejects(h.api.pickRosterImportPreview('team', async () => { throw new Error('Secure parser unavailable.'); }), /Secure parser unavailable/);
   assert.equal(h.removed.length, 1);
+});
+
+test('startup recovery deletes only the picker directory once without listing files', async () => {
+  const h = utility();
+  await Promise.all([h.api.recoverRosterImportFiles(), h.api.recoverRosterImportFiles()]);
+  await h.api.pickRosterImportPreview('team', async () => preview);
+  assert.deepEqual(h.recovered, ['file:///cache/DocumentPicker/']);
+  assert.equal(h.reads.length, 1);
+  assert.equal(h.removed.length, 1);
+});
+
+test('picker waits for startup recovery before creating a new temporary file', async () => {
+  const wait = deferred(); let opened = false;
+  const h = utility({ recovery: () => wait.promise, pick: async () => { opened = true; return { canceled: true }; } });
+  const job = h.api.pickRosterImportPreview('team', () => assert.fail('upload'));
+  await settle();
+  assert.equal(opened, false);
+  wait.resolve();
+  assert.equal(await job, null);
+  assert.equal(opened, true);
+});
+
+test('failed cache recovery prevents a new picker and can retry safely', async () => {
+  let attempts = 0;
+  const h = utility({ recovery: async () => { if (++attempts === 1) throw new Error('native path canary'); } });
+  await assert.rejects(h.api.pickRosterImportPreview('team', () => assert.fail('upload')), error =>
+    error.code === 'IMPORT_CLEANUP_FAILED' && !error.message.includes('canary'));
+  assert.equal(h.reads.length, 0);
+  assert.equal((await h.api.pickRosterImportPreview('team', async () => preview)).rows.length, 1);
+});
+
+test('picker cleanup does not delete a source outside its native temporary directory', async () => {
+  const h = utility({ asset: { uri: 'file:///cache/other-feature/roster.csv' } });
+  await h.api.pickRosterImportPreview('team', async () => preview);
+  assert.equal(h.removed.length, 0);
 });
 
 test('pending operation persists its original ID and context for restart', async () => {
@@ -119,7 +167,7 @@ test('deletion racing a pending storage write cannot recreate account data', asy
   await assert.rejects(h.api.savePendingRosterImport(pending), error => error.code === 'CANCELLED');
 });
 
-function screen({ failCommit = false, pendingCommit = null } = {}) {
+function screen({ failCommit = false, pendingCommit = null, previewResult = preview } = {}) {
   const h = utility();
   const slots = [], effects = []; let cursor = 0, epoch = 1, account = 'owner', tree;
   const commits = [], toasts = [];
@@ -133,7 +181,7 @@ function screen({ failCommit = false, pendingCommit = null } = {}) {
   };
   const backend = {
     auth: { getSessionEpoch: () => epoch }, getOrCreateTeam: async () => 'team', getTeamRoster: async () => [], getTeamRules: async () => ({ context: 'submission:original' }),
-    previewRosterImport: async () => preview,
+    previewRosterImport: async () => previewResult,
     commitRosterImport: async (team, input) => { commits.push(input); if (pendingCommit) await pendingCommit.promise; if (failCommit && commits.length === 1) throw new Error('Response lost'); return { operationId: input.operationId, committed: true, replayed: commits.length > 1, createdCount: 1, createdPlayerIds: ['player'], skippedSourceRows: [] }; },
   };
   const toast = { show(value) { toasts.push(value); } };
@@ -180,6 +228,15 @@ test('response loss retries the durable same operation instead of individual pla
   h.find(node => node.props?.label === 'Confirm saved import').props.onPress(); await settle(); h.render();
   assert.equal(h.commits.length, 2); assert.equal(h.commits[0].operationId, h.commits[1].operationId);
   assert.equal(h.commits[1].rulesContext, 'submission:original'); assert.equal(h.store.size, 0);
+});
+
+test('import commit uses the rules snapshot returned by preview instead of stale screen rules', async () => {
+  const h = screen({ previewResult: { ...preview, rulesContext: 'submission:current' } });
+  h.render(); await settle(); h.render();
+  h.find(node => node.props?.accessibilityLabel === 'Import roster from a spreadsheet').props.onPress(); await settle(); h.render();
+  h.find(node => node.props?.label === 'Import players').props.onPress(); await settle(); h.render();
+  assert.equal(h.commits.length, 1);
+  assert.equal(h.commits[0].rulesContext, 'submission:current');
 });
 
 test('account switch ignores an old committed response and cannot show its roster/toast', async () => {

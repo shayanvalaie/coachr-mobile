@@ -6,6 +6,7 @@ export type ImportPlayer = Omit<Player, "id" | "rulesContext">;
 export type ImportRow = { sourceRow: number; player: ImportPlayer };
 export type ImportPreview = {
   worksheet: string;
+  rulesContext?: string;
   rows: ImportRow[];
   issues: Array<{ sourceRow: number; column: string; code: string; message: string }>;
   emptySourceRows: number[];
@@ -29,8 +30,27 @@ const aborted = (signal?: AbortSignal) => {
 };
 const invalid = () => new RosterImportError("IMPORT_INVALID_ROWS", "The import preview could not be read. Choose the file again.");
 
+let pickerRecovery: Promise<void> | null = null;
+export const recoverRosterImportFiles = (): Promise<void> => {
+  if (pickerRecovery) return pickerRecovery;
+  pickerRecovery = (async () => {
+    const FileSystem = await import("expo-file-system/legacy");
+    if (!FileSystem.cacheDirectory) return;
+    try {
+      await FileSystem.deleteAsync(`${FileSystem.cacheDirectory}DocumentPicker/`, { idempotent: true });
+    } catch {
+      throw new RosterImportError("IMPORT_CLEANUP_FAILED", "Temporary import files could not be cleared. Try again.");
+    }
+  })().catch(error => {
+    pickerRecovery = null;
+    throw error;
+  });
+  return pickerRecovery;
+};
+
 export const validateImportPreview = (value: ImportPreview): ImportPreview => {
   if (!value || typeof value.worksheet !== "string" || value.worksheet.length > 256 || !Array.isArray(value.rows) || value.rows.length > 200 || !Array.isArray(value.issues) || value.issues.length > 200 || !Array.isArray(value.emptySourceRows) || value.emptySourceRows.length > 200) throw invalid();
+  if (value.rulesContext !== undefined && (typeof value.rulesContext !== "string" || !value.rulesContext || value.rulesContext.length > 256)) throw invalid();
   const sourceRows = new Set<number>();
   for (const row of value.rows) {
     const player = row.player;
@@ -57,6 +77,8 @@ export const decodedBase64Size = (value: string): number => {
 
 export const pickRosterImportPreview = async (teamId: string, preview: ImportPreviewApi, signal?: AbortSignal): Promise<ImportPreview | null> => {
   aborted(signal);
+  await recoverRosterImportFiles();
+  aborted(signal);
   const DocumentPicker = await import("expo-document-picker");
   const FileSystem = await import("expo-file-system/legacy");
   aborted(signal);
@@ -80,7 +102,7 @@ export const pickRosterImportPreview = async (teamId: string, preview: ImportPre
     aborted(signal);
     return validateImportPreview(result);
   } finally {
-    if (FileSystem.cacheDirectory && asset.uri.startsWith(FileSystem.cacheDirectory)) {
+    if (FileSystem.cacheDirectory && asset.uri.startsWith(`${FileSystem.cacheDirectory}DocumentPicker/`)) {
       await FileSystem.deleteAsync(asset.uri, { idempotent: true });
     }
   }

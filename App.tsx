@@ -19,6 +19,7 @@ import {
   ORIENTATION_LOCK_PORTRAIT_UP,
 } from "./src/screens/lineup/orientation";
 import { theme } from "./src/theme/colors";
+import { recoverRosterImportFiles } from "./src/utils/rosterImport";
 
 const navigationTheme = {
   ...DarkTheme,
@@ -54,6 +55,12 @@ export default function App() {
   // lock from a previous session doesn't leave the whole app sideways.
   useEffect(() => {
     void lockOrientation(ORIENTATION_LOCK_PORTRAIT_UP);
+  }, []);
+
+  useEffect(() => {
+    void recoverRosterImportFiles().catch(() => {
+      console.warn("[import] temporary-file recovery failed", "IMPORT_CLEANUP_FAILED");
+    });
   }, []);
 
   return (
