@@ -1,0 +1,20 @@
+Starting Metro Bundler
+iOS ./index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+iOS Bundled 3433ms index.ts (1724 modules)
+
+› Assets (17):
+node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Feather.ttf (55.6 kB)
+node_modules/@react-navigation/elements/lib/module/assets/back-icon-mask.png (653 B)
+node_modules/@react-navigation/elements/lib/module/assets/back-icon.png (4 variations | 566 B)
+node_modules/@react-navigation/elements/lib/module/assets/clear-icon.png (4 variations | 425 B)
+node_modules/@react-navigation/elements/lib/module/assets/close-icon.png (4 variations | 235 B)
+node_modules/@react-navigation/elements/lib/module/assets/search-icon.png (3 variations | 582 B)
+
+› ios bundles (2):
+_expo/static/js/ios/index-29fa102d4fd662f939ac1e2402c69a7a.hbc (3.13 MB)
+_expo/static/js/ios/index-29fa102d4fd662f939ac1e2402c69a7a.hbc.map (9.7 MB)
+
+› Files (1):
+metadata.json (1.4 kB)
+
+Exported: /tmp/coachr-task6-ios-reachability

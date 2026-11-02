@@ -1,0 +1,756 @@
+TAP version 13
+# Subtest: unknown access denies paid requests without inventing an entitlement
+ok 1 - unknown access denies paid requests without inventing an entitlement
+  ---
+  duration_ms: 52.988583
+  ...
+# Subtest: late protected or mixed-history result is rejected after expiry
+ok 2 - late protected or mixed-history result is rejected after expiry
+  ---
+  duration_ms: 27.856917
+  ...
+# Subtest: late protected or mixed-history result is rejected after revoke
+ok 3 - late protected or mixed-history result is rejected after revoke
+  ---
+  duration_ms: 18.9165
+  ...
+# Subtest: late protected or mixed-history result is rejected after switch
+ok 4 - late protected or mixed-history result is rejected after switch
+  ---
+  duration_ms: 6.296459
+  ...
+# Subtest: late protected or mixed-history result is rejected after logout
+ok 5 - late protected or mixed-history result is rejected after logout
+  ---
+  duration_ms: 37.224666
+  ...
+# Subtest: late protected or mixed-history result is rejected after delete
+ok 6 - late protected or mixed-history result is rejected after delete
+  ---
+  duration_ms: 4.061625
+  ...
+# Subtest: late protected or mixed-history result is rejected after renew
+ok 7 - late protected or mixed-history result is rejected after renew
+  ---
+  duration_ms: 3.694208
+  ...
+# Subtest: cache invalidation precedes subscribers and renewal requires refetch
+ok 8 - cache invalidation precedes subscribers and renewal requires refetch
+  ---
+  duration_ms: 25.926083
+  ...
+# Subtest: token refresh retaining the same authoritative state does not clear data
+ok 9 - token refresh retaining the same authoritative state does not clear data
+  ---
+  duration_ms: 27.735791
+  ...
+# Subtest: screen gate removes protected children on expiry and keeps renewal/Profile/Home reachable
+ok 10 - screen gate removes protected children on expiry and keeps renewal/Profile/Home reachable
+  ---
+  duration_ms: 95.232208
+  ...
+# Subtest: verification and resend send the signup password
+ok 11 - verification and resend send the signup password
+  ---
+  duration_ms: 531.061333
+  ...
+# Subtest: incorrect deletion password preserves the session and local data
+ok 12 - incorrect deletion password preserves the session and local data
+  ---
+  duration_ms: 237.211292
+  ...
+# Subtest: successful deletion clears only owned storage and emits signed out
+ok 13 - successful deletion clears only owned storage and emits signed out
+  ---
+  duration_ms: 267.029792
+  ...
+# Subtest: local cleanup failure is reported separately after committed deletion
+ok 14 - local cleanup failure is reported separately after committed deletion
+  ---
+  duration_ms: 216.971334
+  ...
+# Subtest: late refresh cannot restore a signed-out session
+ok 15 - late refresh cannot restore a signed-out session
+  ---
+  duration_ms: 136.401167
+  ...
+# Subtest: deletion waits for an existing refresh then removes its credentials
+ok 16 - deletion waits for an existing refresh then removes its credentials
+  ---
+  duration_ms: 101.428334
+  ...
+# Subtest: deletion blocks duplicate submissions and other account requests
+ok 17 - deletion blocks duplicate submissions and other account requests
+  ---
+  duration_ms: 64.436958
+  ...
+# Subtest: refresh started during deletion cannot restore the deleted session
+ok 18 - refresh started during deletion cannot restore the deleted session
+  ---
+  duration_ms: 114.936875
+  ...
+# Subtest: network failure leaves account state available for retry
+ok 19 - network failure leaves account state available for retry
+  ---
+  duration_ms: 87.951375
+  ...
+# Subtest: an old request cannot retry with a different signed-in account
+ok 20 - an old request cannot retry with a different signed-in account
+  ---
+  duration_ms: 77.850333
+  ...
+# Subtest: pending-purchase cleanup failure is reported after acknowledged account deletion
+ok 21 - pending-purchase cleanup failure is reported after acknowledged account deletion
+  ---
+  duration_ms: 70.313042
+  ...
+# Subtest: a noncooperative hanging fetch releases its caller and aborts its signal
+ok 22 - a noncooperative hanging fetch releases its caller and aborts its signal
+  ---
+  duration_ms: 81.485459
+  ...
+# Subtest: deadline includes a hanging 200 response body
+ok 23 - deadline includes a hanging 200 response body
+  ---
+  duration_ms: 14.983084
+  ...
+# Subtest: deadline includes a hanging 503 response body
+ok 24 - deadline includes a hanging 503 response body
+  ---
+  duration_ms: 19.962542
+  ...
+# Subtest: caller cancellation prevents late noncancelable work from committing
+ok 25 - caller cancellation prevents late noncancelable work from committing
+  ---
+  duration_ms: 7.926125
+  ...
+# Subtest: an already cancelled caller never starts work or installs a timer
+ok 26 - an already cancelled caller never starts work or installs a timer
+  ---
+  duration_ms: 50.144917
+  ...
+# Subtest: host attempts, refresh waiting and replay consume one operation budget
+ok 27 - host attempts, refresh waiting and replay consume one operation budget
+  ---
+  duration_ms: 15.397375
+  ...
+# Subtest: one timed-out waiter does not abort shared refresh for another waiter
+ok 28 - one timed-out waiter does not abort shared refresh for another waiter
+  ---
+  duration_ms: 8.975417
+  ...
+# Subtest: a nested operation preserves the parent timeout code
+ok 29 - a nested operation preserves the parent timeout code
+  ---
+  duration_ms: 12.812041
+  ...
+# Subtest: delayed timer dispatch cannot deliver a response after its monotonic deadline
+ok 30 - delayed timer dispatch cannot deliver a response after its monotonic deadline
+  ---
+  duration_ms: 15.138416
+  ...
+# Subtest: success, HTTP errors and programmer errors release timers and caller listeners
+ok 31 - success, HTTP errors and programmer errors release timers and caller listeners
+  ---
+  duration_ms: 30.532584
+  ...
+# Subtest: transport errors use stable codes without HTTP or private caller details
+ok 32 - transport errors use stable codes without HTTP or private caller details
+  ---
+  duration_ms: 3.810875
+  ...
+# Subtest: invalid budgets reject before executing any operation
+ok 33 - invalid budgets reject before executing any operation
+  ---
+  duration_ms: 30.125208
+  ...
+# Subtest: calendar local-midnight UTC window spans DST and month boundaries
+ok 34 - calendar local-midnight UTC window spans DST and month boundaries
+  ---
+  duration_ms: 8.25675
+  ...
+# Subtest: dense windows collect every page and explicit end without inventing a count
+ok 35 - dense windows collect every page and explicit end without inventing a count
+  ---
+  duration_ms: 0.416
+  ...
+# Subtest: expiry or filter change during page request rejects all retained results
+ok 36 - expiry or filter change during page request rejects all retained results
+  ---
+  duration_ms: 0.272292
+  ...
+# Subtest: broken or repeating cursor and resource ceiling never silently return incomplete list
+ok 37 - broken or repeating cursor and resource ceiling never silently return incomplete list
+  ---
+  duration_ms: 0.150834
+  ...
+# Subtest: upcoming bound is explicit93days
+ok 38 - upcoming bound is explicit93days
+  ---
+  duration_ms: 0.070709
+  ...
+# Subtest: requiring permission displays disclosure without granting; cancel retains authority and resolves false
+ok 39 - requiring permission displays disclosure without granting; cancel retains authority and resolves false
+  ---
+  duration_ms: 126.448917
+  ...
+# Subtest: affirmative grant uses current scope/version and resolves only after saved server grant
+ok 40 - affirmative grant uses current scope/version and resolves only after saved server grant
+  ---
+  duration_ms: 84.472834
+  ...
+# Subtest: existing current permission is freshly checked and needs no duplicate grant
+ok 41 - existing current permission is freshly checked and needs no duplicate grant
+  ---
+  duration_ms: 56.328625
+  ...
+# Subtest: account switch cancels disclosure and rejects old identity even for same account login
+ok 42 - account switch cancels disclosure and rejects old identity even for same account login
+  ---
+  duration_ms: 35.622167
+  ...
+# Subtest: late grant and late fetch cannot overwrite switched-account state
+ok 43 - late grant and late fetch cannot overwrite switched-account state
+  ---
+  duration_ms: 87.804625
+  ...
+# Subtest: offline privacy fetch withholds permission and leaves disclosure available for cancel
+ok 44 - offline privacy fetch withholds permission and leaves disclosure available for cancel
+  ---
+  duration_ms: 22.090084
+  ...
+# Subtest: unknown, under-13, stale policy or revoked permission never authorizes AI
+ok 45 - unknown, under-13, stale policy or revoked permission never authorizes AI
+  ---
+  duration_ms: 3.027208
+  ...
+# Subtest: unknown eligibility and unknown entitlement do not initialize or request ads
+ok 46 - unknown eligibility and unknown entitlement do not initialize or request ads
+  ---
+  duration_ms: 63.298375
+  ...
+# Subtest: SDK canRequestAds false withholds initialization and ad requests
+ok 47 - SDK canRequestAds false withholds initialization and ad requests
+  ---
+  duration_ms: 28.123208
+  ...
+# Subtest: eligible adult initializes once with conservative settings and SDK-authorized fallback
+ok 48 - eligible adult initializes once with conservative settings and SDK-authorized fallback
+  ---
+  duration_ms: 57.146208
+  ...
+# Subtest: Pro upgrade during load removes native listeners and late callback cannot show
+ok 49 - Pro upgrade during load removes native listeners and late callback cannot show
+  ---
+  duration_ms: 27.162875
+  ...
+# Subtest: account switch invalidates loaded work; ad errors resolve the core flow
+ok 50 - account switch invalidates loaded work; ad errors resolve the core flow
+  ---
+  duration_ms: 98.413125
+  ...
+# Subtest: privacy options are exposed from SDK requirement and recheck authorization after form
+ok 51 - privacy options are exposed from SDK requirement and recheck authorization after form
+  ---
+  duration_ms: 9.953542
+  ...
+# Subtest: required privacy options remain reachable for Pro without initializing ads
+ok 52 - required privacy options remain reachable for Pro without initializing ads
+  ---
+  duration_ms: 17.624209
+  ...
+# Subtest: unsupported teen age treatment withholds initialization, ad requests and presentation
+ok 53 - unsupported teen age treatment withholds initialization, ad requests and presentation
+  ---
+  duration_ms: 16.644292
+  ...
+# Subtest: correcting adult eligibility to teen invalidates an already loaded adult ad before display
+ok 54 - correcting adult eligibility to teen invalidates an already loaded adult ad before display
+  ---
+  duration_ms: 7.474458
+  ...
+# Subtest: deferred permission continues without a modal or an invented grant
+ok 55 - deferred permission continues without a modal or an invented grant
+  ---
+  duration_ms: 131.648417
+  ...
+# Subtest: deferred permission cannot authorize unknown or under-13 eligibility
+ok 56 - deferred permission cannot authorize unknown or under-13 eligibility
+  ---
+  duration_ms: 12.95725
+  ...
+# Subtest: publication status stays separate from active algorithm status and private creator draft remains explicit
+ok 57 - publication status stays separate from active algorithm status and private creator draft remains explicit
+  ---
+  duration_ms: 112.318166
+  ...
+# Subtest: malformed publication policy never becomes approved or permits blocking by coercion
+ok 58 - malformed publication policy never becomes approved or permits blocking by coercion
+  ---
+  duration_ms: 33.809625
+  ...
+# Subtest: admin review validates exact revision version and publisher suspension state
+ok 59 - admin review validates exact revision version and publisher suspension state
+  ---
+  duration_ms: 8.329666
+  ...
+# Subtest: review and report queues reject unbounded replies or malformed report reasons
+ok 60 - review and report queues reject unbounded replies or malformed report reasons
+  ---
+  duration_ms: 24.124709
+  ...
+# Subtest: report acknowledgement must be committed authority and block management never accepts private account fields
+ok 61 - report acknowledgement must be committed authority and block management never accepts private account fields
+  ---
+  duration_ms: 29.039292
+  ...
+# Subtest: public content invalidation clears cached harmful text before notifying live consumers
+ok 62 - public content invalidation clears cached harmful text before notifying live consumers
+  ---
+  duration_ms: 18.940833
+  ...
+# Subtest: deadline rounds up and does not permit early retries
+ok 63 - deadline rounds up and does not permit early retries
+  ---
+  duration_ms: 95.058834
+  ...
+# Subtest: countdown enables explicit retry without automatically calling it
+ok 64 - countdown enables explicit retry without automatically calling it
+  ---
+  duration_ms: 11.014209
+  ...
+# Subtest: late successful read is discarded after signout
+ok 65 - late successful read is discarded after signout
+  ---
+  duration_ms: 604.254916
+  ...
+# Subtest: late successful read is discarded after switch
+ok 66 - late successful read is discarded after switch
+  ---
+  duration_ms: 304.771458
+  ...
+# Subtest: late successful read is discarded after delete
+ok 67 - late successful read is discarded after delete
+  ---
+  duration_ms: 181.112708
+  ...
+# Subtest: successful replay after refresh still checks the originating account
+ok 68 - successful replay after refresh still checks the originating account
+  ---
+  duration_ms: 100.805791
+  ...
+# Subtest: late sign-in cannot revive a signed-out session
+ok 69 - late sign-in cannot revive a signed-out session
+  ---
+  duration_ms: 71.477667
+  ...
+# Subtest: acknowledged deletion after local signout still cleans the original account
+ok 70 - acknowledged deletion after local signout still cleans the original account
+  ---
+  duration_ms: 86.9805
+  ...
+# Subtest: sign-in started before deletion cannot replace its originating session
+ok 71 - sign-in started before deletion cannot replace its originating session
+  ---
+  duration_ms: 146.440084
+  ...
+# Subtest: subscription response rejects invalid isPro
+ok 72 - subscription response rejects invalid isPro
+  ---
+  duration_ms: 92.916
+  ...
+# Subtest: subscription response rejects invalid isAdmin
+ok 73 - subscription response rejects invalid isAdmin
+  ---
+  duration_ms: 63.768208
+  ...
+# Subtest: subscription response rejects invalid canManageAdmins
+ok 74 - subscription response rejects invalid canManageAdmins
+  ---
+  duration_ms: 42.574292
+  ...
+# Subtest: subscription response rejects invalid status
+ok 75 - subscription response rejects invalid status
+  ---
+  duration_ms: 74.561208
+  ...
+# Subtest: subscription response rejects invalid expiresAt
+ok 76 - subscription response rejects invalid expiresAt
+  ---
+  duration_ms: 65.637292
+  ...
+# Subtest: subscription response rejects invalid proAccess
+ok 77 - subscription response rejects invalid proAccess
+  ---
+  duration_ms: 53.878958
+  ...
+# Subtest: subscription response rejects invalid productId
+ok 78 - subscription response rejects invalid productId
+  ---
+  duration_ms: 40.897041
+  ...
+# Subtest: valid Free and explicit server Pro override snapshots retain their semantics
+ok 79 - valid Free and explicit server Pro override snapshots retain their semantics
+  ---
+  duration_ms: 111.464875
+  ...
+# Subtest: PRO_REQUIRED preserves the machine code without refreshing authentication
+ok 80 - PRO_REQUIRED preserves the machine code without refreshing authentication
+  ---
+  duration_ms: 30.835958
+  ...
+# Subtest: AI_CONSENT_REQUIRED preserves the machine code without refreshing authentication
+ok 81 - AI_CONSENT_REQUIRED preserves the machine code without refreshing authentication
+  ---
+  duration_ms: 33.349292
+  ...
+# Subtest: integrated ordinary request times out during fetch and preserves auth
+ok 82 - integrated ordinary request times out during fetch and preserves auth
+  ---
+  duration_ms: 38.017084
+  ...
+# Subtest: integrated ordinary request times out during success body and preserves auth
+ok 83 - integrated ordinary request times out during success body and preserves auth
+  ---
+  duration_ms: 34.618167
+  ...
+# Subtest: integrated ordinary request times out during error body and preserves auth
+ok 84 - integrated ordinary request times out during error body and preserves auth
+  ---
+  duration_ms: 36.328125
+  ...
+# Subtest: verification gets a 30 second budget and caller cancellation is distinct
+ok 85 - verification gets a 30 second budget and caller cancellation is distinct
+  ---
+  duration_ms: 35.066292
+  ...
+# [backend] FASTAPI URL candidates: http://192.0.2.1:8000 | http://localhost:8000
+# Subtest: refresh timeout shares the request budget and a late payload cannot revive auth
+ok 86 - refresh timeout shares the request budget and a late payload cannot revive auth
+  ---
+  duration_ms: 32.337333
+  ...
+# Subtest: a failed mutation is never replayed against another development host
+ok 87 - a failed mutation is never replayed against another development host
+  ---
+  duration_ms: 34.974666
+  ...
+# Subtest: Retry-After is preserved with structured HTTP error details
+ok 88 - Retry-After is preserved with structured HTTP error details
+  ---
+  duration_ms: 30.71675
+  ...
+# Subtest: a timed out sign-in response cannot write a late session
+ok 89 - a timed out sign-in response cannot write a late session
+  ---
+  duration_ms: 55.791458
+  ...
+# Subtest: an expired request does not cancel a later shared-refresh waiter
+ok 90 - an expired request does not cancel a later shared-refresh waiter
+  ---
+  duration_ms: 41.366
+  ...
+# Subtest: interrupted 200 body reports a stable network error
+ok 91 - interrupted 200 body reports a stable network error
+  ---
+  duration_ms: 31.452667
+  ...
+# Subtest: interrupted 503 body reports a stable network error
+ok 92 - interrupted 503 body reports a stable network error
+  ---
+  duration_ms: 35.022167
+  ...
+# Subtest: valid preview uses a bounded native read and cleans the temporary copy
+ok 93 - valid preview uses a bounded native read and cleans the temporary copy
+  ---
+  duration_ms: 165.525917
+  ...
+# Subtest: picker cancellation performs no read, upload or write
+ok 94 - picker cancellation performs no read, upload or write
+  ---
+  duration_ms: 37.772667
+  ...
+# Subtest: picker metadata over limit rejects before reading and cleans copied files
+ok 95 - picker metadata over limit rejects before reading and cleans copied files
+  ---
+  duration_ms: 64.581625
+  ...
+# Subtest: missing metadata and stat rejects before reading and cleans copied files
+ok 96 - missing metadata and stat rejects before reading and cleans copied files
+  ---
+  duration_ms: 67.162125
+  ...
+# Subtest: stat over limit rejects before reading and cleans copied files
+ok 97 - stat over limit rejects before reading and cleans copied files
+  ---
+  duration_ms: 24.301
+  ...
+# Subtest: wrong extension rejects before reading and cleans copied files
+ok 98 - wrong extension rejects before reading and cleans copied files
+  ---
+  duration_ms: 19.754708
+  ...
+# Subtest: bounded read detects changed size and incomplete native reads
+ok 99 - bounded read detects changed size and incomplete native reads
+  ---
+  duration_ms: 66.246708
+  ...
+# Subtest: base64 count handles an exact-limit file without decoding or regex stack overflow
+ok 100 - base64 count handles an exact-limit file without decoding or regex stack overflow
+  ---
+  duration_ms: 39.5695
+  ...
+# Subtest: cancel during native read suppresses upload and removes the picker copy
+ok 101 - cancel during native read suppresses upload and removes the picker copy
+  ---
+  duration_ms: 83.422708
+  ...
+# Subtest: unavailable parser has an actionable error and still cleans the file
+ok 102 - unavailable parser has an actionable error and still cleans the file
+  ---
+  duration_ms: 8.296375
+  ...
+# Subtest: pending operation persists its original ID and context for restart
+ok 103 - pending operation persists its original ID and context for restart
+  ---
+  duration_ms: 86.012792
+  ...
+# Subtest: deletion racing a pending storage write cannot recreate account data
+ok 104 - deletion racing a pending storage write cannot recreate account data
+  ---
+  duration_ms: 26.979833
+  ...
+# Subtest: roster preview cancel performs no player writes
+ok 105 - roster preview cancel performs no player writes
+  ---
+  duration_ms: 84.80675
+  ...
+# Subtest: response loss retries the durable same operation instead of individual player writes
+ok 106 - response loss retries the durable same operation instead of individual player writes
+  ---
+  duration_ms: 114.112583
+  ...
+# Subtest: account switch ignores an old committed response and cannot show its roster/toast
+ok 107 - account switch ignores an old committed response and cannot show its roster/toast
+  ---
+  duration_ms: 52.041959
+  ...
+# Subtest: slow name save cannot overwrite a later gender selection; reads wait
+ok 108 - slow name save cannot overwrite a later gender selection; reads wait
+  ---
+  duration_ms: 115.056792
+  ...
+# Subtest: failed autosave blocks stale reads until retry succeeds
+ok 109 - failed autosave blocks stale reads until retry succeeds
+  ---
+  duration_ms: 48.958167
+  ...
+# Subtest: delete runs after pending save so the player is not recreated
+ok 110 - delete runs after pending save so the player is not recreated
+  ---
+  duration_ms: 27.300084
+  ...
+# Subtest: invalidated in-flight roster read cannot restore stale cached genders
+ok 111 - invalidated in-flight roster read cannot restore stale cached genders
+  ---
+  duration_ms: 66.350959
+  ...
+# Subtest: sign-out cache clear prevents an old read from repopulating cache
+ok 112 - sign-out cache clear prevents an old read from repopulating cache
+  ---
+  duration_ms: 38.307833
+  ...
+# Subtest: clearing account writes prevents a late failure from restoring old state
+ok 113 - clearing account writes prevents a late failure from restoring old state
+  ---
+  duration_ms: 30.102834
+  ...
+# Subtest: persists before verification and finishes only after server entitlement
+ok 114 - persists before verification and finishes only after server entitlement
+  ---
+  duration_ms: 407.771584
+  ...
+# Subtest: failed verification survives restart and never finishes or grants Pro
+ok 115 - failed verification survives restart and never finishes or grants Pro
+  ---
+  duration_ms: 193.358083
+  ...
+# Subtest: finish failure retains the purchase for retry after server confirmation
+ok 116 - finish failure retains the purchase for retry after server confirmation
+  ---
+  duration_ms: 128.430334
+  ...
+# Subtest: duplicate events share verification and transaction finishing
+ok 117 - duplicate events share verification and transaction finishing
+  ---
+  duration_ms: 55.379
+  ...
+# Subtest: storage failure prevents verification, Pro delivery, and finishing
+ok 118 - storage failure prevents verification, Pro delivery, and finishing
+  ---
+  duration_ms: 23.142
+  ...
+# Subtest: unknown and deferred purchases cannot enter the verification queue
+ok 119 - unknown and deferred purchases cannot enter the verification queue
+  ---
+  duration_ms: 43.172
+  ...
+# Subtest: account changes during verification cannot deliver or finish the old purchase
+ok 120 - account changes during verification cannot deliver or finish the old purchase
+  ---
+  duration_ms: 61.439333
+  ...
+# Subtest: concurrent queued writes and legacy cache cleanup preserve pending transactions
+ok 121 - concurrent queued writes and legacy cache cleanup preserve pending transactions
+  ---
+  duration_ms: 4.298667
+  ...
+# Subtest: startup never trusts the legacy entitlement cache or an unverified store purchase
+ok 122 - startup never trusts the legacy entitlement cache or an unverified store purchase
+  ---
+  duration_ms: 63.981583
+  ...
+# Subtest: restore rejection never reports restored or grants Pro
+ok 123 - restore rejection never reports restored or grants Pro
+  ---
+  duration_ms: 69.057625
+  ...
+# Subtest: foreground and periodic recovery retry failed purchases and unlock after confirmation
+ok 124 - foreground and periodic recovery retry failed purchases and unlock after confirmation
+  ---
+  duration_ms: 55.434167
+  ...
+# Subtest: startup retries account-scoped pending work after a process restart
+ok 125 - startup retries account-scoped pending work after a process restart
+  ---
+  duration_ms: 47.234583
+  ...
+# Subtest: provider ignores late verification after a session changes
+ok 126 - provider ignores late verification after a session changes
+  ---
+  duration_ms: 23.96625
+  ...
+# Subtest: an expired cached backend response cannot reopen Pro
+ok 127 - an expired cached backend response cannot reopen Pro
+  ---
+  duration_ms: 67.579708
+  ...
+# Subtest: a backend override disabling Pro is respected even after purchase verification
+ok 128 - a backend override disabling Pro is respected even after purchase verification
+  ---
+  duration_ms: 39.510667
+  ...
+# Subtest: the native purchase request explicitly disables automatic finishing
+ok 129 - the native purchase request explicitly disables automatic finishing
+  ---
+  duration_ms: 11.395417
+  ...
+# Subtest: explicit Restore synchronizes before enumeration; automatic recovery never syncs
+ok 130 - explicit Restore synchronizes before enumeration; automatic recovery never syncs
+  ---
+  duration_ms: 31.981708
+  ...
+# Subtest: acknowledged finish survives expiry and never needs another access grant
+ok 131 - acknowledged finish survives expiry and never needs another access grant
+  ---
+  duration_ms: 24.539583
+  ...
+# Subtest: terminal ownership conflict stops callback and timer retries until explicit Restore
+ok 132 - terminal ownership conflict stops callback and timer retries until explicit Restore
+  ---
+  duration_ms: 17.193875
+  ...
+# Subtest: Retry-After prevents early retry after process restart
+ok 133 - Retry-After prevents early retry after process restart
+  ---
+  duration_ms: 38.110708
+  ...
+# Subtest: account deletion clears only its queue and prevents stale callbacks re-enqueueing
+ok 134 - account deletion clears only its queue and prevents stale callbacks re-enqueueing
+  ---
+  duration_ms: 6.967042
+  ...
+# Subtest: verified grace remains Pro after paid expiry and locks at accessUntil
+ok 135 - verified grace remains Pro after paid expiry and locks at accessUntil
+  ---
+  duration_ms: 28.292959
+  ...
+# Subtest: hanging status refresh does not block StoreKit setup or product work
+ok 136 - hanging status refresh does not block StoreKit setup or product work
+  ---
+  duration_ms: 24.361625
+  ...
+# Subtest: late native callback carrying account A token never enters account B queue
+ok 137 - late native callback carrying account A token never enters account B queue
+  ---
+  duration_ms: 33.415
+  ...
+# Subtest: authoritative entitlement and expiry notify access consumers before account reset
+ok 138 - authoritative entitlement and expiry notify access consumers before account reset
+  ---
+  duration_ms: 27.021083
+  ...
+# Subtest: status refresh failure remains unknown for privacy rather than verified Free
+ok 139 - status refresh failure remains unknown for privacy rather than verified Free
+  ---
+  duration_ms: 23.568583
+  ...
+# Subtest: only authoritative status establishes Free or Pro and account reset becomes unknown
+ok 140 - only authoritative status establishes Free or Pro and account reset becomes unknown
+  ---
+  duration_ms: 80.2715
+  ...
+# Subtest: tracing is disabled unless both development and explicit opt-in apply
+ok 141 - tracing is disabled unless both development and explicit opt-in apply
+  ---
+  duration_ms: 319.911333
+  ...
+# Subtest: the trace stores only metadata and never uploads, logs or persists payloads
+ok 142 - the trace stores only metadata and never uploads, logs or persists payloads
+  ---
+  duration_ms: 9.082542
+  ...
+# Subtest: metadata extraction never invokes fields getters
+ok 143 - metadata extraction never invokes fields getters
+  ---
+  duration_ms: 28.85575
+  ...
+# Subtest: unknown stages are rejected before evaluating their fields
+ok 144 - unknown stages are rejected before evaluating their fields
+  ---
+  duration_ms: 25.951667
+  ...
+# Subtest: metadata shapes and lengths are bounded without traversing large inputs
+ok 145 - metadata shapes and lengths are bounded without traversing large inputs
+  ---
+  duration_ms: 32.965209
+  ...
+# Subtest: known identifiers, states and error codes remain useful
+ok 146 - known identifiers, states and error codes remain useful
+  ---
+  duration_ms: 7.217
+  ...
+# Subtest: memory retention evicts oldest records at its fixed bound
+ok 147 - memory retention evicts oldest records at its fixed bound
+  ---
+  duration_ms: 27.865292
+  ...
+# Subtest: diagnostic readers cannot mutate retained records
+ok 148 - diagnostic readers cannot mutate retained records
+  ---
+  duration_ms: 12.428833
+  ...
+# Subtest: a failed optional fields producer cannot break the observed operation
+ok 149 - a failed optional fields producer cannot break the observed operation
+  ---
+  duration_ms: 9.020958
+  ...
+1..149
+# tests 149
+# suites 0
+# pass 149
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3062.73575
