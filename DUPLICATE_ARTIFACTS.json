@@ -1,0 +1,227 @@
+{
+  "reason": "Obsolete numbered backup artifacts; canonical imports use unnumbered files. Original artifacts remain in baseline Git snapshot and original owner checkout.",
+  "files": [
+    {
+      "removedBackup": "src/components/ProGateModal 2.tsx",
+      "retainedCanonical": "src/components/ProGateModal.tsx",
+      "backupSha256": "e713ef74884f5dc530b847961f5381f985f1025f3f2bc62c5bbfc845fa209f4b",
+      "canonicalSha256": "9cf84b0451b351bb97b3cf3d12d4049392433e726dab495d546384bf1360f90c"
+    },
+    {
+      "removedBackup": "src/lib/ads/lineupInterstitial 2.ts",
+      "retainedCanonical": "src/lib/ads/lineupInterstitial.ts",
+      "backupSha256": "6d8612e61eb132a06922dd3cd8fe273c0383e2f0dd52ff92fc529280befa7e39",
+      "canonicalSha256": "9c92669282c84b11425d7853ea18446501a0ed0882aa7418cf57f60f6670df26"
+    },
+    {
+      "removedBackup": "src/lib/ads/policy 2.ts",
+      "retainedCanonical": "src/lib/ads/policy.ts",
+      "backupSha256": "dd7b4fa26bbbd3425f573b2b917b2b56379adf867ea10c01983afe75f669ea5b",
+      "canonicalSha256": "55289276b234643fc0ce030a3190a4f1986676159d601110fc11cfa36fe0294b"
+    },
+    {
+      "removedBackup": "src/lib/iap/SubscriptionProvider 2.tsx",
+      "retainedCanonical": "src/lib/iap/SubscriptionProvider.tsx",
+      "backupSha256": "c0aec9fa2c8e7d8bf465375b4a64f772b0feb651b585382b22e35a0ff21365cc",
+      "canonicalSha256": "cf126bac828e23ce560ea462d43552a79096cb7243724b573945446f30cb62ff"
+    },
+    {
+      "removedBackup": "src/lib/iap/index 2.ts",
+      "retainedCanonical": "src/lib/iap/index.ts",
+      "backupSha256": "9f3d4145617333e452849d3a444a943e49e97ac519405dc3d9ec7b69c828b216",
+      "canonicalSha256": "8e1eac4a318f32a8027c755d3980079297ab19df9f61a5ff07fe4a9f8fb8e4dd"
+    },
+    {
+      "removedBackup": "src/lib/iap/persistence 2.ts",
+      "retainedCanonical": "src/lib/iap/persistence.ts",
+      "backupSha256": "43edfa1d9cb06c397e22104fec56a8c7a6c6b534d777cc7be25e5f99714a5159",
+      "canonicalSha256": "d68f3f2da2ac837094d5e5ecd6c126d1e05075bfdec04b9abda8a8e42e4f052f"
+    },
+    {
+      "removedBackup": "src/lib/iap/purchaseVerification 2.ts",
+      "retainedCanonical": "src/lib/iap/purchaseVerification.ts",
+      "backupSha256": "358e627d0dfd4e75afc116ffc5ceb5060811ab35ee973d7826b9132a3b4e4730",
+      "canonicalSha256": "4e0debe6a95d06fcec029c38c608b74e8a5f180bc7c220967057e65d3ba640b7"
+    },
+    {
+      "removedBackup": "src/lib/iap/storeService 2.ts",
+      "retainedCanonical": "src/lib/iap/storeService.ts",
+      "backupSha256": "d213eb15a7a5b697fb45ca94b34151aa2a0ef8d2660baa988ca282088f53caa6",
+      "canonicalSha256": "b53b6001b0326c11825e3376dd258bf6cbabc0b42a207f84d7d13f62dccc29ab"
+    },
+    {
+      "removedBackup": "src/lib/proGate 2.tsx",
+      "retainedCanonical": "src/lib/proGate.tsx",
+      "backupSha256": "14a6d14389c07fe9e847e575c82744d6cb5b6b3fdbdb40c1f5c3b5d5b9a63f34",
+      "canonicalSha256": "bf15caa25dea407f4540783067d99308e5e59d691133964e665bdb9b82df0899"
+    },
+    {
+      "removedBackup": "src/screens/HomeScreen 2.tsx",
+      "retainedCanonical": "src/screens/HomeScreen.tsx",
+      "backupSha256": "1571325613a8aa40d3d62f7853710036bc9ed23c1619e3a7393716f8d9aa2f12",
+      "canonicalSha256": "75a2e559c284e56570b771c5376fe97d303f8f9b8fa54e576a79acf2f43f360f"
+    },
+    {
+      "removedBackup": "src/screens/RosterScreen 2.tsx",
+      "retainedCanonical": "src/screens/RosterScreen.tsx",
+      "backupSha256": "1c69f2fd31818348c906a1a15e90aba787a4e97814dec2b1c5cfefa187546457",
+      "canonicalSha256": "4a51850e446ac4a08107c7f5ed16130a13525d8d7c64ecc996bae65f2356fc93"
+    },
+    {
+      "removedBackup": "src/screens/RosterScreen 3.tsx",
+      "retainedCanonical": "src/screens/RosterScreen.tsx",
+      "backupSha256": "acc919a17baf47784c851c860686bedb0d1deacb99c387ee301e2aecba51dd7e",
+      "canonicalSha256": "4a51850e446ac4a08107c7f5ed16130a13525d8d7c64ecc996bae65f2356fc93"
+    },
+    {
+      "removedBackup": "src/screens/RulesScreen 2.tsx",
+      "retainedCanonical": "src/screens/RulesScreen.tsx",
+      "backupSha256": "cdeb882c992b46919edb901f8051209c04f6058fbfb96209ad163955b62df69a",
+      "canonicalSha256": "a2f72aa9ea49554206812c74d7ec61587a164867862958036b68af34fff62b2d"
+    },
+    {
+      "removedBackup": "src/screens/RulesScreen 3.tsx",
+      "retainedCanonical": "src/screens/RulesScreen.tsx",
+      "backupSha256": "93cb39a1359493193880e927ee87ecef2a253c289d93a162c189323a1f843dac",
+      "canonicalSha256": "a2f72aa9ea49554206812c74d7ec61587a164867862958036b68af34fff62b2d"
+    },
+    {
+      "removedBackup": "src/screens/SubscriptionScreen 2.tsx",
+      "retainedCanonical": "src/screens/SubscriptionScreen.tsx",
+      "backupSha256": "282849f4eca7ae2a535360a1e0ccb91a82cd57e9727f263d59bfd4828488aa13",
+      "canonicalSha256": "458b00b488b22ff0655ec10e16991b3c70759d832ceb2873fce17100b7ce1cdf"
+    },
+    {
+      "removedBackup": "src/screens/calendar/CalendarScreen 2.tsx",
+      "retainedCanonical": "src/screens/calendar/CalendarScreen.tsx",
+      "backupSha256": "a3bb0737fa33d2070829c94b26f6cbc911e268f126bdc3eb2db0fd249faeb0a1",
+      "canonicalSha256": "d9fc8197252e07ea92030e211e174f7daa8004393cf4118a05bfc4bbf6c17598"
+    },
+    {
+      "removedBackup": "src/screens/calendar/components/DayAgenda 2.tsx",
+      "retainedCanonical": "src/screens/calendar/components/DayAgenda.tsx",
+      "backupSha256": "5a46f56ffcd61776d8c8b050558cad1e2d606b79139a5ab6c476d10454a4f17c",
+      "canonicalSha256": "f8fbdfaaf7ea4b4fb9f478319cd105ad19ed6b25404ab2b6db882da3525bf793"
+    },
+    {
+      "removedBackup": "src/screens/calendar/components/GameCard 2.tsx",
+      "retainedCanonical": "src/screens/calendar/components/GameCard.tsx",
+      "backupSha256": "fdcb6f73e8545d0001d31cff378e3f793d67b0c6afefb5bd39681f32d3543e78",
+      "canonicalSha256": "fbf3613501185781fd6b2a6d822fe68cda5e1c293a58e40f7f6a79161997419f"
+    },
+    {
+      "removedBackup": "src/screens/calendar/components/LineupsSheet 2.tsx",
+      "retainedCanonical": "src/screens/calendar/components/LineupsSheet.tsx",
+      "backupSha256": "e46d714fb8315ebd030ae1264fbfb5010493b2a4cde706720a7a47a6ec52b525",
+      "canonicalSha256": "9b7be622276f823847b607dd3fcd16d2eacec4786e443294ae939810322c20dc"
+    },
+    {
+      "removedBackup": "src/screens/calendar/hooks/useCalendarData 2.ts",
+      "retainedCanonical": "src/screens/calendar/hooks/useCalendarData.ts",
+      "backupSha256": "e8784096dbf90f64ca0a10b23ee9a49129e4e2e617d62347feddd8500302dd95",
+      "canonicalSha256": "80d8429621a0c6a4d1f2b8d167d58034d37da935fd144887fd6572370b8d7903"
+    },
+    {
+      "removedBackup": "src/screens/calendar/hooks/useLineupCarousel 2.ts",
+      "retainedCanonical": "src/screens/calendar/hooks/useLineupCarousel.ts",
+      "backupSha256": "4c9c27662790113622a96ce59d85e034ea7bf9dae60d0b14a67234f358fcd33b",
+      "canonicalSha256": "7aae0ea8363a7d556531d9e37c9f58dc72a9d1cde649a12606af1af441a49567"
+    },
+    {
+      "removedBackup": "src/screens/leagues/LeagueDetailScreen 2.tsx",
+      "retainedCanonical": "src/screens/leagues/LeagueDetailScreen.tsx",
+      "backupSha256": "7cbcadcaec3df7acf4459c9c8c35bd4722a2a70538c28022ddf85131f6709ba1",
+      "canonicalSha256": "7281b9547a1ce65a8ab5b5b9975de25764009d89ce40c623cffa96c1ff23c114"
+    },
+    {
+      "removedBackup": "src/screens/leagues/LeaguesScreen 2.tsx",
+      "retainedCanonical": "src/screens/leagues/LeaguesScreen.tsx",
+      "backupSha256": "167ec99cc7178456dabcc2a49f8a79d5e146b69c838cb6e77511e8b0f2970919",
+      "canonicalSha256": "a62494b7366db701d4d69f274f12e38e7aed360e7d5d3be90974f873ec443cf0"
+    },
+    {
+      "removedBackup": "src/screens/lineup/LineupScreen 2.tsx",
+      "retainedCanonical": "src/screens/lineup/LineupScreen.tsx",
+      "backupSha256": "61bdfdd9d09d137e2a9958ce6cddaab43d0882bffa3fce52cbca5d08c8e417da",
+      "canonicalSha256": "50b58c6d18f0e54a2a8759e2e8233d5adfa2bef7180411ac6fbc2ada7bbefdae"
+    },
+    {
+      "removedBackup": "src/screens/lineup/components/GameContextCard 2.tsx",
+      "retainedCanonical": "src/screens/lineup/components/GameContextCard.tsx",
+      "backupSha256": "554e89a2a8496693076e0831fc48c9189de15b47e7ebe2a831f0370653ef1a98",
+      "canonicalSha256": "d6f45e7db1e86b1d88aaaec1dacc12de3be14a9f232e954cabaf8b63203c0bf9"
+    },
+    {
+      "removedBackup": "src/screens/lineup/components/HistoryTab 2.tsx",
+      "retainedCanonical": "src/screens/lineup/components/HistoryTab.tsx",
+      "backupSha256": "270a9927165f7a49e6079ea91f7317f4a168e433d23b1f4552437348b79f81ea",
+      "canonicalSha256": "42adcda3b24dd1ea76b072db6c1d6248fbe95ff97db1defa4d9051f9825a3494"
+    },
+    {
+      "removedBackup": "src/screens/lineup/hooks/useLineupData 2.ts",
+      "retainedCanonical": "src/screens/lineup/hooks/useLineupData.ts",
+      "backupSha256": "b795724d2415fe919fdefd18603f62997a27c5172010dddd2834922f096f0bba",
+      "canonicalSha256": "1471b786e9088e592e8a139810e55bfde99135f254799f75f6c7a49c9c61238a"
+    },
+    {
+      "removedBackup": "src/screens/lineup/hooks/useLineupEditor 2.ts",
+      "retainedCanonical": "src/screens/lineup/hooks/useLineupEditor.ts",
+      "backupSha256": "74a61d4fdd38a3d9f9796f534ed4a1d7e5410c1a3bc5504d1158370a25bf8e78",
+      "canonicalSha256": "248a6eba1bfa077e689690ee63e6e35c4bb7466c7ae85d1a241c8d0f91e9ce91"
+    },
+    {
+      "removedBackup": "src/screens/lineup/hooks/useLineupGeneration 2.ts",
+      "retainedCanonical": "src/screens/lineup/hooks/useLineupGeneration.ts",
+      "backupSha256": "41cee89f7b4a8b449be62a064718f888df4bd8f1e4f212317f625da188c2e01f",
+      "canonicalSha256": "aef84234eb806f0edd1d52287471212ec4d3e7bca4c7a28affa89d81db630185"
+    },
+    {
+      "removedBackup": "src/screens/lineup/hooks/useLineupHistory 2.ts",
+      "retainedCanonical": "src/screens/lineup/hooks/useLineupHistory.ts",
+      "backupSha256": "d2aeed203fba936630fae1bc160dd23b94ea272690b371e8c5e990ef0deb1033",
+      "canonicalSha256": "d6f5b927f25bc717d3b1b0d28f238ebe213c099782869060c5e3cd57c053e6b2"
+    },
+    {
+      "removedBackup": "src/screens/onboarding/SetupWizard 2.tsx",
+      "retainedCanonical": "src/screens/onboarding/SetupWizard.tsx",
+      "backupSha256": "9bd8045be353acfb288aba599dc2235e7fdd7f3e1622e35d9c6e99c90da3a496",
+      "canonicalSha256": "7f7830ffbde844e03b30e5cd4955d416ed67f817f15b5e2c51f4f1bd79753077"
+    },
+    {
+      "removedBackup": "src/screens/onboarding/SetupWizard 3.tsx",
+      "retainedCanonical": "src/screens/onboarding/SetupWizard.tsx",
+      "backupSha256": "374e401f14d35c5eb101b2164fceb4ec74b70d5b592dcf4daa4886e5c53b4b72",
+      "canonicalSha256": "7f7830ffbde844e03b30e5cd4955d416ed67f817f15b5e2c51f4f1bd79753077"
+    },
+    {
+      "removedBackup": "src/utils/rosterImport 2.ts",
+      "retainedCanonical": "src/utils/rosterImport.ts",
+      "backupSha256": "a84090db2226801c1c3f02818e29343f54cbfcd75263754d7c6cbffd8716d8e0",
+      "canonicalSha256": "a27e7aade3ccd76e4d42289b6e3d43052317036f92ab8ae928a60e76829fd06b"
+    },
+    {
+      "removedBackup": "src/utils/rosterImport 3.ts",
+      "retainedCanonical": "src/utils/rosterImport.ts",
+      "backupSha256": "31ab27eed270710a998ce310c552a4400869d2b28967cc67437e1e48a3e18a8c",
+      "canonicalSha256": "a27e7aade3ccd76e4d42289b6e3d43052317036f92ab8ae928a60e76829fd06b"
+    },
+    {
+      "removedBackup": "tests/privacyConsent.test 2.cjs",
+      "retainedCanonical": "tests/privacyConsent.test.cjs",
+      "backupSha256": "558861570c3b90ba79c21b23734f6a4969f6e0a304552ff24c6708e1d3020740",
+      "canonicalSha256": "b8951fd12d28ee569938d165de6e1ea94b68d23f94270efeec1a0e978752e6ea"
+    },
+    {
+      "removedBackup": "tests/rosterImport.test 2.cjs",
+      "retainedCanonical": "tests/rosterImport.test.cjs",
+      "backupSha256": "bdb7d733ea842f5f47ad649dfb947c228d88ddcbb8d341591169d04bbe00d544",
+      "canonicalSha256": "46af7d99b63b6b5ac87c4e867e61b9c3c0c705b3e220eccee54c64aa8a090f7e"
+    },
+    {
+      "removedBackup": "tests/subscriptions.test 2.cjs",
+      "retainedCanonical": "tests/subscriptions.test.cjs",
+      "backupSha256": "d6bf97f98a845c2e524b346e0011eaf9337cf5bfe3e2903087714c6f68569f30",
+      "canonicalSha256": "1f00342fab5cd8b1f47c255ef6d6b4cd8ec6000fd858981262078e056b68d864"
+    }
+  ]
+}
