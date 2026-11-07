@@ -1114,6 +1114,21 @@ export const fastApiBackendClient: BackendClient = {
       { method: "POST", body: JSON.stringify({ email }) },
       "Unable to grant admin access",
     ) as BackendAdminAccount,
+  revokeAdminAccount: async (email) =>
+    await authedRequest(
+      "/admin/accounts/revoke",
+      { method: "POST", body: JSON.stringify({ email }) },
+      "Unable to remove admin access",
+    ) as BackendAdminAccount,
+  listAdminAccounts: async () =>
+    ((await authedRequest("/admin/accounts", { method: "GET" }, "Unable to load admins")) as { accounts: BackendAdminAccount[] })
+      .accounts,
+  searchAdminAccounts: async (query, options) =>
+    ((await authedRequest(
+      `/admin/accounts/search?q=${encodeURIComponent(query)}`,
+      { method: "GET", signal: options?.signal },
+      "Unable to search accounts",
+    )) as { accounts: BackendAdminAccount[] }).accounts,
   setProAccess: async (enabled: boolean | null) => {
     const payload = (await authedRequest(
       "/subscriptions/pro-access",

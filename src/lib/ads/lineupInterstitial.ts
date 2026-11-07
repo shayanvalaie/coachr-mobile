@@ -7,8 +7,8 @@ export async function presentLineupInterstitial(isPro = false): Promise<void> {
   if (!authorization) return;
   const { sdk } = authorization;
   const configured = Platform.OS === "ios"
-    ? process.env.EXPO_PUBLIC_ADMOB_IOS_INTERSTITIAL_ID
-    : process.env.EXPO_PUBLIC_ADMOB_ANDROID_INTERSTITIAL_ID;
+    ? process.env.EXPO_PUBLIC_LINEUP_INTERSTITIAL_IOS
+    : process.env.EXPO_PUBLIC_LINEUP_INTERSTITIAL_ANDROID;
   const unitId = configured || (__DEV__ ? sdk.TestIds.INTERSTITIAL : null);
   if (!unitId) return;
   await new Promise<void>(resolve => {

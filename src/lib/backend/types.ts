@@ -176,6 +176,7 @@ export type BackendAdminAccount = {
   email: string;
   isAdmin: boolean;
   emailVerified: boolean;
+  removable: boolean;
 };
 
 export type BackendGamePageItem = BackendGame & { lineupCount: number };
@@ -183,6 +184,9 @@ export type BackendGamePageItem = BackendGame & { lineupCount: number };
 export type BackendClient = PrivacyApi & ModerationApi & {
   lookupAdminAccount: (email: string) => Promise<BackendAdminAccount>;
   grantAdminAccount: (email: string) => Promise<BackendAdminAccount>;
+  revokeAdminAccount: (email: string) => Promise<BackendAdminAccount>;
+  listAdminAccounts: () => Promise<BackendAdminAccount[]>;
+  searchAdminAccounts: (query: string, options?: { signal?: AbortSignal }) => Promise<BackendAdminAccount[]>;
   provider: BackendProvider;
   auth: {
     getSessionEpoch: () => number;
