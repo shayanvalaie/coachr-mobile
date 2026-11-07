@@ -16,9 +16,11 @@ const listeners = new Set<() => void>();
 const enabled = process.env.EXPO_PUBLIC_ENABLE_ADS === "true";
 const resolved = () => enabled && context.accountId !== null &&
   context.policyVersion === AGE_POLICY_VERSION && (context.ageBand === "teen13to17" || context.ageBand === "adult18plus");
-// RN16.5.0 has no supported TFAT TEEN setting. Teens remain eligible
-// accounts, but ads are withheld until the native treatment is verified.
-const eligible = () => resolved() && context.ageBand === "adult18plus" && context.entitlement === "free";
+const eligible = () => resolved() && context.entitlement === "free";
+// Google's teen age treatment disables personalization and remarketing
+// and applies its teen ad-serving protections.
+const ageTreatment = (sdk: AdsModule) => context.ageBand === "teen13to17"
+  ? sdk.AgeRestrictedTreatment.TEEN : sdk.AgeRestrictedTreatment.UNSPECIFIED;
 const notify = () => listeners.forEach(listener => listener());
 export const subscribeAdPolicy = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; };
 export const getAdPrivacyStatus = () => status;
@@ -41,7 +43,7 @@ async function prepare(ticket: number): Promise<void> {
     }
     let info;
     try {
-      await sdk.AdsConsent.requestInfoUpdate({ tagForUnderAgeOfConsent: false });
+      await sdk.AdsConsent.requestInfoUpdate();
       if (ticket !== generation || !eligible()) return;
       info = await sdk.AdsConsent.loadAndShowConsentFormIfRequired();
     } catch {
@@ -52,12 +54,9 @@ async function prepare(ticket: number): Promise<void> {
     if (ticket !== generation || !eligible()) return;
     publish({ privacyOptionsRequired: info.privacyOptionsRequirementStatus === "REQUIRED" });
     if (!info.canRequestAds) { publish({ ready: false }); return; }
-    // Adult-only serving retains NPA + G. These legacy request settings
-    // are not used as substitutes for TFAT TEEN age treatment.
     await sdk.default().setRequestConfiguration({
       maxAdContentRating: sdk.MaxAdContentRating.G,
-      tagForChildDirectedTreatment: false,
-      tagForUnderAgeOfConsent: false,
+      ageRestrictedTreatment: ageTreatment(sdk),
     });
     if (ticket !== generation || !eligible()) return;
     if (!initialized) initialized = sdk.default().initialize().catch(error => { initialized = null; throw error; });
@@ -71,8 +70,7 @@ export function setAdPolicyContext(next: AdPolicyContext): void {
   if (JSON.stringify(context) === JSON.stringify(next)) return;
   context = next;
   const ticket = ++generation;
-  publish({ ready: false, privacyOptionsRequired: false, error: next.ageBand === "teen13to17"
-    ? "Ads are unavailable for this age group until teen protections are verified. You can keep using Coachr." : null });
+  publish({ ready: false, privacyOptionsRequired: false, error: null });
   // Serial work prevents a previous account's native configuration from
   // overwriting the current configuration after an asynchronous SDK call.
   preparation = preparation.then(() => prepare(ticket));

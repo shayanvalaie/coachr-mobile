@@ -73,7 +73,7 @@ function ads(options = {}) {
   const sdk = {
     AdsConsent: { requestInfoUpdate: async () => { calls.push('refresh'); if (options.refreshError) throw Error('offline'); return info(); }, loadAndShowConsentFormIfRequired: async () => info(), getConsentInfo: async () => { calls.push('previous'); return info(); }, showPrivacyOptionsForm: async () => { calls.push('options'); return info(); } },
     default: () => ({ setRequestConfiguration: async config => calls.push(config), initialize: async () => calls.push('initialize') }),
-    MaxAdContentRating: { G: 'G' }, TestIds: { INTERSTITIAL: 'test' }, AdEventType: { LOADED: 'loaded', CLOSED: 'closed', ERROR: 'error' },
+    MaxAdContentRating: { G: 'G' }, AgeRestrictedTreatment: { TEEN: 'teen', UNSPECIFIED: 'unspecified' }, TestIds: { INTERSTITIAL: 'test' }, AdEventType: { LOADED: 'loaded', CLOSED: 'closed', ERROR: 'error' },
     InterstitialAd: { createForAdRequest: (id, config) => { calls.push({ id, config }); return { addAdEventListener: (event, callback) => { events.set(event, callback); return () => events.delete(event); }, load: () => calls.push('load'), show: async () => { shown++; } }; } },
   };
   const load = loader({ 'react-native-google-mobile-ads': sdk, 'react-native': { Platform: { OS: 'ios' } } });
@@ -89,7 +89,7 @@ test('SDK canRequestAds false withholds initialization and ad requests', async (
 });
 test('eligible adult initializes once with conservative settings and SDK-authorized fallback', async () => {
   const h = ads({ refreshError: true }); h.policy.setAdPolicyContext(context); await settle();
-  assert.ok(h.calls.includes('previous')); assert.deepEqual(JSON.parse(JSON.stringify(h.calls.find(v => typeof v === 'object'))), { maxAdContentRating: 'G', tagForChildDirectedTreatment: false, tagForUnderAgeOfConsent: false });
+  assert.ok(h.calls.includes('previous')); assert.deepEqual(JSON.parse(JSON.stringify(h.calls.find(v => typeof v === 'object'))), { maxAdContentRating: 'G', ageRestrictedTreatment: 'unspecified' });
   await h.policy.refreshAdConsent(); assert.equal(h.calls.filter(v => v === 'initialize').length, 1);
 });
 test('Pro upgrade during load removes native listeners and late callback cannot show', async () => {
@@ -113,16 +113,16 @@ test('required privacy options remain reachable for Pro without initializing ads
 });
 
 
-test('unsupported teen age treatment withholds initialization, ad requests and presentation', async () => {
-  const h = ads(); h.policy.setAdPolicyContext({ ...context, ageBand: 'teen13to17' }); await settle(); await h.present();
-  assert.equal(h.calls.includes('initialize'), false); assert.equal(h.calls.includes('refresh'), false); assert.equal(h.calls.includes('load'), false);
-  assert.equal(h.calls.some(item => typeof item === 'object' && 'id' in item), false); assert.equal(h.shown(), 0);
-  assert.equal(h.policy.getAdAuthorization(), null); assert.match(h.policy.getAdPrivacyStatus().error, /teen protections/);
+test('teen on free tier gets ads with teen age treatment', async () => {
+  const h = ads(); h.policy.setAdPolicyContext({ ...context, ageBand: 'teen13to17' }); await settle();
+  assert.deepEqual(JSON.parse(JSON.stringify(h.calls.find(v => typeof v === 'object'))), { maxAdContentRating: 'G', ageRestrictedTreatment: 'teen' });
+  assert.ok(h.policy.getAdAuthorization()); assert.equal(h.policy.getAdPrivacyStatus().error, null);
 });
 test('correcting adult eligibility to teen invalidates an already loaded adult ad before display', async () => {
   const h = ads(); h.policy.setAdPolicyContext(context); await settle(); const pending = h.present(); const loaded = h.events.get('loaded');
   h.policy.setAdPolicyContext({ ...context, ageBand: 'teen13to17' }); await pending; loaded(); await settle();
-  assert.equal(h.events.size, 0); assert.equal(h.shown(), 0); assert.equal(h.policy.getAdAuthorization(), null);
+  assert.equal(h.events.size, 0); assert.equal(h.shown(), 0);
+  assert.equal(h.calls.filter(v => typeof v === 'object' && 'ageRestrictedTreatment' in v).at(-1).ageRestrictedTreatment, 'teen');
 });
 
 test('deferred permission continues without a modal or an invented grant', async () => {
