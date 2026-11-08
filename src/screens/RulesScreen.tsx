@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, StyleSheet, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import RulesSummary from "../components/rules/RulesSummary";
-import RulesetStatusBanner from "../components/rules/RulesetStatusBanner";
+import RulesProgressCard from "../components/rules/RulesProgressCard";
 import {
   AppText,
   Button,
@@ -43,6 +43,11 @@ const capitalize = (value: string) =>
 const RULES_PLACEHOLDER =
   "e.g. Coed softball, 7 innings, 10 on the field (P, C, 1B, 2B, 3B, SS, LF, LCF, RCF, RF). At least 3 women; with exactly 3 women play 9 and the catcher must be a man. Nobody sits two innings in a row.";
 
+// Minimum time each in-flight step stays on screen so a fast save still reads
+// as "read, then checked" instead of flashing past.
+const STEP_MS = 900;
+const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
 const savedRulesMessage = (ruleset: RulesetPayload): string => {
   switch (ruleset.status) {
     case "active":
@@ -74,6 +79,8 @@ const RulesScreen = ({ session, onBack, onOpenLeagues }: Props) => {
   const [rulesError, setRulesError] = useState<string | null>(null);
   const [rulesRetryAt, setRulesRetryAt] = useState<number | null>(null);
   const [isSavingRules, setIsSavingRules] = useState(false);
+  const [savingStep, setSavingStep] = useState<number | null>(null);
+  const [editorVisible, setEditorVisible] = useState(false);
 
   const [prefsDraft, setPrefsDraft] = useState("");
 
@@ -175,6 +182,10 @@ const RulesScreen = ({ session, onBack, onOpenLeagues }: Props) => {
     setRulesRetryAt(null);
     setRulesError(null);
     setIsSavingRules(true);
+    setEditorVisible(false);
+    const started = Date.now();
+    setSavingStep(0);
+    const stepTimer = setTimeout(() => setSavingStep(1), STEP_MS);
     try {
       if (!await privacy.requireAiConsent(account)) return;
       const team = await ensureTeam();
@@ -186,6 +197,8 @@ const RulesScreen = ({ session, onBack, onOpenLeagues }: Props) => {
         segmentCount,
         playersOnField,
       });
+      const remaining = started + 2 * STEP_MS - Date.now();
+      if (remaining > 0) await wait(remaining);
       applyRules(next);
       void rulesetStatus.refresh();
       if (next.ruleset) {
@@ -197,7 +210,11 @@ const RulesScreen = ({ session, onBack, onOpenLeagues }: Props) => {
     } catch (err) {
       setRulesRetryAt(retryDeadline(err));
       setRulesError(toError(err).message);
+      // Reopen the editor (when it lives in the sheet) so the draft and error are visible.
+      setEditorVisible(true);
     } finally {
+      clearTimeout(stepTimer);
+      setSavingStep(null);
       rulesSubmissionPending.current = false;
       setIsSavingRules(false);
     }
@@ -280,6 +297,13 @@ const RulesScreen = ({ session, onBack, onOpenLeagues }: Props) => {
     }
   }, [changeMessage, rules, toast]);
 
+  // Closing the editor discards the draft so the summary and editor never disagree.
+  const closeEditor = useCallback(() => {
+    setEditorVisible(false);
+    setRulesError(null);
+    if (rules) applyRules(rules);
+  }, [applyRules, rules]);
+
   const league = rules?.league ?? null;
   const ruleset = rules?.ruleset ?? null;
   const savedSegmentCount = ruleset ? String(ruleset.spec.segment.count) : "";
@@ -289,6 +313,71 @@ const RulesScreen = ({ session, onBack, onOpenLeagues }: Props) => {
     sportDraft !== (ruleset?.sport ?? null) ||
     segmentCountDraft !== savedSegmentCount ||
     playersOnFieldDraft !== savedPlayersOnField;
+
+  const rulesEditor = (
+    <>
+      <SportPicker
+        value={sportDraft}
+        onChange={(code) => {
+          setSportDraft(code);
+          if (rulesError) setRulesError(null);
+        }}
+      />
+      <View style={styles.fieldRow}>
+        <Input
+          label="Innings or periods"
+          value={segmentCountDraft}
+          onChangeText={(value) => {
+            setSegmentCountDraft(digitsOnly(value, 2));
+            if (rulesError) setRulesError(null);
+          }}
+          placeholder="7"
+          keyboardType="number-pad"
+          maxLength={2}
+          containerStyle={styles.field}
+          accessibilityLabel="Innings or periods"
+        />
+        <Input
+          label="Players on field"
+          value={playersOnFieldDraft}
+          onChangeText={(value) => {
+            setPlayersOnFieldDraft(digitsOnly(value, 2));
+            if (rulesError) setRulesError(null);
+          }}
+          placeholder="10"
+          keyboardType="number-pad"
+          maxLength={2}
+          containerStyle={styles.field}
+          accessibilityLabel="Players on the field"
+        />
+      </View>
+      <Input
+        label="Rules"
+        value={rulesDraft}
+        onChangeText={(value) => {
+          setRulesDraft(value);
+          if (rulesError) setRulesError(null);
+        }}
+        placeholder={RULES_PLACEHOLDER}
+        multiline
+        textAlignVertical="top"
+        style={styles.textarea}
+        error={rulesError}
+        hint="Supported rules go live right away. Unusual rules may need a custom engine or a quick review."
+        accessibilityLabel="Team rules"
+      />
+      {rulesRetryAt !== null ? <RateLimitNotice retryAt={rulesRetryAt} /> : null}
+      <Button
+        label="Save rules"
+        size="lg"
+        onPress={handleSaveRules}
+        loading={isSavingRules}
+        disabled={!rulesDirty && !!ruleset}
+        fullWidth
+        accessibilityLabel="Save team rules"
+      />
+    </>
+  );
 
   return (
     <ScreenContainer
@@ -311,9 +400,21 @@ const RulesScreen = ({ session, onBack, onOpenLeagues }: Props) => {
           eyebrow="Your rules"
           title={ruleset ? `${capitalize(ruleset.sport)} rules` : "Team rules"}
           subtitle={
-            isLoading
+            isLoading || ruleset
               ? undefined
               : "Describe your rules once. Coachr builds the lineup engine."
+          }
+          right={
+            ruleset ? (
+              <Button
+                label="Edit"
+                size="sm"
+                variant="secondary"
+                icon="edit-2"
+                onPress={() => setEditorVisible(true)}
+                accessibilityLabel="Edit team rules"
+              />
+            ) : undefined
           }
         />
       )}
@@ -330,11 +431,9 @@ const RulesScreen = ({ session, onBack, onOpenLeagues }: Props) => {
           </>
         }
       >
-        {ruleset && ruleset.status !== "active" ? (
-          <RulesetStatusBanner status={ruleset.status} />
-        ) : null}
+        <RulesProgressCard savingStep={savingStep} status={ruleset?.status ?? null} />
 
-        {!league ? (
+        {!league && !ruleset ? (
           <>
             <Card variant="glass" radius="xl">
               <View style={styles.cardInner}>
@@ -368,66 +467,7 @@ const RulesScreen = ({ session, onBack, onOpenLeagues }: Props) => {
                   Players on the field, innings or periods, positions, gender rules,
                   bench limits. Anything the rulebook says.
                 </AppText>
-                <SportPicker
-                  value={sportDraft}
-                  onChange={(code) => {
-                    setSportDraft(code);
-                    if (rulesError) setRulesError(null);
-                  }}
-                />
-                <View style={styles.fieldRow}>
-                  <Input
-                    label="Innings or periods"
-                    value={segmentCountDraft}
-                    onChangeText={(value) => {
-                      setSegmentCountDraft(digitsOnly(value, 2));
-                      if (rulesError) setRulesError(null);
-                    }}
-                    placeholder="7"
-                    keyboardType="number-pad"
-                    maxLength={2}
-                    containerStyle={styles.field}
-                    accessibilityLabel="Innings or periods"
-                  />
-                  <Input
-                    label="Players on field"
-                    value={playersOnFieldDraft}
-                    onChangeText={(value) => {
-                      setPlayersOnFieldDraft(digitsOnly(value, 2));
-                      if (rulesError) setRulesError(null);
-                    }}
-                    placeholder="10"
-                    keyboardType="number-pad"
-                    maxLength={2}
-                    containerStyle={styles.field}
-                    accessibilityLabel="Players on the field"
-                  />
-                </View>
-                <Input
-                  label="Rules"
-                  value={rulesDraft}
-                  onChangeText={(value) => {
-                    setRulesDraft(value);
-                    if (rulesError) setRulesError(null);
-                  }}
-                  placeholder={RULES_PLACEHOLDER}
-                  multiline
-                  textAlignVertical="top"
-                  style={styles.textarea}
-                  error={rulesError}
-                  hint="Supported rules can go live immediately. Unusual rules need review; custom lineup execution is currently unavailable."
-                  accessibilityLabel="Team rules"
-                />
-                {rulesRetryAt !== null ? <RateLimitNotice retryAt={rulesRetryAt} /> : null}
-                <Button
-                  label="Save rules"
-                  size="lg"
-                  onPress={handleSaveRules}
-                  loading={isSavingRules}
-                  disabled={!rulesDirty && !!ruleset}
-                  fullWidth
-                  accessibilityLabel="Save team rules"
-                />
+                {rulesEditor}
               </View>
             </Card>
           </>
@@ -435,7 +475,7 @@ const RulesScreen = ({ session, onBack, onOpenLeagues }: Props) => {
 
         {ruleset ? (
           <RulesSummary ruleset={ruleset} />
-        ) : (
+        ) : league ? (
           <Card padding="xxs">
             <EmptyState
               icon="clipboard"
@@ -443,7 +483,7 @@ const RulesScreen = ({ session, onBack, onOpenLeagues }: Props) => {
               body="Write your rules above, or join a league to use its rules."
             />
           </Card>
-        )}
+        ) : null}
 
         <View style={styles.notes}>
           <SectionLabel>Coach notes</SectionLabel>
@@ -478,7 +518,22 @@ const RulesScreen = ({ session, onBack, onOpenLeagues }: Props) => {
             />
           </View>
         ) : null}
+
+        {!league && ruleset ? (
+          <Button
+            label="Is your league on Coachr? Find it"
+            variant="ghost"
+            size="sm"
+            icon="search"
+            onPress={onOpenLeagues}
+            accessibilityLabel="Find or create your league"
+          />
+        ) : null}
       </LoadTransition>
+
+      <Sheet visible={editorVisible && !!ruleset && !league} onClose={closeEditor} title="Edit rules" keyboard>
+        {rulesEditor}
+      </Sheet>
 
       <Sheet
         visible={changeSheetVisible}
