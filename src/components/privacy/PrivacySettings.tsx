@@ -4,7 +4,6 @@ import { AppText, Button, Card } from "../ui";
 import { hasAiConsent, PRIVACY_URL, TERMS_URL } from "../../lib/privacy/contracts";
 import { getAdPrivacyStatus, showAdPrivacyOptions, subscribeAdPolicy } from "../../lib/ads/policy";
 import { usePrivacy } from "./PrivacyProvider";
-import { PrivacyAgeChoice } from "./PrivacyAgeChoice";
 import { space } from "../../theme/tokens";
 
 export function PrivacySettings() {
@@ -12,7 +11,6 @@ export function PrivacySettings() {
   const ads = useSyncExternalStore(subscribeAdPolicy, getAdPrivacyStatus, getAdPrivacyStatus);
   return <Card><View style={{ gap: space.md }}>
     <AppText family="heading">Privacy and permissions</AppText>
-    <PrivacyAgeChoice />
     {state && state.aiConsent.required !== false ? <>
     <AppText family="heading">AI rules processing</AppText>
     <AppText color="secondary">{hasAiConsent(state) ? "Allowed for this account. You can stop future rules-processing requests at any time." : "OpenAI rules processing needs your permission. Existing approved rule selection remains available."}</AppText>

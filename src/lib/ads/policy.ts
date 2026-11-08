@@ -1,4 +1,4 @@
-import { AGE_POLICY_VERSION, AgeBand } from "../privacy/contracts";
+import { AgeBand } from "../privacy/contracts";
 
 type AdsModule = typeof import("react-native-google-mobile-ads");
 export type AdPolicyContext = {
@@ -14,13 +14,10 @@ let initialized: Promise<unknown> | null = null;
 let preparation: Promise<void> = Promise.resolve();
 const listeners = new Set<() => void>();
 const enabled = process.env.EXPO_PUBLIC_ENABLE_ADS === "true";
-const resolved = () => enabled && context.accountId !== null &&
-  context.policyVersion === AGE_POLICY_VERSION && (context.ageBand === "teen13to17" || context.ageBand === "adult18plus");
+const resolved = () => enabled && context.accountId !== null && context.ageBand !== "under13";
 const eligible = () => resolved() && context.entitlement === "free";
-// Google's teen age treatment disables personalization and remarketing
-// and applies its teen ad-serving protections.
-const ageTreatment = (sdk: AdsModule) => context.ageBand === "teen13to17"
-  ? sdk.AgeRestrictedTreatment.TEEN : sdk.AgeRestrictedTreatment.UNSPECIFIED;
+// Age is not collected, so every request gets Google's teen age treatment:
+// no personalization or remarketing, plus its teen ad-serving protections.
 const notify = () => listeners.forEach(listener => listener());
 export const subscribeAdPolicy = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; };
 export const getAdPrivacyStatus = () => status;
@@ -56,7 +53,7 @@ async function prepare(ticket: number): Promise<void> {
     if (!info.canRequestAds) { publish({ ready: false }); return; }
     await sdk.default().setRequestConfiguration({
       maxAdContentRating: sdk.MaxAdContentRating.G,
-      ageRestrictedTreatment: ageTreatment(sdk),
+      ageRestrictedTreatment: sdk.AgeRestrictedTreatment.TEEN,
     });
     if (ticket !== generation || !eligible()) return;
     if (!initialized) initialized = sdk.default().initialize().catch(error => { initialized = null; throw error; });

@@ -598,10 +598,10 @@ export const fastApiBackendClient: BackendClient = {
         "Failed to sign in",
         "SIGNED_IN",
       ),
-    signUp: async ({ email, password, ageBand, policyVersion }) =>
+    signUp: async ({ email, password }) =>
       authWithSessionPayload(
         "/auth/signup",
-        { email, password, ageBand, policyVersion },
+        { email, password },
         "Failed to sign up",
         "SIGNED_IN",
       ),

@@ -11,8 +11,7 @@ import {
 import PasswordResetForm from "../components/auth/PasswordResetForm";
 import AuthForm from "../components/auth/AuthForm";
 import AuthHeader from "../components/auth/AuthHeader";
-import { AgeEligibility } from "../components/privacy/AgeEligibility";
-import { AGE_POLICY_VERSION, DeclaredAgeBand, PRIVACY_URL, TERMS_URL } from "../lib/privacy/contracts";
+import { PRIVACY_URL, TERMS_URL } from "../lib/privacy/contracts";
 import { AppPressable, AppText, Reveal, ScreenContainer } from "../components/ui";
 import { space } from "../theme/tokens";
 import { AuthMode } from "../types/auth";
@@ -21,7 +20,6 @@ import { backendClient } from "../lib/backend/client";
 const AuthScreen = () => {
   const [resettingPassword, setResettingPassword] = useState(false);
   const [mode, setMode] = useState<AuthMode>(AuthMode.SignIn);
-  const [ageBand, setAgeBand] = useState<DeclaredAgeBand | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -74,10 +72,6 @@ const AuthScreen = () => {
       return;
     }
 
-    if (mode === AuthMode.SignUp && (ageBand === null || ageBand === "under13")) {
-      setError("Coachr accounts require an age group of 13 or older.");
-      return;
-    }
     if (!normalizedEmail || !password) {
       setError("Email and password are required.");
       return;
@@ -125,8 +119,6 @@ const AuthScreen = () => {
         const { data, error: signUpError } = await backendClient.auth.signUp({
           email: normalizedEmail,
           password,
-          ageBand: ageBand!,
-          policyVersion: AGE_POLICY_VERSION,
         });
         if (signUpError) throw signUpError;
         const needsEmailVerify = !data.session;
@@ -199,12 +191,7 @@ const AuthScreen = () => {
               Mount-only, so mode/verification swaps stay still. */}
           <Reveal style={styles.stack}>
             <AuthHeader />
-            {mode === AuthMode.SignUp && !verificationEmail && !resettingPassword ?
-              <AgeEligibility value={ageBand} onChange={setAgeBand} disabled={loading} /> : null}
-            {mode === AuthMode.SignUp && !verificationEmail && !resettingPassword &&
-              (ageBand === null || ageBand === "under13") ? (
-                <AppPressable onPress={handleToggleMode}><AppText>Already have an account? Sign in</AppText></AppPressable>
-              ) : resettingPassword ? (
+            {resettingPassword ? (
               <PasswordResetForm
                 initialEmail={email}
                 onBack={(nextEmail, completed) => {

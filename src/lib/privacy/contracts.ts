@@ -21,9 +21,10 @@ export type PrivacyApi = {
   setAgeEligibility: (input: { ageBand: DeclaredAgeBand; policyVersion: string }) => Promise<PrivacyState>;
   setAiConsent: (input: { scope: string; version: string; granted: boolean }) => Promise<PrivacyState>;
 };
+// The App Store 13+ rating gates downloads; only an explicit under-13
+// declaration makes an account ineligible.
 export function isEligible(state: PrivacyState | null): boolean {
-  return state !== null && state.policyVersion === AGE_POLICY_VERSION &&
-    (state.ageBand === "teen13to17" || state.ageBand === "adult18plus");
+  return state !== null && state.ageBand !== "under13";
 }
 export function hasAiConsent(state: PrivacyState | null): boolean {
   return isEligible(state) && state !== null && state.aiConsent.scope === AI_CONSENT_SCOPE &&

@@ -197,8 +197,6 @@ export type BackendClient = PrivacyApi & ModerationApi & {
     signUp: (input: {
       email: string;
       password: string;
-      ageBand: DeclaredAgeBand;
-      policyVersion: string;
     }) => Promise<BackendAuthResponse>;
     verifyEmail: (input: {
       email: string;

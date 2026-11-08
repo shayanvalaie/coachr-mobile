@@ -80,16 +80,16 @@ function ads(options = {}) {
   return { policy: load('lib/ads/policy'), present: load('lib/ads/lineupInterstitial').presentLineupInterstitial, calls, events, shown: () => shown };
 }
 const context = { accountId: 'a', sessionEpoch: 1, ageBand: 'adult18plus', policyVersion: '2026-10-04', entitlement: 'free' };
-test('unknown eligibility and unknown entitlement do not initialize or request ads', async () => {
-  const h = ads(); h.policy.setAdPolicyContext({ ...context, ageBand: 'unknown' }); await settle(); await h.present();
+test('under-13 and unknown entitlement do not initialize or request ads', async () => {
+  const h = ads(); h.policy.setAdPolicyContext({ ...context, ageBand: 'under13' }); await settle(); await h.present();
   h.policy.setAdPolicyContext({ ...context, entitlement: 'unknown' }); await settle(); await h.present(); assert.equal(h.calls.length, 0);
 });
 test('SDK canRequestAds false withholds initialization and ad requests', async () => {
   const h = ads({ allowed: false }); h.policy.setAdPolicyContext(context); await settle(); await h.present(); assert.equal(h.calls.includes('initialize'), false); assert.equal(h.policy.getAdAuthorization(), null);
 });
-test('eligible adult initializes once with conservative settings and SDK-authorized fallback', async () => {
+test('eligible adult initializes once with teen-treated settings and SDK-authorized fallback', async () => {
   const h = ads({ refreshError: true }); h.policy.setAdPolicyContext(context); await settle();
-  assert.ok(h.calls.includes('previous')); assert.deepEqual(JSON.parse(JSON.stringify(h.calls.find(v => typeof v === 'object'))), { maxAdContentRating: 'G', ageRestrictedTreatment: 'unspecified' });
+  assert.ok(h.calls.includes('previous')); assert.deepEqual(JSON.parse(JSON.stringify(h.calls.find(v => typeof v === 'object'))), { maxAdContentRating: 'G', ageRestrictedTreatment: 'teen' });
   await h.policy.refreshAdConsent(); assert.equal(h.calls.filter(v => v === 'initialize').length, 1);
 });
 test('Pro upgrade during load removes native listeners and late callback cannot show', async () => {
@@ -113,8 +113,8 @@ test('required privacy options remain reachable for Pro without initializing ads
 });
 
 
-test('teen on free tier gets ads with teen age treatment', async () => {
-  const h = ads(); h.policy.setAdPolicyContext({ ...context, ageBand: 'teen13to17' }); await settle();
+test('account with no declared age gets ads with teen age treatment', async () => {
+  const h = ads(); h.policy.setAdPolicyContext({ ...context, ageBand: 'unknown', policyVersion: null }); await settle();
   assert.deepEqual(JSON.parse(JSON.stringify(h.calls.find(v => typeof v === 'object'))), { maxAdContentRating: 'G', ageRestrictedTreatment: 'teen' });
   assert.ok(h.policy.getAdAuthorization()); assert.equal(h.policy.getAdPrivacyStatus().error, null);
 });
@@ -135,11 +135,12 @@ test('deferred permission continues without a modal or an invented grant', async
   assert.equal(calls.length, 0);
   assert.equal(controller.getSnapshot().state.aiConsent.granted, false);
 });
-test('deferred permission cannot authorize unknown or under-13 eligibility', () => {
+test('deferred permission authorizes unknown age but not under-13', () => {
   const { canProcessRules, hasAiConsent, parsePrivacyState } = loader()('lib/privacy/contracts');
   const permitted = state({ aiConsent: { ...state().aiConsent, required: false } });
   assert.equal(canProcessRules(permitted), true);
   assert.equal(hasAiConsent(permitted), false);
-  for (const ageBand of ['unknown', 'under13']) assert.equal(canProcessRules({ ...permitted, ageBand }), false);
+  assert.equal(canProcessRules({ ...permitted, ageBand: 'unknown', policyVersion: null }), true);
+  assert.equal(canProcessRules({ ...permitted, ageBand: 'under13' }), false);
   assert.throws(() => parsePrivacyState({ ...permitted, aiConsent: { ...permitted.aiConsent, required: 'false' } }), /Invalid privacy/);
 });
