@@ -5,15 +5,12 @@ import {
   Platform,
   StyleSheet,
   UIManager,
-  View,
-  ScrollView,
 } from "react-native";
 import Animated, { useAnimatedRef } from "react-native-reanimated";
 import DraggablePlayerList from "../components/DraggablePlayerList";
 import {
   AppText,
   Button,
-  Sheet,
   EmptyState,
   IconButton,
   LoadTransition,
@@ -28,11 +25,8 @@ import { space, TAB_BAR_CLEARANCE } from "../theme/tokens";
 import { Player } from "../types/lineup";
 import { defaultTeamRulesConfig, rulesConfigFromTeamRules } from "../types/rules";
 import { createPlayer } from "../utils/lineupGenerator";
-import {
-  findDuplicatePlayerNames,
-  normalizePlayerName,
-} from "../utils/playerNames";
-import { clearPendingRosterImport, ImportPreview, loadPendingRosterImport, PendingRosterImport, pickRosterImportPreview, savePendingRosterImport } from "../utils/rosterImport";
+import { findDuplicatePlayerNames } from "../utils/playerNames";
+import { clearPendingRosterImport, ImportPreview, loadPendingRosterImport, pickRosterImportPreview, savePendingRosterImport } from "../utils/rosterImport";
 import { assertPaidAccess, capturePaidAccess, requirePaidAccess } from "../lib/access/paidAccess";
 
 type Props = {
@@ -58,35 +52,21 @@ const RosterScreen = ({ session, hasProSubscription, onRequirePro }: Props) => {
   // Transient progress copy only (importing/saving); outcomes go to toasts.
   const [status, setStatus] = useState("");
   const [rulesContext, setRulesContext] = useState<string | undefined>();
-  const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
-  const [pendingImport, setPendingImport] = useState<PendingRosterImport | null>(null);
-  const [importVisible, setImportVisible] = useState(false);
-  const [isImportSaving, setIsImportSaving] = useState(false);
   const importBusyRef = useRef(false);
   const importAbortRef = useRef<AbortController | null>(null);
-  const importAttemptedRef = useRef(false);
   const accountRef = useRef(session.user.id);
   accountRef.current = session.user.id;
   useEffect(() => {
     importAbortRef.current?.abort();
     importAbortRef.current = null;
     importBusyRef.current = false;
-    setImportVisible(false);
-    setPendingImport(null);
-    setImportPreview(null);
-    setIsImportSaving(false);
     setStatus("");
     return () => { importAbortRef.current?.abort(); };
   }, [session.user.id]);
   // Per-player handlers read the roster through this ref so their identity
   // does not change on every keystroke, which would re-render every card.
   useEffect(() => {
-    if (!hasProSubscription) {
-      importAbortRef.current?.abort();
-      setImportVisible(false);
-      setImportPreview(null);
-      setPendingImport(null);
-    }
+    if (!hasProSubscription) importAbortRef.current?.abort();
   }, [hasProSubscription]);
   const rosterRef = useRef(roster);
   const setRoster = useCallback((update: Player[] | ((players: Player[]) => Player[])) => {
@@ -387,6 +367,8 @@ const RosterScreen = ({ session, hasProSubscription, onRequirePro }: Props) => {
     ]);
   }, [handleRemoveAll]);
 
+  // Pick, parse and commit in one step. A pending import left by a lost
+  // response is retried with its original operation ID, so it cannot duplicate.
   const handleImportRoster = useCallback(async () => {
     if (importBusyRef.current) return;
     importBusyRef.current = true;
@@ -396,6 +378,7 @@ const RosterScreen = ({ session, hasProSubscription, onRequirePro }: Props) => {
     const controller = new AbortController();
     importAbortRef.current = controller;
     const current = () => accountRef.current === accountId && backendClient.auth.getSessionEpoch() === epoch && !controller.signal.aborted;
+    let rowIssues: ImportPreview["issues"] = [];
     setStatus("Checking import...");
     try {
       requirePaidAccess();
@@ -403,114 +386,61 @@ const RosterScreen = ({ session, hasProSubscription, onRequirePro }: Props) => {
       if (!current()) return;
       assertPaidAccess(access);
       if (!team) throw new Error("Unable to load your team.");
-      const saved = await loadPendingRosterImport(accountId);
+      let pending = await loadPendingRosterImport(accountId);
       if (!current()) return;
-      if (saved) {
-        if (saved.teamId !== team) throw new Error("A pending import belongs to another team. Open that team to reconcile it.");
-        setPendingImport(saved);
-        setImportPreview({ worksheet: "Saved import", rows: saved.rows, issues: [], emptySourceRows: [] });
-        importAttemptedRef.current = saved.attempted;
-        setImportVisible(true);
-        return;
+      if (pending && pending.teamId !== team) throw new Error("A pending import belongs to another team. Open that team to reconcile it.");
+      if (!pending) {
+        const preview = await pickRosterImportPreview(team, backendClient.previewRosterImport, controller.signal);
+        if (!current() || preview === null) return;
+        assertPaidAccess(access);
+        rowIssues = preview.issues;
+        if (preview.rows.length === 0) {
+          const firstIssue = preview.issues[0];
+          throw new Error(firstIssue ? `No players imported. Row ${firstIssue.sourceRow}: ${firstIssue.message}` : "No players found in that file.");
+        }
+        pending = { accountId, teamId: team, operationId: createPlayer().id, rows: preview.rows, rulesContext: preview.rulesContext ?? rulesContext, attempted: false };
       }
-      const preview = await pickRosterImportPreview(team, backendClient.previewRosterImport, controller.signal);
-      if (!current() || preview === null) return;
-      assertPaidAccess(access);
-      const pending: PendingRosterImport = { accountId, teamId: team, operationId: createPlayer().id, rows: preview.rows, rulesContext: preview.rulesContext ?? rulesContext, attempted: false };
-      if (preview.issues.length === 0 && preview.rows.length > 0) {
-        await savePendingRosterImport(pending);
-        if (!current()) return;
-      }
-      setPendingImport(pending);
-      setImportPreview(preview);
-      importAttemptedRef.current = false;
-      setImportVisible(true);
-    } catch (error) {
-      if (current()) showError(error instanceof Error ? error.message : "Unable to prepare the import.");
-    } finally {
-      if (importAbortRef.current === controller) importBusyRef.current = false;
-      if (accountRef.current === accountId && backendClient.auth.getSessionEpoch() === epoch) setStatus("");
-    }
-  }, [ensureTeam, rulesContext, session.user.id, showError]);
-
-  const confirmImport = useCallback(async () => {
-    if (!pendingImport || !importPreview || importPreview.issues.length > 0 || importPreview.rows.length === 0 || importBusyRef.current) return;
-    if (!hasProSubscription) { onRequirePro("Roster import"); return; }
-    const access = capturePaidAccess();
-    const accountId = pendingImport.accountId;
-    const epoch = backendClient.auth.getSessionEpoch();
-    if (accountId !== session.user.id) return;
-    importBusyRef.current = true;
-    importAttemptedRef.current = true;
-    const controller = new AbortController();
-    importAbortRef.current = controller;
-    const current = () => accountRef.current === accountId && backendClient.auth.getSessionEpoch() === epoch;
-    setIsImportSaving(true);
-    setStatus("Saving import...");
-    try {
-      requirePaidAccess();
+      setStatus(`Importing ${pending.rows.length} players...`);
       // Persist before dispatch. A lost response is reconciled using this same ID.
-      const dispatched = { ...pendingImport, attempted: true };
-      setPendingImport(dispatched);
-      await savePendingRosterImport(dispatched);
-      if (!current() || controller.signal.aborted) return;
+      await savePendingRosterImport({ ...pending, attempted: true });
+      if (!current()) return;
       assertPaidAccess(access);
-      const result = await backendClient.commitRosterImport(pendingImport.teamId, { operationId: pendingImport.operationId, rows: pendingImport.rows, rulesContext: pendingImport.rulesContext }, { signal: controller.signal });
+      const result = await backendClient.commitRosterImport(pending.teamId, { operationId: pending.operationId, rows: pending.rows, rulesContext: pending.rulesContext }, { signal: controller.signal });
       await clearPendingRosterImport(accountId);
       if (!current()) return;
-      setPendingImport(null);
-      setImportPreview(null);
-      setImportVisible(false);
-      assertPaidAccess(access);
-      const nextRoster = await backendClient.getTeamRoster(pendingImport.teamId);
+      const nextRoster = await backendClient.getTeamRoster(pending.teamId);
       if (!current()) return;
       setRoster(nextRoster);
       setActiveIds(new Set(nextRoster.filter(player => !player.benched).map(player => player.id)));
       setExpandedPlayers(new Set());
-      toast.show({ message: `Imported ${result.createdCount} players. Skipped ${result.skippedSourceRows.length} already on this team.`, type: "success" });
+      const skipped = [
+        result.skippedSourceRows.length > 0 ? `${result.skippedSourceRows.length} already on this team` : null,
+        rowIssues.length > 0 ? `${rowIssues.length} rows with errors` : null,
+      ].filter(Boolean).join(", ");
+      toast.show({ message: `Imported ${result.createdCount} players.${skipped ? ` Skipped ${skipped}.` : ""}`, type: "success" });
     } catch (error) {
       const response = error as { context?: { body?: { detail?: { committed?: boolean } } } };
       if (response.context?.body?.detail?.committed === false) {
         try {
           await clearPendingRosterImport(accountId);
         } catch (storageError) {
-          if (current()) showError(`No import was saved, but the saved preview could not be cleared. ${storageError instanceof Error ? storageError.message : "Try again."}`);
+          if (current()) showError(`No import was saved, but the saved import could not be cleared. ${storageError instanceof Error ? storageError.message : "Try again."}`);
           return;
         }
-        if (current()) {
-          setPendingImport(null);
-          setImportPreview(null);
-          setImportVisible(false);
-          importAttemptedRef.current = false;
-          await loadRoster();
-          if (current()) showError(`${error instanceof Error ? error.message : "Import was rejected."} No import was saved. Choose the file again.`);
-        }
+        if (current()) showError(`${error instanceof Error ? error.message : "Import was rejected."} No import was saved. Choose the file again.`);
       } else if (current()) {
-        showError(`${error instanceof Error ? error.message : "The save could not be confirmed."} Tap Import to retry this same operation; it will not add duplicates.`);
+        showError(error instanceof Error ? error.message : "Unable to import the roster.");
       }
     } finally {
       if (importAbortRef.current === controller) importBusyRef.current = false;
-      if (current()) { setIsImportSaving(false); setStatus(""); }
+      if (accountRef.current === accountId && backendClient.auth.getSessionEpoch() === epoch) setStatus("");
     }
-  }, [pendingImport, importPreview, hasProSubscription, onRequirePro, session.user.id, setRoster, showError, toast, loadRoster]);
-
-  const closeImport = useCallback(() => {
-    importAbortRef.current?.abort();
-    setImportVisible(false);
-    // An attempted save can already have committed. Preserve its durable receipt request.
-    if (!importAttemptedRef.current && pendingImport) {
-      void clearPendingRosterImport(pendingImport.accountId).catch(() => showError("The pending import could not be cleared. Try again."));
-      setPendingImport(null);
-      setImportPreview(null);
-    }
-  }, [pendingImport, showError]);
+  }, [ensureTeam, rulesContext, session.user.id, setRoster, showError, toast]);
 
   const handleImportPress = useCallback(() => {
     if (!hasProSubscription) { onRequirePro("Roster import"); return; }
     void handleImportRoster();
   }, [hasProSubscription, onRequirePro, handleImportRoster]);
-
-  const existingImportSkips = importPreview?.rows.filter(row => roster.some(player => normalizePlayerName(player.name) === normalizePlayerName(row.player.name))).length ?? 0;
 
   return (
     <ScreenContainer keyboard padded={false}>
@@ -528,11 +458,15 @@ const RosterScreen = ({ session, hasProSubscription, onRequirePro }: Props) => {
           title={playerCountLabel}
           right={
             <>
-              <IconButton
+              <Button
+                label="Import"
                 icon="upload"
+                variant="secondary"
+                size="sm"
                 onPress={handleImportPress}
                 disabled={Boolean(status)}
                 accessibilityLabel="Import roster from a spreadsheet"
+                style={styles.importButton}
               />
               <IconButton
                 icon="plus"
@@ -585,22 +519,6 @@ const RosterScreen = ({ session, hasProSubscription, onRequirePro }: Props) => {
           )}
         </LoadTransition>
       </Animated.ScrollView>
-      <Sheet visible={importVisible} onClose={closeImport} title="Review roster import">
-        <View style={{ gap: space.md }}>
-          <AppText variant="caption" color="secondary">{importPreview?.worksheet}</AppText>
-          <AppText>{(importPreview?.rows.length ?? 0) - existingImportSkips} new players · {existingImportSkips} already on this team</AppText>
-          {importPreview && importPreview.emptySourceRows.length > 0 ? <AppText variant="caption" color="secondary">{importPreview.emptySourceRows.length} empty rows skipped.</AppText> : null}
-          {importAttemptedRef.current ? <AppText variant="caption" color="secondary">This operation may already have saved. Retry checks its result without adding duplicates.</AppText> : null}
-          {importPreview && importPreview.issues.length > 0 ? (
-            <ScrollView style={{ maxHeight: 180 }}>
-              <AppText color="danger">Fix {importPreview.issues.length} row errors before importing.</AppText>
-              {importPreview.issues.map(issue => <AppText key={`${issue.sourceRow}:${issue.column}:${issue.code}`} variant="caption">Row {issue.sourceRow}, {issue.column}: {issue.message}</AppText>)}
-            </ScrollView>
-          ) : null}
-          <Button label={importAttemptedRef.current ? "Confirm saved import" : "Import players"} loading={isImportSaving} disabled={!importPreview || importPreview.rows.length === 0 || importPreview.issues.length > 0} onPress={() => { void confirmImport(); }} />
-          <Button label={importAttemptedRef.current ? "Close" : "Cancel"} variant="ghost" onPress={closeImport} />
-        </View>
-      </Sheet>
     </ScreenContainer>
   );
 };
@@ -608,6 +526,9 @@ const RosterScreen = ({ session, hasProSubscription, onRequirePro }: Props) => {
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
+  },
+  importButton: {
+    minHeight: 40,
   },
   content: {
     paddingHorizontal: space.md,

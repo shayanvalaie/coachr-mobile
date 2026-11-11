@@ -181,11 +181,22 @@ const PlayerCard = ({
             </AppPressable>
           </Sortable.Handle>
 
-          <Chip
-            label={isActive ? "Active" : "Bench"}
-            selected={isActive}
-            onPress={handleToggleActive}
-          />
+          {isExpanded ? (
+            <Button
+              label="Remove"
+              variant="danger"
+              size="sm"
+              icon="trash-2"
+              onPress={handleRemove}
+              accessibilityLabel={`Remove ${displayName}`}
+            />
+          ) : (
+            <Chip
+              label={isActive ? "Active" : "Bench"}
+              selected={isActive}
+              onPress={handleToggleActive}
+            />
+          )}
         </View>
 
         {isExpanded && (
@@ -229,6 +240,22 @@ const PlayerCard = ({
               </View>
             </View>
 
+            <View style={styles.field}>
+              <SectionLabel>Next lineup</SectionLabel>
+              <View style={styles.inlineChips}>
+                <Chip
+                  label="Active"
+                  selected={isActive}
+                  onPress={isActive ? undefined : handleToggleActive}
+                />
+                <Chip
+                  label="Bench"
+                  selected={!isActive}
+                  onPress={isActive ? handleToggleActive : undefined}
+                />
+              </View>
+            </View>
+
             <View style={styles.switchRow}>
               <View style={styles.switchText}>
                 <AppText variant="body" family="heading">
@@ -264,14 +291,6 @@ const PlayerCard = ({
                 onPress={handleSave}
                 loading={isSaving}
                 accessibilityLabel={`Save ${displayName}`}
-              />
-              <Button
-                label="Remove"
-                variant="danger"
-                size="sm"
-                icon="trash-2"
-                onPress={handleRemove}
-                accessibilityLabel={`Remove ${displayName}`}
               />
             </View>
           </View>

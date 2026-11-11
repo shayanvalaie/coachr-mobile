@@ -10,6 +10,14 @@ const pending = { accountId: 'owner', teamId: 'team', operationId: '11111111-111
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
 const settle = async () => { for (let i = 0; i < 5; i++) await new Promise(done => setImmediate(done)); };
 
+function parser() {
+  const exports = {};
+  const source = fs.readFileSync(path.join(__dirname, '../src/utils/rosterFileParser.ts'), 'utf8');
+  const { outputText } = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } });
+  vm.runInNewContext(outputText, { exports, require(name) { if (name === 'fflate') return require('fflate'); throw new Error(name); }, Error, Set, Uint8Array, String, Number, RegExp });
+  return exports;
+}
+
 function utility(options = {}) {
   const store = new Map();
   const reads = [], removed = [], recovered = [];
@@ -38,17 +46,17 @@ function utility(options = {}) {
     if (name === 'expo-document-picker') return { getDocumentAsync: options.pick ?? (async () => ({ canceled: false, assets: [asset] })) };
     if (name === 'expo-file-system/legacy') return file;
     if (name === '@react-native-async-storage/async-storage') return { default: storage };
+    if (name === './rosterFileParser') return parser();
     throw new Error(name);
   }, Error, Map, Set, Promise, AbortController });
   return { api: exports, store, reads, removed, recovered };
 }
 
-test('valid preview uses a bounded native read and cleans the temporary copy', async () => {
+test('valid preview is parsed on device with a bounded native read and cleans the temporary copy', async () => {
   const h = utility();
-  const value = await h.api.pickRosterImportPreview('team', async (team, input) => {
-    assert.equal(team, 'team'); assert.equal(input.fileName, 'roster.csv'); return preview;
-  });
+  const value = await h.api.pickRosterImportPreview('team', () => assert.fail('upload'));
   assert.equal(value.rows.length, 1);
+  assert.equal(value.rows[0].player.name, 'Alice');
   assert.equal(h.reads[0].length, 2 * 1024 * 1024 + 1);
   assert.equal(h.reads[0].position, 0);
   assert.equal(h.removed.length, 1);
@@ -102,8 +110,8 @@ test('cancel during native read suppresses upload and removes the picker copy', 
   assert.equal(h.removed.length, 1);
 });
 
-test('unavailable parser has an actionable error and still cleans the file', async () => {
-  const h = utility();
+test('legacy xls goes to the server parser, whose errors stay actionable and still clean the file', async () => {
+  const h = utility({ asset: { uri: 'file:///cache/DocumentPicker/roster.xls', name: 'roster.xls' } });
   await assert.rejects(h.api.pickRosterImportPreview('team', async () => { throw new Error('Secure parser unavailable.'); }), /Secure parser unavailable/);
   assert.equal(h.removed.length, 1);
 });
@@ -143,6 +151,55 @@ test('picker cleanup does not delete a source outside its native temporary direc
   assert.equal(h.removed.length, 0);
 });
 
+test('csv parser maps columns like the server parser and reports bad rows as issues', () => {
+  const { parseRosterFile } = parser();
+  const csv = 'Player Name,Gender,Positions,Fixed,Lock\r\n"Smith, Jo",F,"ss, 2b",yes,no\r\nAl,m,P,,y\r\n,,,,\r\nal,f,,,\r\n=SUM(1),f,,,\r\n';
+  const result = parseRosterFile('roster.csv', Buffer.from('\ufeff' + csv).toString('base64'));
+  assert.equal(result.worksheet, 'CSV');
+  assert.deepEqual(JSON.parse(JSON.stringify(result.rows)), [
+    { sourceRow: 2, player: { name: 'Smith, Jo', gender: 'female', desiredPositions: ['SS', '2B'], fixedAllGame: true, lockInPosition: false, benched: false } },
+    { sourceRow: 3, player: { name: 'Al', gender: 'male', desiredPositions: ['P'], fixedAllGame: false, lockInPosition: true, benched: false } },
+  ]);
+  assert.deepEqual(JSON.parse(JSON.stringify(result.emptySourceRows)), [4]);
+  assert.deepEqual(JSON.parse(JSON.stringify(result.issues.map(issue => [issue.sourceRow, issue.code]))), [[5, 'DUPLICATE_NAME'], [6, 'INVALID_NAME']]);
+});
+
+function xlsx(sheetXml, sharedXml) {
+  const { zipSync, strToU8 } = require('fflate');
+  const files = {
+    '[Content_Types].xml': strToU8('<Types/>'),
+    'xl/workbook.xml': strToU8('<workbook xmlns:r="r"><sheets><sheet name="Team &amp; Co" sheetId="1" r:id="rId1"/></sheets></workbook>'),
+    'xl/_rels/workbook.xml.rels': strToU8('<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>'),
+    'xl/worksheets/sheet1.xml': strToU8(sheetXml),
+  };
+  if (sharedXml) files['xl/sharedStrings.xml'] = strToU8(sharedXml);
+  return Buffer.from(zipSync(files)).toString('base64');
+}
+
+test('xlsx parser reads the first sheet with shared, inline and numeric cells', () => {
+  const { parseRosterFile } = parser();
+  const sheet = '<worksheet><sheetData>'
+    + '<row r="1"><c r="A1" t="s"><v>0</v></c><c r="C1" t="s"><v>1</v></c></row>'
+    + '<row r="2"><c r="A2" t="s"><v>2</v></c><c r="C2" t="inlineStr"><is><t>c</t></is></c></row>'
+    + '<row r="4"><c r="A4" t="inlineStr"><is><t>Ann &amp; Bo</t></is></c><c r="B4"><v>1</v></c></row>'
+    + '</sheetData></worksheet>';
+  const shared = '<sst><si><t>Name</t></si><si><r><t>Pos</t></r><r><t>ition</t></r></si><si><t xml:space="preserve"> Zed </t></si></sst>';
+  const result = parseRosterFile('team.xlsx', xlsx(sheet, shared));
+  assert.equal(result.worksheet, 'Team & Co');
+  assert.deepEqual(JSON.parse(JSON.stringify(result.rows.map(row => [row.sourceRow, row.player.name, row.player.desiredPositions]))), [[2, 'Zed', ['C']], [4, 'Ann & Bo', []]]);
+  assert.deepEqual([...result.emptySourceRows], [3]);
+});
+
+test('xlsx parser rejects formulas and oversized sheets; xls defers to the server', () => {
+  const { parseRosterFile } = parser();
+  const formula = '<worksheet><sheetData><row r="1"><c r="A1"><f>1+1</f><v>2</v></c></row></sheetData></worksheet>';
+  assert.throws(() => parseRosterFile('a.xlsx', xlsx(formula)), error => error.code === 'IMPORT_INVALID_FILE');
+  const tall = '<worksheet><sheetData><row r="300"><c r="A300" t="inlineStr"><is><t>x</t></is></c></row></sheetData></worksheet>';
+  assert.throws(() => parseRosterFile('a.xlsx', xlsx(tall)), error => error.code === 'IMPORT_LIMIT_EXCEEDED');
+  assert.throws(() => parseRosterFile('a.xlsx', Buffer.from('Name').toString('base64')), error => error.code === 'IMPORT_INVALID_FILE');
+  assert.equal(parseRosterFile('a.xls', Buffer.from('x').toString('base64')), null);
+});
+
 test('pending operation persists its original ID and context for restart', async () => {
   const h = utility();
   await h.api.savePendingRosterImport(pending);
@@ -167,8 +224,8 @@ test('deletion racing a pending storage write cannot recreate account data', asy
   await assert.rejects(h.api.savePendingRosterImport(pending), error => error.code === 'CANCELLED');
 });
 
-function screen({ failCommit = false, pendingCommit = null, previewResult = preview } = {}) {
-  const h = utility();
+function screen({ failCommit = false, pendingCommit = null, previewResult = preview, utilityOptions = {} } = {}) {
+  const h = utility(utilityOptions);
   const slots = [], effects = []; let cursor = 0, epoch = 1, account = 'owner', tree;
   const commits = [], toasts = [];
   const equal = (a, b) => a && b && a.length === b.length && a.every((value, i) => Object.is(value, b[i]));
@@ -211,38 +268,45 @@ function screen({ failCommit = false, pendingCommit = null, previewResult = prev
   return { ...h, render, find, commits, toasts, switchAccount() { account = 'other'; epoch++; render(); } };
 }
 
-test('roster preview cancel performs no player writes', async () => {
-  const h = screen(); h.render(); await settle(); h.render();
-  h.find(node => node.props?.accessibilityLabel === 'Import roster from a spreadsheet').props.onPress();
-  await settle(); h.render();
-  const sheet = h.find(node => node.type === 'Sheet'); assert.equal(sheet.props.visible, true);
-  h.find(node => node.props?.label === 'Cancel').props.onPress(); await settle(); h.render();
-  assert.equal(h.commits.length, 0); assert.equal(h.store.size, 0);
+const pressImport = h => h.find(node => node.props?.accessibilityLabel === 'Import roster from a spreadsheet').props.onPress();
+
+test('picker cancel performs no player writes', async () => {
+  const h = screen({ utilityOptions: { pick: async () => ({ canceled: true }) } }); h.render(); await settle(); h.render();
+  pressImport(h); await settle(); h.render();
+  assert.equal(h.commits.length, 0); assert.equal(h.store.size, 0); assert.equal(h.toasts.length, 0);
 });
 
-test('response loss retries the durable same operation instead of individual player writes', async () => {
+test('choosing a file commits immediately without a review step', async () => {
+  const h = screen(); h.render(); await settle(); h.render();
+  pressImport(h); await settle(); h.render();
+  assert.equal(h.commits.length, 1);
+  assert.equal(h.commits[0].rows[0].player.name, 'Alice');
+  assert.equal(h.commits[0].rulesContext, 'submission:original');
+  assert.equal(h.store.size, 0);
+  assert.equal(h.toasts[0].type, 'success');
+  assert.equal(h.find(node => node.type === 'Sheet'), null);
+});
+
+test('response loss retries the durable same operation on the next Import press', async () => {
   const h = screen({ failCommit: true }); h.render(); await settle(); h.render();
-  h.find(node => node.props?.accessibilityLabel === 'Import roster from a spreadsheet').props.onPress(); await settle(); h.render();
-  h.find(node => node.props?.label === 'Import players').props.onPress(); await settle(); h.render();
+  pressImport(h); await settle(); h.render();
   assert.equal(h.commits.length, 1); assert.equal(h.store.size, 1);
-  h.find(node => node.props?.label === 'Confirm saved import').props.onPress(); await settle(); h.render();
+  pressImport(h); await settle(); h.render();
   assert.equal(h.commits.length, 2); assert.equal(h.commits[0].operationId, h.commits[1].operationId);
   assert.equal(h.commits[1].rulesContext, 'submission:original'); assert.equal(h.store.size, 0);
 });
 
-test('import commit uses the rules snapshot returned by preview instead of stale screen rules', async () => {
-  const h = screen({ previewResult: { ...preview, rulesContext: 'submission:current' } });
+test('server-parsed xls commits with the rules snapshot returned by preview', async () => {
+  const h = screen({ previewResult: { ...preview, rulesContext: 'submission:current' }, utilityOptions: { asset: { uri: 'file:///cache/DocumentPicker/roster.xls', name: 'roster.xls' } } });
   h.render(); await settle(); h.render();
-  h.find(node => node.props?.accessibilityLabel === 'Import roster from a spreadsheet').props.onPress(); await settle(); h.render();
-  h.find(node => node.props?.label === 'Import players').props.onPress(); await settle(); h.render();
+  pressImport(h); await settle(); h.render();
   assert.equal(h.commits.length, 1);
   assert.equal(h.commits[0].rulesContext, 'submission:current');
 });
 
 test('account switch ignores an old committed response and cannot show its roster/toast', async () => {
   const wait = deferred(); const h = screen({ pendingCommit: wait }); h.render(); await settle(); h.render();
-  h.find(node => node.props?.accessibilityLabel === 'Import roster from a spreadsheet').props.onPress(); await settle(); h.render();
-  h.find(node => node.props?.label === 'Import players').props.onPress(); await settle();
+  pressImport(h); await settle();
   h.switchAccount(); wait.resolve(); await settle(); h.render();
-  assert.equal(h.toasts.length, 0); assert.equal(h.find(node => node.type === 'Sheet').props.visible, false);
+  assert.equal(h.toasts.length, 0);
 });

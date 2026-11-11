@@ -98,6 +98,9 @@ export const pickRosterImportPreview = async (teamId: string, preview: ImportPre
     aborted(signal);
     if (decodedBase64Size(base64Data) > MAX_IMPORT_BYTES) throw new RosterImportError("IMPORT_LIMIT_EXCEEDED", "Source file exceeds 2 MiB.");
     if (decodedBase64Size(base64Data) !== info.size) throw new RosterImportError("IMPORT_INVALID_FILE", "The file changed or could not be read completely. Save a local copy and try again.");
+    const { parseRosterFile } = await import("./rosterFileParser");
+    const local = parseRosterFile(asset.name, base64Data);
+    if (local) return validateImportPreview(local);
     const result = await preview(teamId, { fileName: asset.name, base64Data }, { signal });
     aborted(signal);
     return validateImportPreview(result);

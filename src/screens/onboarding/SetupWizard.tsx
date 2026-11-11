@@ -128,7 +128,6 @@ const RULES_HINT =
 
 const WELCOME_ITEMS: Array<{ label: string; detail: string }> = [
   { label: "Rules", detail: "Join or create your league, or write your own" },
-  { label: "Roster", detail: "Add your players on the Roster tab" },
   { label: "Lineup", detail: "Generate a fair lineup instantly" },
 ];
 
@@ -682,8 +681,7 @@ const SetupWizard = ({ session }: Props) => {
                 Let's get your first lineup ready
               </AppText>
               <AppText variant="bodyLg" color="secondary">
-                One quick step: your rules. Then add your players and you're
-                generating.
+                One quick step: your rules. Then you're ready to generate.
               </AppText>
               <View style={styles.checklist}>
                 {WELCOME_ITEMS.map((item, index) => (
