@@ -33,4 +33,3 @@ export type ModerationApi = {
   suspendLeaguePublisher: (leagueId: string, input: { expectedVersion: number; rationale: string }) => Promise<{ version: number; suspended: true }>;
   resolveContentReport: (reportId: string, input: { expectedVersion: number; rationale: string }) => Promise<void>;
 };
-export const PUBLICATION_CONFIRMATION = "Submit this league name, location, description and rules for public review. Approved information will be visible to other users. You can use your private setup while review is pending. AI permission is a separate choice.";

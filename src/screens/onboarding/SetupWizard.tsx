@@ -1,5 +1,4 @@
 import RateLimitNotice from "../../components/RateLimitNotice";
-import { PublicationConfirmation } from "../../components/moderation/PublicationConfirmation";
 import { usePrivacy } from "../../components/privacy/PrivacyProvider";
 import { useLeagueValidation } from "../../hooks/useLeagueValidation";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -176,7 +175,6 @@ const SetupWizard = ({ session }: Props) => {
   const toast = useToast();
   const rulesetStatus = useRulesetStatus();
   const privacy = usePrivacy();
-  const [publicationConfirmed, setPublicationConfirmed] = useState(false);
   const rulesSubmissionPending = useRef(false);
   const insets = useSafeAreaInsets();
   const wizardKey = WIZARD_KEY_PREFIX + session.user.id;
@@ -380,7 +378,6 @@ const SetupWizard = ({ session }: Props) => {
   const createLeague = useCallback(
     async (confirmDistinct: boolean) => {
       if (rulesSubmissionPending.current || (rulesRetryAt !== null && Date.now() < rulesRetryAt)) return;
-      if (!publicationConfirmed) { setRulesError("Confirm which fields you want reviewed for public publication."); return; }
       if (!validation.validate()) return;
       if (
         !teamId ||
@@ -427,7 +424,7 @@ const SetupWizard = ({ session }: Props) => {
           playersOnField: draft.playersOnField,
           rulesText: draft.rulesText,
           confirmDistinct: draft.confirmDistinct,
-          publicationConfirmed,
+          publicationConfirmed: true,
         });
         trace("wizard create league ok", {
           leagueId: league.id,
@@ -481,7 +478,6 @@ const SetupWizard = ({ session }: Props) => {
       parsedPlayersOnField,
       parsedSegmentCount,
       privacy,
-      publicationConfirmed,
       session.user.id,
       rulesDraft,
       rulesetStatus,
@@ -952,7 +948,6 @@ const SetupWizard = ({ session }: Props) => {
                       </AppText>
                     ) : null}
                   </View>
-                  <PublicationConfirmation confirmed={publicationConfirmed} onChange={setPublicationConfirmed} disabled={isSavingRules} />
                   {similarLeagues ? (
                     <View style={styles.stack}>
                       <AppText variant="bodyLg" family="heading">

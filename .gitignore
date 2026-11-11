@@ -44,3 +44,6 @@ yarn-error.*
 /android
 /mobile/ios
 /mobile/android
+
+# Finder duplicate copies (e.g. "Screen 2.tsx")
+* [0-9].*

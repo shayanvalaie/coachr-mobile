@@ -1,5 +1,4 @@
 import { usePrivacy } from "../../components/privacy/PrivacyProvider";
-import { PublicationConfirmation } from "../../components/moderation/PublicationConfirmation";
 import { subscribePublicContent } from "../../lib/moderation/events";
 import { useLeagueValidation } from "../../hooks/useLeagueValidation";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -46,7 +45,6 @@ const LeaguesScreen = ({ session, onBack, onOpenLeague }: Props) => {
   const rulesetStatus = useRulesetStatus();
   const privacy = usePrivacy();
   const creationPending = useRef(false);
-  const [publicationConfirmed, setPublicationConfirmed] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<LeagueSummary[]>([]);
   const [isSearching, setIsSearching] = useState(true);
@@ -136,7 +134,6 @@ const LeaguesScreen = ({ session, onBack, onOpenLeague }: Props) => {
   const createLeague = useCallback(
     async (confirmDistinct: boolean) => {
       if (creationPending.current) return;
-      if (!publicationConfirmed) { setCreateError("Confirm which fields you want reviewed for public publication."); return; }
       if (!validation.validate()) return;
       if (
         !formValid ||
@@ -172,7 +169,7 @@ const LeaguesScreen = ({ session, onBack, onOpenLeague }: Props) => {
           playersOnField: parsedPlayersOnField,
           rulesText: rulesText.trim(),
           confirmDistinct,
-          publicationConfirmed,
+          publicationConfirmed: true,
         });
         setSuggestions(null);
 
@@ -183,7 +180,7 @@ const LeaguesScreen = ({ session, onBack, onOpenLeague }: Props) => {
           void rulesetStatus.refresh();
         }
         toast.show({
-          message: `${league.name} submitted for publication review. Your private team setup is available.`,
+          message: `${league.name} submitted.`,
           type: "success",
         });
         setShowCreate(false);
@@ -193,7 +190,6 @@ const LeaguesScreen = ({ session, onBack, onOpenLeague }: Props) => {
         setSegmentCount("");
         setPlayersOnField("");
         setRulesText("");
-        setPublicationConfirmed(false);
         onOpenLeague(league.id);
       } catch (err) {
         const similar = getSimilarLeaguesError(err);
@@ -219,7 +215,6 @@ const LeaguesScreen = ({ session, onBack, onOpenLeague }: Props) => {
     [
       validation,
       privacy,
-      publicationConfirmed,
       formValid,
       name,
       onOpenLeague,
@@ -369,8 +364,6 @@ const LeaguesScreen = ({ session, onBack, onOpenLeague }: Props) => {
                 </AppText>
               ) : null}
             </View>
-
-            <PublicationConfirmation confirmed={publicationConfirmed} onChange={setPublicationConfirmed} disabled={isCreating} />
 
             {suggestions ? (
               <View style={styles.suggestions}>
