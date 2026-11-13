@@ -236,7 +236,10 @@ export const SubscriptionProvider = ({
         const purchases = await getRestorablePurchases();
         for (const purchase of purchases) {
           if (!mountedRef.current) return;
-          if ("appAccountToken" in purchase && purchase.appAccountToken && purchase.appAccountToken !== accountId) continue;
+          if ("appAccountToken" in purchase && purchase.appAccountToken && purchase.appAccountToken.toLowerCase() !== accountId.toLowerCase()) {
+            console.warn("[iap-debug] recovery SKIPPED: token mismatch", JSON.stringify({ token: purchase.appAccountToken, accountId, transactionId: purchase.transactionId }));
+            continue;
+          }
           try {
             await verifier.verify(purchase, "recovery", true);
           } catch (error) {
@@ -263,7 +266,10 @@ export const SubscriptionProvider = ({
       );
       return;
     }
-    if (purchaseInFlight.current) return;
+    if (purchaseInFlight.current) {
+      console.warn("[iap-debug] purchase() ignored: purchaseInFlight still true");
+      return;
+    }
     purchaseInFlight.current = true;
     setLoading(true);
     try {
@@ -338,12 +344,18 @@ export const SubscriptionProvider = ({
   // ── Purchase event listeners ───────────────────────────────────────────
 
   const handlePurchaseSuccess = useCallback(async (purchase: Purchase) => {
-    if (!verifier || !mountedRef.current) return;
+    console.warn("[iap-debug] purchaseUpdated", JSON.stringify({ accountId, appAccountToken: "appAccountToken" in purchase ? purchase.appAccountToken : "<none>", purchaseState: purchase.purchaseState, productId: purchase.productId, transactionId: purchase.transactionId, hasVerifier: !!verifier, mounted: mountedRef.current, inFlight: purchaseInFlight.current }));
+    if (!accountId || !verifier || !mountedRef.current) return;
     if (purchase.purchaseState !== "purchased") {
       setLoading(false);
       return;
     }
-    if ("appAccountToken" in purchase && purchase.appAccountToken && purchase.appAccountToken !== accountId) return;
+    if ("appAccountToken" in purchase && purchase.appAccountToken && purchase.appAccountToken.toLowerCase() !== accountId.toLowerCase()) {
+      console.warn("[iap-debug] purchase DROPPED: token mismatch", JSON.stringify({ token: purchase.appAccountToken, accountId }));
+      purchaseInFlight.current = false;
+      setLoading(false);
+      return;
+    }
     try {
       setPurchaseState("verifying");
       const status = await verifier.verify(purchase, "purchase", true);

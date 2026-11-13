@@ -384,6 +384,26 @@ test('late native callback carrying account A token never enters account B queue
   assert.ok(!h.events.some(event => event[0] === 'verify'));
 });
 
+test('StoreKit uppercase appAccountToken still matches the lowercase account id', async () => {
+  const id = '3f2a9c1e-0b4d-4e8f-9a1b-2c3d4e5f6a7b';
+  const h = harness();
+  h.mount(id);
+  await settle();
+  await h.purchaseEvent({ ...purchase, appAccountToken: id.toUpperCase() });
+  assert.ok(h.events.some(event => event[0] === 'verify'));
+  assert.equal(h.render().isPro, true);
+  assert.equal(h.render().loading, false);
+});
+
+test('a mismatched-token callback releases the purchase lock', async () => {
+  const h = harness();
+  h.mount('other');
+  await settle();
+  await h.render().purchase('subscription.monthly');
+  await h.purchaseEvent({ ...purchase, appAccountToken: 'owner' });
+  assert.equal(h.render().loading, false);
+});
+
 
 test('authoritative entitlement and expiry notify access consumers before account reset', async () => {
   const ending = { ...pro, accessUntil: new Date(Date.now() + 10000).toISOString() };
