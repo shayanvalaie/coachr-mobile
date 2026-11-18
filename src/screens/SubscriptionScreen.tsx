@@ -59,16 +59,17 @@ type PlanCardProps = {
   priceLine: string;
   selected: boolean;
   tag?: string;
+  current?: boolean;
   elevated?: boolean;
   onPress: () => void;
 };
 
-const PlanCard = ({ name, priceLine, selected, tag, elevated, onPress }: PlanCardProps) => (
+const PlanCard = ({ name, priceLine, selected, tag, current, elevated, onPress }: PlanCardProps) => (
   <AppPressable
     onPress={onPress}
     pressScale={motion.pressScale}
     accessibilityRole="radio"
-    accessibilityLabel={`${name}, ${priceLine}`}
+    accessibilityLabel={current ? `${name}, ${priceLine}, current plan` : `${name}, ${priceLine}`}
     accessibilityState={{ selected }}
     style={[
       styles.plan,
@@ -81,7 +82,12 @@ const PlanCard = ({ name, priceLine, selected, tag, elevated, onPress }: PlanCar
         <AppText variant="bodyLg" family="heading">
           {name}
         </AppText>
-        {tag ? (
+        {current ? (
+          <View style={[styles.tag, styles.tagCurrent]}>
+            <AppText style={[styles.tagText, styles.tagCurrentText]}>Current plan</AppText>
+          </View>
+        ) : null}
+        {tag && !current ? (
           <View style={styles.tag}>
             <AppText style={styles.tagText}>{tag}</AppText>
           </View>
@@ -111,6 +117,10 @@ const SubscriptionScreen = ({ onClose }: Props) => {
   }, []);
 
   const isAdminUnlocked = adminProEnabled && isPro && !activeSku;
+  // Store subscribers still see the plan list so they can tell which plan
+  // they're on and switch; admin-granted Pro has no plan to show.
+  const hasStorePlan = isPro && activeSku !== null;
+  const showPlans = !isPro || hasStorePlan;
   const hasProducts = products.length > 0;
   // True only while the store products are first being fetched. Once products
   // exist, `loading` also flips during purchase/restore and must not swap the
@@ -119,18 +129,27 @@ const SubscriptionScreen = ({ onClose }: Props) => {
 
   const monthly = products.find((p) => p.sku === IAP_SKUS.MONTHLY);
   const annual = products.find((p) => p.sku === IAP_SKUS.ANNUAL);
-  const [selectedSku, setSelectedSku] = useState<IapSku>(IAP_SKUS.ANNUAL);
+  const [selectedSku, setSelectedSku] = useState<IapSku>(activeSku ?? IAP_SKUS.ANNUAL);
+  // Entitlement arrives after mount; select the active plan once it's known.
+  useEffect(() => {
+    if (activeSku) setSelectedSku(activeSku);
+  }, [activeSku]);
   const selectedProduct =
     selectedSku === IAP_SKUS.ANNUAL ? (annual ?? monthly) : (monthly ?? annual);
 
   const savings = annual && monthly ? savingsPercent(annual, monthly) : 0;
   const annualPerMonth = annual ? perMonthLabel(annual) : null;
 
-  const ctaLabel = selectedProduct
-    ? selectedProduct.sku === IAP_SKUS.ANNUAL
-      ? `Start annual · ${selectedProduct.localizedPrice}/yr`
-      : `Start monthly · ${selectedProduct.localizedPrice}/mo`
-    : "Start Pro";
+  const isCurrentPlanSelected = hasStorePlan && selectedProduct?.sku === activeSku;
+  const ctaVerb = hasStorePlan ? "Switch to" : "Start";
+  let ctaLabel = "Start Pro";
+  if (isCurrentPlanSelected) {
+    ctaLabel = "Current Plan";
+  } else if (selectedProduct?.sku === IAP_SKUS.ANNUAL) {
+    ctaLabel = `${ctaVerb} annual · ${selectedProduct.localizedPrice}/yr`;
+  } else if (selectedProduct) {
+    ctaLabel = `${ctaVerb} monthly · ${selectedProduct.localizedPrice}/mo`;
+  }
 
   return (
     <View style={styles.root}>
@@ -175,18 +194,22 @@ const SubscriptionScreen = ({ onClose }: Props) => {
               </AppText>
             </View>
           </Card>
-        ) : (
+        ) : null}
+
+        {showPlans ? (
           <>
-            <View style={styles.benefitsList}>
-              {BENEFITS.map((benefit) => (
-                <View key={benefit} style={styles.benefitRow}>
-                  <Feather name="check" size={16} color={theme.accent.base} />
-                  <AppText variant="body" color="secondary" style={styles.benefitText}>
-                    {benefit}
-                  </AppText>
-                </View>
-              ))}
-            </View>
+            {!isPro ? (
+              <View style={styles.benefitsList}>
+                {BENEFITS.map((benefit) => (
+                  <View key={benefit} style={styles.benefitRow}>
+                    <Feather name="check" size={16} color={theme.accent.base} />
+                    <AppText variant="body" color="secondary" style={styles.benefitText}>
+                      {benefit}
+                    </AppText>
+                  </View>
+                ))}
+              </View>
+            ) : null}
 
             <LoadTransition
               loading={isInitialLoading}
@@ -231,6 +254,7 @@ const SubscriptionScreen = ({ onClose }: Props) => {
                       : `${annual.localizedPrice} per year`
                   }
                   tag={savings > 0 ? `Save ${savings}%` : undefined}
+                  current={hasStorePlan && activeSku === annual.sku}
                   elevated
                   selected={selectedProduct?.sku === annual.sku}
                   onPress={() => setSelectedSku(annual.sku)}
@@ -240,23 +264,24 @@ const SubscriptionScreen = ({ onClose }: Props) => {
                 <PlanCard
                   name="Monthly"
                   priceLine={`${monthly.localizedPrice} per month`}
+                  current={hasStorePlan && activeSku === monthly.sku}
                   selected={selectedProduct?.sku === monthly.sku}
                   onPress={() => setSelectedSku(monthly.sku)}
                 />
               ) : null}
             </LoadTransition>
           </>
-        )}
+        ) : null}
       </ScreenContainer>
 
-      {!isPro ? (
+      {showPlans ? (
         <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, space.md) }]}>
           <Button
             label={ctaLabel}
             size="lg"
             fullWidth
             loading={loading && hasProducts}
-            disabled={!selectedProduct}
+            disabled={!selectedProduct || isCurrentPlanSelected}
             onPress={() => {
               if (selectedProduct) purchase(selectedProduct.sku);
             }}
@@ -361,6 +386,12 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm / 2,
     paddingHorizontal: 6,
     paddingVertical: 2,
+  },
+  tagCurrent: {
+    backgroundColor: theme.accent.subtle,
+  },
+  tagCurrentText: {
+    color: theme.accent.base,
   },
   tagText: {
     fontFamily: typeface.display,
