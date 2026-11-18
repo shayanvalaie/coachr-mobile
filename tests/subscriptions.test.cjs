@@ -74,6 +74,7 @@ function harness({ storage = new Map(), verify = async () => pro, finish = async
       verifySubscription: async body => { events.push(['verify', body.transactionId]); return verify(body); },
       getSubscriptionStatus: async () => typeof status === "function" ? status() : status,
       getSubscriptionAccountToken: async () => ({ appAccountToken: accountId }),
+      setProAccess: async enabled => { events.push(['pro-access', enabled]); return { ...(typeof status === "function" ? status() : status), proAccess: enabled, isPro: enabled ?? (typeof status === "function" ? status() : status).isPro }; },
       auth: { onAuthStateChange: fn => { authListener = fn; return { data: { subscription: { unsubscribe() {} } } }; } },
     } },
   };
@@ -393,6 +394,18 @@ test('StoreKit uppercase appAccountToken still matches the lowercase account id'
   assert.ok(h.events.some(event => event[0] === 'verify'));
   assert.equal(h.render().isPro, true);
   assert.equal(h.render().loading, false);
+});
+
+test('admin toggle off clears the override so the real subscription applies', async () => {
+  const h = harness({ status: pro });
+  h.mount('owner');
+  await settle();
+  await h.render().setAdminProEnabled(true);
+  assert.equal(h.render().adminProEnabled, true);
+  await h.render().setAdminProEnabled(false);
+  assert.deepEqual(h.events.filter(event => event[0] === 'pro-access').map(event => event[1]), [true, null]);
+  assert.equal(h.render().adminProEnabled, false);
+  assert.equal(h.render().isPro, true);
 });
 
 test('a mismatched-token callback releases the purchase lock', async () => {

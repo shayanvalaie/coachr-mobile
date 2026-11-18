@@ -203,8 +203,10 @@ export const SubscriptionProvider = ({
 
   // ── Admin Pro override toggle (server-backed) ──────────────────────────
 
+  // Off clears the override (null) rather than forcing Free, so an admin's
+  // real subscription applies when the toggle is off.
   const setAdminProEnabled = useCallback(async (enabled: boolean) => {
-    applyStatus(await backendClient.setProAccess(enabled));
+    applyStatus(await backendClient.setProAccess(enabled ? true : null));
   }, [applyStatus]);
 
   // ── Server status and durable purchase recovery ────────────────────────
@@ -236,10 +238,7 @@ export const SubscriptionProvider = ({
         const purchases = await getRestorablePurchases();
         for (const purchase of purchases) {
           if (!mountedRef.current) return;
-          if ("appAccountToken" in purchase && purchase.appAccountToken && purchase.appAccountToken.toLowerCase() !== accountId.toLowerCase()) {
-            console.warn("[iap-debug] recovery SKIPPED: token mismatch", JSON.stringify({ token: purchase.appAccountToken, accountId, transactionId: purchase.transactionId }));
-            continue;
-          }
+          if ("appAccountToken" in purchase && purchase.appAccountToken && purchase.appAccountToken.toLowerCase() !== accountId.toLowerCase()) continue;
           try {
             await verifier.verify(purchase, "recovery", true);
           } catch (error) {
@@ -266,10 +265,7 @@ export const SubscriptionProvider = ({
       );
       return;
     }
-    if (purchaseInFlight.current) {
-      console.warn("[iap-debug] purchase() ignored: purchaseInFlight still true");
-      return;
-    }
+    if (purchaseInFlight.current) return;
     purchaseInFlight.current = true;
     setLoading(true);
     try {
@@ -344,14 +340,12 @@ export const SubscriptionProvider = ({
   // ── Purchase event listeners ───────────────────────────────────────────
 
   const handlePurchaseSuccess = useCallback(async (purchase: Purchase) => {
-    console.warn("[iap-debug] purchaseUpdated", JSON.stringify({ accountId, appAccountToken: "appAccountToken" in purchase ? purchase.appAccountToken : "<none>", purchaseState: purchase.purchaseState, productId: purchase.productId, transactionId: purchase.transactionId, hasVerifier: !!verifier, mounted: mountedRef.current, inFlight: purchaseInFlight.current }));
     if (!accountId || !verifier || !mountedRef.current) return;
     if (purchase.purchaseState !== "purchased") {
       setLoading(false);
       return;
     }
     if ("appAccountToken" in purchase && purchase.appAccountToken && purchase.appAccountToken.toLowerCase() !== accountId.toLowerCase()) {
-      console.warn("[iap-debug] purchase DROPPED: token mismatch", JSON.stringify({ token: purchase.appAccountToken, accountId }));
       purchaseInFlight.current = false;
       setLoading(false);
       return;

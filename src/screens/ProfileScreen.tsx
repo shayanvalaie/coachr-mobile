@@ -205,11 +205,11 @@ const ProfileScreen = ({ session, onOpenSubscribe, onOpenRules, onReplayTour }: 
           {isAdmin ? (
             <ListRow
               title="Admin: Pro access"
-              subtitle="Toggle all Pro features on/off"
+              subtitle="Force Pro on. Off uses your real subscription."
               chevron={false}
               right={
                 <Switch
-                  value={isPro}
+                  value={adminProEnabled}
                   onValueChange={(enabled) => {
                     setAdminProEnabled(enabled).catch((err) => {
                       Alert.alert(
@@ -222,7 +222,7 @@ const ProfileScreen = ({ session, onOpenSubscribe, onOpenRules, onReplayTour }: 
                     false: theme.border.base,
                     true: withAlpha(theme.accent.base, 0.6),
                   }}
-                  thumbColor={isPro ? theme.accent.base : theme.text.secondary}
+                  thumbColor={adminProEnabled ? theme.accent.base : theme.text.secondary}
                   ios_backgroundColor={theme.border.base}
                   accessibilityLabel="Admin: Pro access"
                 />
