@@ -36,6 +36,7 @@ type Props = {
     targetPosition: string,
   ) => void;
   onSaveEdited: (lineupVersion: BackendLineupVersionSummary) => void;
+  onDelete: (lineupVersion: BackendLineupVersionSummary) => void;
   onExport: (lineupId: string, format: "xlsx" | "pdf") => void;
   onGenerateInLineupPage: (gameId: string | null) => void;
 };
@@ -60,6 +61,7 @@ const LineupsSheet = ({
   onToggleEditing,
   onApplyCellEdit,
   onSaveEdited,
+  onDelete,
   onExport,
   onGenerateInLineupPage,
 }: Props) => {
@@ -174,6 +176,15 @@ const LineupsSheet = ({
                         onPress={() => onExport(lineupVersion.id, "pdf")}
                         disabled={isBusy}
                         accessibilityLabel="Export lineup to PDF"
+                      />
+                      <Button
+                        label="Delete"
+                        variant="danger"
+                        size="sm"
+                        icon="trash-2"
+                        onPress={() => onDelete(lineupVersion)}
+                        disabled={isBusy}
+                        accessibilityLabel="Delete this lineup"
                       />
                     </View>
 

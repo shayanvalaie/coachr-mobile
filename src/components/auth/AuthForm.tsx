@@ -1,6 +1,9 @@
-import { StyleSheet, View } from "react-native";
+import { Linking, StyleSheet, View } from "react-native";
 import { AppPressable, AppText, Button, Input } from "../ui";
-import { space } from "../../theme/tokens";
+import { Feather } from "../../icons";
+import { PRIVACY_URL, TERMS_URL } from "../../lib/privacy/contracts";
+import { theme } from "../../theme/colors";
+import { radius, space } from "../../theme/tokens";
 import { AuthMode } from "../../types/auth";
 
 type Props = {
@@ -8,6 +11,8 @@ type Props = {
   email: string;
   password: string;
   confirm: string;
+  acceptedTerms: boolean;
+  onToggleAcceptedTerms: () => void;
   verificationEmail: string | null;
   verificationCode: string;
   loading: boolean;
@@ -58,6 +63,8 @@ const AuthForm = ({
   email,
   password,
   confirm,
+  acceptedTerms,
+  onToggleAcceptedTerms,
   verificationEmail,
   verificationCode,
   loading,
@@ -123,6 +130,47 @@ const AuthForm = ({
         </>
       )}
 
+      {!isSignIn && !isVerificationStep ? (
+        <View style={styles.termsRow}>
+          <AppPressable
+            onPress={onToggleAcceptedTerms}
+            disabled={loading}
+            hitSlop={10}
+            style={[styles.checkbox, acceptedTerms && styles.checkboxChecked]}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: acceptedTerms }}
+            accessibilityLabel="I agree to the Privacy Policy and Terms of Use"
+          >
+            {acceptedTerms ? (
+              <Feather name="check" size={14} color={theme.text.onAccent} />
+            ) : null}
+          </AppPressable>
+          <AppText variant="caption" color="secondary" style={styles.termsText}>
+            I agree to the{" "}
+            <AppText
+              variant="caption"
+              family="heading"
+              color="accent"
+              accessibilityRole="link"
+              onPress={() => { void Linking.openURL(PRIVACY_URL); }}
+            >
+              Privacy Policy
+            </AppText>{" "}
+            and{" "}
+            <AppText
+              variant="caption"
+              family="heading"
+              color="accent"
+              accessibilityRole="link"
+              onPress={() => { void Linking.openURL(TERMS_URL); }}
+            >
+              Terms of Use
+            </AppText>
+            .
+          </AppText>
+        </View>
+      ) : null}
+
       {isSignIn && !isVerificationStep ? (
         <FooterLink
           prompt=""
@@ -185,6 +233,28 @@ const styles = StyleSheet.create({
   },
   cta: {
     marginTop: space.xxs,
+  },
+  termsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.xs,
+    minHeight: 32,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: theme.border.strong,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  checkboxChecked: {
+    backgroundColor: theme.accent.base,
+    borderColor: theme.accent.base,
+  },
+  termsText: {
+    flex: 1,
   },
   footerLink: {
     alignSelf: "center",

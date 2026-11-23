@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import { assertPaidAccess, capturePaidAccess } from "../../../lib/access/paidAccess";
 import { calendarMonthWindow, readAllPages } from "../../../lib/backend/pagination";
 import { backendClient } from "../../../lib/backend/client";
@@ -40,12 +41,19 @@ export const useCalendarData = ({ session, selectedDateKey }: Params) => {
   const [year, month] = selectedDateKey.split("-").map(Number);
   const window = useMemo(() => calendarMonthWindow(year, month - 1), [year, month]);
 
+  // The month window the current `games` belong to. A reload of the same
+  // window (returning to the tab, after a save) keeps the games on screen
+  // instead of flashing the skeleton.
+  const loadedWindow = useRef<typeof window | null>(null);
+
   const loadGames = useCallback(async () => {
     const epoch = ++requestEpoch.current;
     const access = capturePaidAccess();
-    setIsLoading(true);
     setLoadError(null);
-    setGames([]);
+    if (loadedWindow.current !== window) {
+      setIsLoading(true);
+      setGames([]);
+    }
     const assertCurrent = () => {
       assertPaidAccess(access);
       if (epoch !== requestEpoch.current) throw new Error("Calendar window changed");
@@ -60,6 +68,7 @@ export const useCalendarData = ({ session, selectedDateKey }: Params) => {
       ]);
       assertCurrent();
       setGames(list);
+      loadedWindow.current = window;
       setPlayerGenderByName(buildPlayerGenderByName(roster));
     } catch (_err) {
       if (epoch === requestEpoch.current) setLoadError("Unable to load this calendar month. Try again.");
@@ -68,12 +77,16 @@ export const useCalendarData = ({ session, selectedDateKey }: Params) => {
     }
   }, [ensureTeam, toast, window]);
 
-  useEffect(() => {
-    loadGames().catch(() => {
-      toast.show({ type: "error", message: "Unable to load games." });
-      setIsLoading(false);
-    });
-  }, [loadGames, toast]);
+  // Reload whenever the calendar regains focus: lineups saved or deleted on
+  // the Lineup tab change each game's lineup count.
+  useFocusEffect(
+    useCallback(() => {
+      loadGames().catch(() => {
+        toast.show({ type: "error", message: "Unable to load games." });
+        setIsLoading(false);
+      });
+    }, [loadGames, toast]),
+  );
 
   const gamesByDay = useMemo(() => {
     const map = new Map<string, BackendGamePageItem[]>();

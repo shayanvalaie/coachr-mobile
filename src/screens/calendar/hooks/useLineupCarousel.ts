@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Share } from "react-native";
+import { Alert, Share } from "react-native";
 import { assertPaidAccess, capturePaidAccess, registerPaidAccessInvalidation } from "../../../lib/access/paidAccess";
 import { readAllPages } from "../../../lib/backend/pagination";
 import { backendClient } from "../../../lib/backend/client";
@@ -362,6 +362,55 @@ export const useLineupCarousel = ({
     [detailsById, draftRowsByLineupId, ensureTeam, loadGames, modalTitle, toast],
   );
 
+  const deleteLineupVersion = useCallback(
+    (lineupVersion: BackendLineupVersionSummary) => {
+      const label =
+        lineupVersion.lineupName || `Lineup v${lineupVersion.versionNumber}`;
+      const runDelete = async () => {
+        try {
+          const team = await ensureTeam();
+          if (!team) return;
+
+          setActiveLineupId(lineupVersion.id);
+          setDetailsError(null);
+          await backendClient.deleteLineupVersion(team, lineupVersion.id);
+
+          const remaining = lineups.filter(
+            (version) => version.id !== lineupVersion.id,
+          );
+          setLineups(remaining);
+          setCarouselIndex((index) =>
+            Math.min(index, Math.max(remaining.length - 1, 0)),
+          );
+          setEditingLineupId((current) =>
+            current === lineupVersion.id ? null : current,
+          );
+
+          await loadGames();
+          toast.show({ type: "success", message: `Deleted ${label}.` });
+        } catch (_err) {
+          setDetailsError("Unable to delete this lineup. Try again.");
+        } finally {
+          setActiveLineupId(null);
+        }
+      };
+
+      Alert.alert(
+        "Delete lineup?",
+        `“${label}” will be permanently removed. This can’t be undone.`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Delete",
+            style: "destructive",
+            onPress: () => void runDelete(),
+          },
+        ],
+      );
+    },
+    [ensureTeam, lineups, loadGames, toast],
+  );
+
   return {
     isOpen,
     close,
@@ -381,5 +430,6 @@ export const useLineupCarousel = ({
     applyCellEdit,
     exportLineupVersion,
     saveEditedLineupVersion,
+    deleteLineupVersion,
   };
 };

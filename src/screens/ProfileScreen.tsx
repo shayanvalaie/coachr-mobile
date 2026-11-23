@@ -122,8 +122,6 @@ const ProfileScreen = ({ session, onOpenSubscribe, onOpenRules, onReplayTour }: 
 
   return (
     <ScreenContainer keyboard scroll contentStyle={styles.content}>
-      <PrivacySettings />
-      <BlockManagement api={backendClient} accountId={session.user.id} />
       <PageHeader eyebrow="Profile" title="Coach" />
 
       <Card padding="none">
@@ -239,6 +237,9 @@ const ProfileScreen = ({ session, onOpenSubscribe, onOpenRules, onReplayTour }: 
           ) : null}
         </ListGroup>
       ) : null}
+
+      <PrivacySettings />
+      <BlockManagement api={backendClient} accountId={session.user.id} />
     </ScreenContainer>
   );
 };

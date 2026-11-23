@@ -30,6 +30,10 @@ type Props = {
   exportBusy: boolean;
   error: string | null;
   playerGenderByName?: Record<string, Player["gender"]>;
+  // Shared batting order for a freshly generated lineup; a saved lineup opens
+  // without one and the grid keeps its own.
+  playerOrder?: string[];
+  onPlayerOrderChange?: (order: string[]) => void;
   onExport: (format: "xlsx" | "pdf") => void;
   onSavePress: () => void;
   onUndo: () => void;
@@ -62,6 +66,8 @@ const EditLineupOverlay = ({
   exportBusy,
   error,
   playerGenderByName,
+  playerOrder,
+  onPlayerOrderChange,
   onExport,
   onSavePress,
   onUndo,
@@ -269,6 +275,8 @@ const EditLineupOverlay = ({
               editable={editable}
               onSetPlayerPosition={onSetPlayerPosition}
               playerGenderByName={playerGenderByName}
+              playerOrder={playerOrder}
+              onPlayerOrderChange={onPlayerOrderChange}
               scrollableRef={gridScrollRef}
               presentation="editModal"
             />

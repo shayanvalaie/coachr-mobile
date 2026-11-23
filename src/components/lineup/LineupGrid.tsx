@@ -27,6 +27,10 @@ type Props = {
   // Vertical scroller hosting this grid; when provided, Sortable auto-scrolls
   // it as a dragged row nears the viewport edge.
   scrollableRef?: AnimatedRef<Animated.ScrollView>;
+  // Batting (row) order owned by the parent, so two grids showing the same
+  // lineup stay in the same order. Omit both to let the grid own its order.
+  playerOrder?: string[];
+  onPlayerOrderChange?: (order: string[]) => void;
 };
 
 const BENCH_MARKER = "X";
@@ -50,6 +54,8 @@ const LineupGrid = ({
   onSetPlayerPosition,
   playerGenderByName,
   scrollableRef,
+  playerOrder,
+  onPlayerOrderChange,
 }: Props) => {
   const [openCell, setOpenCell] = useState<{
     inningNumber: number;
@@ -133,22 +139,18 @@ const LineupGrid = ({
     return { innings: inningCells, players: orderedPlayers };
   }, [lineup]);
 
-  const [playerOrder, setPlayerOrder] = useState<string[]>([]);
+  const [localPlayerOrder, setLocalPlayerOrder] = useState<string[]>([]);
+  const preferredOrder = playerOrder ?? localPlayerOrder;
 
-  useEffect(() => {
-    setPlayerOrder((prev) => {
-      const discoveredSet = new Set(discoveredPlayers);
-      const kept = prev.filter((name) => discoveredSet.has(name));
-      const keptSet = new Set(kept);
-      const appended = discoveredPlayers.filter((name) => !keptSet.has(name));
-      return [...kept, ...appended];
-    });
-  }, [discoveredPlayers]);
-
-  const players = useMemo(
-    () => (playerOrder.length > 0 ? playerOrder : discoveredPlayers),
-    [playerOrder, discoveredPlayers],
-  );
+  // Rows follow the preferred order; players it doesn't mention yet (a new
+  // lineup, a roster change) are appended in discovery order.
+  const players = useMemo(() => {
+    const discoveredSet = new Set(discoveredPlayers);
+    const kept = preferredOrder.filter((name) => discoveredSet.has(name));
+    const keptSet = new Set(kept);
+    const appended = discoveredPlayers.filter((name) => !keptSet.has(name));
+    return [...kept, ...appended];
+  }, [preferredOrder, discoveredPlayers]);
 
   const handleDragStart = useCallback(() => {
     // A row picked up under an open dropdown would leave the dropdown
@@ -163,9 +165,13 @@ const LineupGrid = ({
 
   const handleDragEnd = useCallback(
     ({ data }: SortableGridDragEndParams<string>) => {
-      setPlayerOrder(data);
+      if (onPlayerOrderChange) {
+        onPlayerOrderChange(data);
+        return;
+      }
+      setLocalPlayerOrder(data);
     },
-    [],
+    [onPlayerOrderChange],
   );
 
   const handleHeaderLayout = useCallback((height: number) => {

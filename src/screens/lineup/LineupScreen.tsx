@@ -74,6 +74,9 @@ const LineupScreen = ({
   const [lineupParentVersionId, setLineupParentVersionId] = useState<
     string | null
   >(null);
+  // Batting (row) order of the working lineup, shared by the portrait grid
+  // and the landscape editor so a reorder in one shows in the other.
+  const [lineupPlayerOrder, setLineupPlayerOrder] = useState<string[]>([]);
   const [lineupInlineEditMode, setLineupInlineEditMode] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [expandedInnings, setExpandedInnings] = useState<Set<number>>(
@@ -494,6 +497,8 @@ const LineupScreen = ({
               onSaveLineup={() => setSaveModalVisible(true)}
               onSetLineupCell={applyInlinePositionSwap}
               playerGenderByName={playerGenderByName}
+              playerOrder={lineupPlayerOrder}
+              onPlayerOrderChange={setLineupPlayerOrder}
               lineupScrollableRef={buildScrollRef}
               lineupAnchorRef={lineupAnchorRef}
             />
@@ -539,6 +544,8 @@ const LineupScreen = ({
           exportBusy={isExporting}
           error={error}
           playerGenderByName={playerGenderByName}
+          playerOrder={isHistoryEdit ? undefined : lineupPlayerOrder}
+          onPlayerOrderChange={isHistoryEdit ? undefined : setLineupPlayerOrder}
           onExport={(format) => {
             if (!hasProSubscription) {
               onRequirePro("Lineup exports");

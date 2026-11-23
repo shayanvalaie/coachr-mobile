@@ -37,6 +37,8 @@ type Props = {
     targetPosition: string,
   ) => void;
   playerGenderByName?: Record<string, Player["gender"]>;
+  playerOrder: string[];
+  onPlayerOrderChange: (order: string[]) => void;
   lineupScrollableRef?: AnimatedRef<Reanimated.ScrollView>;
   lineupAnchorRef?: RefObject<View | null>;
 };
@@ -62,6 +64,8 @@ const BuildTab = ({
   onSaveLineup,
   onSetLineupCell,
   playerGenderByName,
+  playerOrder,
+  onPlayerOrderChange,
   lineupScrollableRef,
   lineupAnchorRef,
 }: Props) => (
@@ -117,6 +121,8 @@ const BuildTab = ({
       onSaveLineup={onSaveLineup}
       onSetLineupCell={onSetLineupCell}
       playerGenderByName={playerGenderByName}
+      playerOrder={playerOrder}
+      onPlayerOrderChange={onPlayerOrderChange}
       lineupScrollableRef={lineupScrollableRef}
       lineupAnchorRef={lineupAnchorRef}
     />

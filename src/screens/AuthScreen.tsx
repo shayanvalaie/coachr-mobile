@@ -23,6 +23,7 @@ const AuthScreen = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [verificationEmail, setVerificationEmail] = useState<string | null>(
     null,
   );
@@ -86,6 +87,10 @@ const AuthScreen = () => {
     }
     if (mode === AuthMode.SignUp && password !== confirm) {
       setError("Passwords must match.");
+      return;
+    }
+    if (mode === AuthMode.SignUp && !acceptedTerms) {
+      setError("Agree to the Privacy Policy and Terms of Use to create an account.");
       return;
     }
 
@@ -215,6 +220,8 @@ const AuthScreen = () => {
                 email={email}
                 password={password}
                 confirm={confirm}
+                acceptedTerms={acceptedTerms}
+                onToggleAcceptedTerms={() => setAcceptedTerms((prev) => !prev)}
                 verificationEmail={verificationEmail}
                 verificationCode={verificationCode}
                 status={status}

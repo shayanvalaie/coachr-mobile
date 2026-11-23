@@ -182,6 +182,7 @@ const CalendarContent = ({
         onToggleEditing={carousel.toggleEditing}
         onApplyCellEdit={carousel.applyCellEdit}
         onSaveEdited={(lineupVersion) => void carousel.saveEditedLineupVersion(lineupVersion)}
+        onDelete={carousel.deleteLineupVersion}
         onExport={handleExport}
         onGenerateInLineupPage={(gameId) =>
           openLineupWorkspace({ gameId, autoGenerate: true })

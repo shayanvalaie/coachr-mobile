@@ -24,6 +24,8 @@ type Props = {
     targetPosition: string,
   ) => void;
   playerGenderByName?: Record<string, Player["gender"]>;
+  playerOrder: string[];
+  onPlayerOrderChange: (order: string[]) => void;
   lineupScrollableRef?: AnimatedRef<Animated.ScrollView>;
   // Wraps the finished lineup so the screen can measure it and scroll it into
   // view (e.g. from the "jump to lineup" toast after a generation).
@@ -47,6 +49,8 @@ const GameSetup = ({
   onSaveLineup,
   onSetLineupCell,
   playerGenderByName,
+  playerOrder,
+  onPlayerOrderChange,
   lineupScrollableRef,
   lineupAnchorRef,
 }: Props) => {
@@ -109,6 +113,8 @@ const GameSetup = ({
               lineup={lineup}
               onSetPlayerPosition={onSetLineupCell}
               playerGenderByName={playerGenderByName}
+              playerOrder={playerOrder}
+              onPlayerOrderChange={onPlayerOrderChange}
               scrollableRef={lineupScrollableRef}
             />
           ) : null}
