@@ -48,6 +48,8 @@ type Params = {
   setEditModalVisible: Dispatch<SetStateAction<boolean>>;
   setLineupParentVersionId: Dispatch<SetStateAction<string | null>>;
   setHistoryEditRows: Dispatch<SetStateAction<InningAssignment[] | null>>;
+  setLineupPlayerOrder: Dispatch<SetStateAction<string[]>>;
+  setHistoryPlayerOrder: Dispatch<SetStateAction<string[]>>;
   setActiveTab: Dispatch<SetStateAction<"build" | "history">>;
   onEditModeChange?: (editing: boolean) => void;
 };
@@ -63,6 +65,8 @@ export const useLineupHistory = ({
   setEditModalVisible,
   setLineupParentVersionId,
   setHistoryEditRows,
+  setLineupPlayerOrder,
+  setHistoryPlayerOrder,
   setActiveTab,
   onEditModeChange,
 }: Params) => {
@@ -163,6 +167,7 @@ export const useLineupHistory = ({
         const editableRows = normalizeLineupRows(detail.rows as any[]);
         setSelectedHistoryDetail(detail);
         setHistoryEditRows(cloneLineupRows(editableRows));
+        setHistoryPlayerOrder(detail.battingOrder);
         setLineupParentVersionId(detail.id);
         setActiveTab("history");
         await lockOrientation(ORIENTATION_LOCK_LANDSCAPE);
@@ -182,6 +187,7 @@ export const useLineupHistory = ({
       setEditModalVisible,
       setError,
       setHistoryEditRows,
+      setHistoryPlayerOrder,
       setLineupInlineEditMode,
       setLineupParentVersionId,
       toast,
@@ -218,6 +224,7 @@ export const useLineupHistory = ({
         const restoredRows = normalizeLineupRows(detail.rows as any[]);
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
         setLineup(restoredRows);
+        setLineupPlayerOrder(detail.battingOrder);
         setLineupInlineEditMode(false);
         setEditModalVisible(false);
         setLineupParentVersionId(detail.id);
@@ -243,6 +250,7 @@ export const useLineupHistory = ({
       setLineup,
       setLineupInlineEditMode,
       setLineupParentVersionId,
+      setLineupPlayerOrder,
       setStatus,
       toast,
     ],

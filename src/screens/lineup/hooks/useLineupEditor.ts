@@ -20,6 +20,7 @@ import {
   formatGameLabel,
   normalizeBenchNames,
   normalizeLineupRows,
+  resolveBattingOrder,
   toLineupRowsPayload,
   validateEditedLineupForSave,
 } from "../../../utils/lineupTransforms";
@@ -41,6 +42,8 @@ type Params = {
   setLineupParentVersionId: Dispatch<SetStateAction<string | null>>;
   historyEditRows: InningAssignment[] | null;
   setHistoryEditRows: Dispatch<SetStateAction<InningAssignment[] | null>>;
+  // Batting order of the lineup being saved (the history edit's, else the build lineup's).
+  playerOrder: string[];
   selectedHistoryDetail: BackendLineupVersionDetail | null;
   setSelectedHistoryDetail: Dispatch<
     SetStateAction<BackendLineupVersionDetail | null>
@@ -73,6 +76,7 @@ export const useLineupEditor = ({
   setLineupParentVersionId,
   historyEditRows,
   setHistoryEditRows,
+  playerOrder,
   selectedHistoryDetail,
   setSelectedHistoryDetail,
   setActiveTab,
@@ -419,6 +423,7 @@ export const useLineupEditor = ({
           ? (selectedHistoryDetail?.id ?? lineupParentVersionId)
           : lineupParentVersionId;
 
+        const battingOrder = resolveBattingOrder(rowsToSave, playerOrder);
         const saved = await backendClient.saveLineupVersion({
           teamId: team,
           sport: capturedSpec.sport,
@@ -428,6 +433,7 @@ export const useLineupEditor = ({
           gameTitle,
           lineupName: trimmedName,
           rows: toLineupRowsPayload(rowsToSave),
+          battingOrder,
           parentLineupId,
           source: parentLineupId ? "manualEdit" : "manualSave",
         });
@@ -452,6 +458,7 @@ export const useLineupEditor = ({
                     ...prev,
                     ...saved,
                     rows: toLineupRowsPayload(rowsToSave),
+                    battingOrder,
                     output: prev.output ?? {},
                   }
                 : prev,
@@ -510,6 +517,7 @@ export const useLineupEditor = ({
       lineup,
       lineupParentVersionId,
       loadLineupHistory,
+      playerOrder,
       onDuplicateLineup,
       rulesConfig,
       lineupRulesContext,

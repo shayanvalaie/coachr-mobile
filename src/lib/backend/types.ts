@@ -92,6 +92,7 @@ export type BackendSaveLineupRequest = {
   gameTitle?: string | null;
   lineupName: string;
   rows: Record<string, unknown>[];
+  battingOrder: string[];
   parentLineupId?: string | null;
   source?: "generated" | "manualSave" | "manualEdit" | null;
 };
@@ -113,6 +114,7 @@ export type BackendLineupVersionDetail = BackendLineupVersionSummary & {
   rulesContext: string;
   rulesSpec: RulesetSpec | null;
   rows: Record<string, unknown>[];
+  battingOrder: string[];
   output: Record<string, unknown>;
 };
 

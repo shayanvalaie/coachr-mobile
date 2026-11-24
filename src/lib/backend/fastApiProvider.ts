@@ -453,6 +453,8 @@ const mapLineupVersionDetail = (raw: any): BackendLineupVersionDetail => ({
   rulesContext: raw.rulesContext,
   rulesSpec: raw.rulesSpec,
   rows: Array.isArray(raw?.rows) ? raw.rows : [],
+  // Absent on backends that predate saved batting orders.
+  battingOrder: Array.isArray(raw?.battingOrder) ? raw.battingOrder : [],
   output: raw?.output && typeof raw.output === "object" ? raw.output : {},
 });
 

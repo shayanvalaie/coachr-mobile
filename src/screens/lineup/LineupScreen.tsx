@@ -77,6 +77,9 @@ const LineupScreen = ({
   // Batting (row) order of the working lineup, shared by the portrait grid
   // and the landscape editor so a reorder in one shows in the other.
   const [lineupPlayerOrder, setLineupPlayerOrder] = useState<string[]>([]);
+  // Batting order of the saved lineup open in the editor, kept apart so
+  // reordering it never disturbs the working lineup.
+  const [historyPlayerOrder, setHistoryPlayerOrder] = useState<string[]>([]);
   const [lineupInlineEditMode, setLineupInlineEditMode] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [expandedInnings, setExpandedInnings] = useState<Set<number>>(
@@ -179,6 +182,8 @@ const LineupScreen = ({
     setEditModalVisible,
     setLineupParentVersionId,
     setHistoryEditRows,
+    setLineupPlayerOrder,
+    setHistoryPlayerOrder,
     setActiveTab,
     onEditModeChange,
   });
@@ -229,6 +234,7 @@ const LineupScreen = ({
     setLineupParentVersionId,
     historyEditRows,
     setHistoryEditRows,
+    playerOrder: selectedHistoryDetail ? historyPlayerOrder : lineupPlayerOrder,
     selectedHistoryDetail,
     setSelectedHistoryDetail,
     setActiveTab,
@@ -326,6 +332,7 @@ const LineupScreen = ({
           const restoredRows = normalizeLineupRows(detail.rows as any[]);
           LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
           setLineup(restoredRows);
+          setLineupPlayerOrder(detail.battingOrder);
           setLineupParentVersionId(detail.id);
           setExpandedInnings(new Set());
           const shouldStartInEditMode = launchRequest.startInEditMode !== false;
@@ -544,8 +551,8 @@ const LineupScreen = ({
           exportBusy={isExporting}
           error={error}
           playerGenderByName={playerGenderByName}
-          playerOrder={isHistoryEdit ? undefined : lineupPlayerOrder}
-          onPlayerOrderChange={isHistoryEdit ? undefined : setLineupPlayerOrder}
+          playerOrder={isHistoryEdit ? historyPlayerOrder : lineupPlayerOrder}
+          onPlayerOrderChange={isHistoryEdit ? setHistoryPlayerOrder : setLineupPlayerOrder}
           onExport={(format) => {
             if (!hasProSubscription) {
               onRequirePro("Lineup exports");

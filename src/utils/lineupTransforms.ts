@@ -195,7 +195,29 @@ export const toLineupRowsPayload = (
     droppedPosition: row.droppedPosition ?? null,
   }));
 
-export const cloneLineupRows = (rows: InningAssignment[]): InningAssignment[] =>
+// Batting order for a lineup: the preferred order first, then any players it
+// doesn't mention (a new lineup, a roster change) in the order they first
+// appear in the innings.
+export const resolveBattingOrder = (
+  rows: InningAssignment[],
+  preferredOrder: string[],
+): string[] => {
+  const discovered = new Set<string>();
+  [...rows]
+    .sort((a, b) => a.inning - b.inning)
+    .forEach((row) => {
+      [...Object.values(row.positions), ...row.bench].forEach((playerName) => {
+        if (typeof playerName !== "string") return;
+        const trimmed = playerName.trim();
+        if (trimmed) discovered.add(trimmed);
+      });
+    });
+  const kept = preferredOrder.filter((name) => discovered.has(name));
+  const keptSet = new Set(kept);
+  return [...kept, ...[...discovered].filter((name) => !keptSet.has(name))];
+};
+
+export const cloneLineupRows =(rows: InningAssignment[]): InningAssignment[] =>
   rows.map((row) => ({
     inning: row.inning,
     positions: { ...row.positions },

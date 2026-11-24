@@ -26,6 +26,8 @@ type Props = {
   activeLineupId: string | null;
   editingLineupId: string | null;
   draftRowsByLineupId: Record<string, InningAssignment[]>;
+  draftOrderByLineupId: Record<string, string[]>;
+  onReorderPlayers: (lineupId: string, order: string[]) => void;
   playerGenderByName: Record<string, string>;
   onToggleEditing: (lineupId: string, normalizedRows: InningAssignment[] | null) => void;
   onApplyCellEdit: (
@@ -57,6 +59,8 @@ const LineupsSheet = ({
   activeLineupId,
   editingLineupId,
   draftRowsByLineupId,
+  draftOrderByLineupId,
+  onReorderPlayers,
   playerGenderByName,
   onToggleEditing,
   onApplyCellEdit,
@@ -199,6 +203,12 @@ const LineupsSheet = ({
                             lineup={displayRows}
                             editable={isEditing}
                             playerGenderByName={playerGenderByName}
+                            playerOrder={
+                              draftOrderByLineupId[lineupVersion.id] ?? detail.battingOrder
+                            }
+                            onPlayerOrderChange={(order) =>
+                              onReorderPlayers(lineupVersion.id, order)
+                            }
                             onSetPlayerPosition={(inning, playerName, targetPosition) =>
                               onApplyCellEdit(
                                 lineupVersion.id,

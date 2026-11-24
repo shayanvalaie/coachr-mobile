@@ -13,6 +13,7 @@ import { InningAssignment } from "../../../types/lineup";
 import {
   cloneLineupRows,
   normalizeBenchNames,
+  resolveBattingOrder,
   toLineupRowsPayload,
   validateEditedLineupForSave,
 } from "../../../utils/lineupTransforms";
@@ -131,6 +132,13 @@ export const useLineupCarousel = ({
   const [draftRowsByLineupId, setDraftRowsByLineupId] = useState<
     Record<string, InningAssignment[]>
   >({});
+  const [draftOrderByLineupId, setDraftOrderByLineupId] = useState<
+    Record<string, string[]>
+  >({});
+
+  const reorderPlayers = useCallback((lineupId: string, order: string[]) => {
+    setDraftOrderByLineupId((prev) => ({ ...prev, [lineupId]: order }));
+  }, []);
 
   const close = useCallback(() => {
     openEpoch.current++;
@@ -145,6 +153,7 @@ export const useLineupCarousel = ({
     setLineups([]);
     setDetailsById({});
     setDraftRowsByLineupId({});
+    setDraftOrderByLineupId({});
     setEditingLineupId(null);
   }), []);
 
@@ -164,6 +173,7 @@ export const useLineupCarousel = ({
       setDetailsError(null);
       setEditingLineupId(null);
       setDraftRowsByLineupId({});
+      setDraftOrderByLineupId({});
       setIsOpen(true);
       setIsDetailsLoading(true);
       try {
@@ -330,6 +340,10 @@ export const useLineupCarousel = ({
           gameTitle: lineupVersion.gameTitle || modalTitle || null,
           lineupName: lineupVersion.lineupName || `Lineup v${lineupVersion.versionNumber}`,
           rows: toLineupRowsPayload(editedRows),
+          battingOrder: resolveBattingOrder(
+            editedRows,
+            draftOrderByLineupId[lineupVersion.id] ?? detail.battingOrder,
+          ),
           parentLineupId: lineupVersion.id,
           source: "manualEdit",
         });
@@ -343,6 +357,7 @@ export const useLineupCarousel = ({
         setCarouselIndex(0);
         setEditingLineupId(null);
         setDraftRowsByLineupId({});
+        setDraftOrderByLineupId({});
 
         await loadGames();
         toast.show({
@@ -359,7 +374,7 @@ export const useLineupCarousel = ({
         setActiveLineupId(null);
       }
     },
-    [detailsById, draftRowsByLineupId, ensureTeam, loadGames, modalTitle, toast],
+    [detailsById, draftOrderByLineupId, draftRowsByLineupId, ensureTeam, loadGames, modalTitle, toast],
   );
 
   const deleteLineupVersion = useCallback(
@@ -426,6 +441,8 @@ export const useLineupCarousel = ({
     activeLineupId,
     editingLineupId,
     draftRowsByLineupId,
+    draftOrderByLineupId,
+    reorderPlayers,
     toggleEditing,
     applyCellEdit,
     exportLineupVersion,
