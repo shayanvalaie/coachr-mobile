@@ -383,7 +383,8 @@ const authWithSessionPayload = async (
     if (deletingAccount) throw new Error("Account deletion is in progress.");
     if (requestEpoch !== sessionEpoch) throw new Error("Account changed. Please try again.");
     const session = parsed?.session ?? null;
-    await persistSession(session, event);
+    const stillSignedOut = session === null && cachedSession === null;
+    if (!stillSignedOut) await persistSession(session, event);
     return buildAuthResponse(session);
   } catch (err) {
     return buildAuthResponse(null, err);
