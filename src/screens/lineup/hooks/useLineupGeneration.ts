@@ -21,6 +21,7 @@ import {
 } from "../../../types/rules";
 import {
   describeInvokeError,
+  extractBattingOrderFromResponse,
   extractRowsFromResponse,
   formatGameLabel,
   normalizeLineupRows,
@@ -74,6 +75,7 @@ type Params = {
   setExpandedInnings: Dispatch<SetStateAction<Set<number>>>;
   setSaveModalVisible: Dispatch<SetStateAction<boolean>>;
   setSaveLineupName: Dispatch<SetStateAction<string>>;
+  setLineupPlayerOrder: Dispatch<SetStateAction<string[]>>;
 };
 
 // Lineup generation flow, including the interstitial ad gate (the ad shows
@@ -99,6 +101,7 @@ export const useLineupGeneration = ({
   setExpandedInnings,
   setSaveModalVisible,
   setSaveLineupName,
+  setLineupPlayerOrder,
 }: Params) => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [rosterRequirement, setRosterRequirement] =
@@ -114,9 +117,11 @@ export const useLineupGeneration = ({
   );
 
   const applyGeneratedLineup = useCallback(
-    (rows: InningAssignment[], statusMessage: string) => {
+    (rows: InningAssignment[], battingOrder: string[], statusMessage: string) => {
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       setLineup(rows);
+      // A fresh lineup replaces any order the coach dragged before regenerating.
+      setLineupPlayerOrder(battingOrder);
       setLineupInlineEditMode(false);
       setEditModalVisible(false);
       setHistoryEditRows(null);
@@ -134,6 +139,7 @@ export const useLineupGeneration = ({
       setLineup,
       setLineupInlineEditMode,
       setLineupParentVersionId,
+      setLineupPlayerOrder,
       setSaveLineupName,
       setSaveModalVisible,
       setStatus,
@@ -233,7 +239,11 @@ export const useLineupGeneration = ({
         assertPaidAccess(access);
         setLineupRulesContext(teamRules.ruleset.context);
         setLineupRulesSpec(teamRules.ruleset.spec);
-        applyGeneratedLineup(nextLineup, "Lineup generated. Save it if you like it.");
+        applyGeneratedLineup(
+          nextLineup,
+          extractBattingOrderFromResponse(data),
+          "Lineup generated. Save it if you like it.",
+        );
       } catch (invokeErr) {
         const { message, detail } = await describeInvokeError(invokeErr);
 

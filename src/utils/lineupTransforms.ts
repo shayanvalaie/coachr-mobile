@@ -64,6 +64,15 @@ export const extractRowsFromResponse = (payload: unknown): any[] => {
   return [];
 };
 
+// Servers before alternating batting orders omit the field; an empty order
+// leaves the grid in the order players first appear in the rows.
+export const extractBattingOrderFromResponse = (payload: unknown): string[] => {
+  if (!payload || typeof payload !== "object") return [];
+  const order = (payload as Record<string, unknown>).battingOrder;
+  if (!Array.isArray(order)) return [];
+  return order.filter((name): name is string => typeof name === "string");
+};
+
 export const describeInvokeError = async (
   err: unknown,
 ): Promise<{ message: string; detail: string }> => {

@@ -274,6 +274,7 @@ const LineupScreen = ({
     setExpandedInnings,
     setSaveModalVisible,
     setSaveLineupName,
+    setLineupPlayerOrder,
   });
 
   // Confirm a finished generation with a toast. Only fires on the generating ->
